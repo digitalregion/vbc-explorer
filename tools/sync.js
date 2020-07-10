@@ -538,18 +538,19 @@ var checkBlockDBExistsThenWrite = function (config, patchData, flush) {
 const quoteInterval = 10 * 60 * 1000;
 
 const getQuote = async () => {
-  const options = {
-    timeout: 10000,
-  };
-  const URL = `https://min-api.cryptocompare.com/data/price?fsym=${config.settings.symbol}&tsyms=USD`;
+    const options = {
+      timeout: 10000,
+    };
+    const coinname = config.settings.name.toLowerCase();
+    const URL = `https://api.coingecko.com/api/v3/simple/price?ids=${coinname}&vs_currencies=usd`;
 
   try {
     const requestUSD = await fetch(URL);
     const quoteUSD = await requestUSD.json();
 
     quoteObject = {
-      timestamp: Math.round(Date.now() / 1000),
-      quoteUSD: quoteUSD.USD,
+        timestamp: Math.round(Date.now() / 1000),
+        quoteUSD: quoteUSD[coinname]['usd'],
     };
 
     new Market(quoteObject).save((err, market, count) => {
