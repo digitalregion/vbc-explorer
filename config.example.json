@@ -1,19 +1,19 @@
 {
-    "nodeAddr":     "localhost",
-    "wsPort":       8294,
-    "startBlock":   7777,
-    "endBlock":     "latest",
-    "quiet":        true,
-    "syncAll":      true,
-    "patch":        true,
-    "patchBlocks":  100,
-    "bulkSize":     100,
+    "nodeAddr": "localhost",
+    "wsPort": 8294,
+    "startBlock": 0,
+    "endBlock": "latest",
+    "quiet": true,
+    "syncAll": true,
+    "patch": true,
+    "patchBlocks": 100,
+    "bulkSize": 100,
     "settings": {
         "symbol": "NUKO",
         "name": "Nekonium",
         "title": "Nekonium Block Explorer",
         "author": "Elaine, Cody, Hackmod, Bakon",
-        "contact": "mailto:ethereumclassicanthony@gmail.com",
+        "contact": "mailto:nekonium@nekonium.org",
         "about": "This is an open source Blockchain Explorer.",
         "rss": "https://nekonium.github.io/",
         "reddit": "",
@@ -27,9 +27,10 @@
         "poweredbyEtc": true,
         "tokenList": "tokens.json",
         "useRichList": true,
-        "useFiat": true,
+        "useFiat": false,
         "miners": {
-            "0x98be787c10d15ad15d1f53af4c516fb509db7417": "mofumofu.me"
+            "0x98be787c10d15ad15d1f53af4c516fb509db7417": "mofumofu.me",
+            "0xef2399f9c4a1f8a9a7adafa9fb7a7d86be7ef4f1": "comining.io"
         }
     }
 }
