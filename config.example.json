@@ -10,7 +10,7 @@
     "bulkSize":     100,
     "settings": {
         "symbol": "NUKO",
-        "name": "Nekonium,
+        "name": "Nekonium",
         "title": "Nekonium Block Explorer",
         "author": "Elaine, Cody, Hackmod, Bakon",
         "contact": "mailto:ethereumclassicanthony@gmail.com",
@@ -21,7 +21,7 @@
         "linkedin": "",
         "github": "https://github.com/nekonium",
         "logo": "/img/explorer-logo.png",
-        "copyright": "2019 &copy; Ethereum Classic.",
+        "copyright": "2019 &copy; Ethereum Classic. / 2020 &copy; Nekonium.",
         "poweredbyCustom": false,
         "poweredbyEtcImage": "/img/powered-by-etcexplorer-w.png",
         "poweredbyEtc": true,
@@ -30,6 +30,6 @@
         "useFiat": true,
         "miners": {
             "0x98be787c10d15ad15d1f53af4c516fb509db7417": "mofumofu.me"
-         }
+        }
     }
 }
