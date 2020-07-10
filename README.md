@@ -1,8 +1,8 @@
-# ETC Explorer
+# Nekonium Explorer
 
-<img src="public/img/explorer-logo.png" alt="ETC Explorer logo" height="200" />
+<img src="public/img/explorer-logo.png" alt="NUKO Explorer logo" height="200" />
 
-<b>Live Version: [etherhub.io](http://etherhub.io)</b>
+<b>Live Version: [explorer.nekonium.site](https://explorer.nekonium.site)</b>
 
 Follow the project progress at: [ETC Block Explorer Development](https://github.com/ethereumclassic/explorer)
 
@@ -10,7 +10,7 @@ Follow the project progress at: [ETC Block Explorer Development](https://github.
 
 Clone the repo
 
-`git clone https://github.com/ethereumclassic/explorer`
+`git clone https://github.com/ROZ-MOFUMOFU-ME/explorer`
 
 Download [Nodejs and npm](https://docs.npmjs.com/getting-started/installing-node "Nodejs install") if you don't have them
 
