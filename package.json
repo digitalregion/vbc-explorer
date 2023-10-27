@@ -1,6 +1,6 @@
 {
   "name": "etc-explorer",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "A lightweight ethereum classic block explorer",
   "repository": "https://github.com/ethereumclassic/explorer",
   "license": "MIT",
@@ -15,20 +15,20 @@
     "lint:fix": "eslint *.js ./lib/*.js ./test/*.js ./test/units/*.js ./routes/*.js ./tools/*.js --fix"
   },
   "dependencies": {
-    "bignumber.js": "^8.1.1",
-    "body-parser": "^1.18.3",
-    "concurrently": "4.1.0",
-    "ejs": "2.6.1",
+    "bignumber.js": "^9.1.2",
+    "body-parser": "^1.20.2",
+    "concurrently": "^8.2.2",
+    "ejs": "^3.1.9",
     "express": "^4.16.4",
     "human-standard-token-abi": "^2.0.0",
-    "mongoose": "^4.13.18",
-    "morgan": "^1.9.1",
-    "node-fetch": "^2.3.0",
+    "mongoose": "^7.6.3",
+    "morgan": "^1.10.0",
+    "node-fetch": "^3.3.2",
     "rlp": "^2.2.3",
-    "serve-favicon": "~2.5.0",
+    "serve-favicon": "^2.5.0",
     "solc": "^0.5.6",
-    "web3": "1.0.0-beta.37",
-    "web3-explorer": "1.0.2"
+    "web3": "^1.10.2",
+    "web3-explorer": "^1.0.4"
   },
   "devDependencies": {
     "chai": "^4.2.0",
