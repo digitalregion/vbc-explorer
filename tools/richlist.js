@@ -36,188 +36,114 @@ console.log(`Connecting ${config.nodeAddr}:${config.wsPort}...`);
 const web3 = new Web3(new Web3.providers.WebsocketProvider(`ws://${config.nodeAddr}:${config.wsPort.toString()}`));
 
 // RichList for Geth Classic, Geth
-function makeRichList(toBlock, blocks, updateCallback) {
+async function makeRichList(toBlock, blocks, updateCallback) {
   const self = makeRichList;
-  if (!self.cached) {
-    self.cached = {};
-    self.index = 0;
-  }
-  if (!self.accounts) {
-    self.accounts = {};
-  }
-  let fromBlock = toBlock - blocks;
-  if (fromBlock < 0) {
-    fromBlock = 0;
-  }
-
-  if (!('quiet' in config && config.quiet === true)) {
-    console.log(`Scan accounts from ${fromBlock} to ${toBlock} ...`);
-  }
-
+  if (!self.accounts) self.accounts = {};
+  if (!self.cached) self.cached = {};
+  if (!self.index) self.index = 0;
   let ended = false;
-  if (fromBlock == toBlock) {
-    ended = true;
-  }
+  let fromBlock = toBlock - blocks;
+  if (fromBlock < 0) fromBlock = 0;
 
-  asyncL.waterfall([
-    function (callback) {
-      // Transaction.distinct("from", { blockNumber: { $lte: toBlock, $gt: fromBlock } }, function(err, docs) ...
-      // faster
-      // dictint("from")
-      Transaction.aggregate([
-        { $match: { blockNumber: { $lte: toBlock, $gt: fromBlock } } },
-        { $group: { _id: '$from' } },
-        { $project: { '_id': 1 } },
-      ]).exec((err, docs) => {
-        if (err) {
-          console.log(err);
-          return;
-        }
-        docs.forEach((doc) => {
-          // check address cache
-          if (!self.cached[doc._id]) {
-            self.accounts[doc._id] = { address: doc._id, type: 0 };
-            // increase cache counter
-            self.cached[doc._id] = 1;
-          } else {
-            self.cached[doc._id]++;
-          }
-        });
-        callback(null);
-      });
-    }, function (callback) {
-      // dictint("to")
-      Transaction.aggregate([
-        { $match: { blockNumber: { $lte: toBlock, $gt: fromBlock } } },
-        { $group: { _id: '$to' } },
-        { $project: { '_id': 1 } },
-      ]).exec((err, docs) => {
-        if (err) {
-          console.log(err);
-          return;
-        }
-        docs.forEach((doc) => {
-          // to == null case
-          if (!doc._id) {
-            return;
-          }
-          if (!self.cached[doc._id]) {
-            self.accounts[doc._id] = { address: doc._id, type: 0 };
-            self.cached[doc._id] = 1;
-          } else {
-            self.cached[doc._id]++;
-          }
-        });
-        callback(null);
-      });
-    }, function (callback) {
-      // aggregate miner's addresses
-      Block.aggregate([
-        { $match: { number: { $lte: toBlock, $gt: fromBlock } } },
-        { $group: { _id: '$miner' } },
-        { $project: { '_id': 1 } },
-      ]).exec((err, docs) => {
-        if (err) {
-          console.log(err);
-          return;
-        }
-        docs.forEach((doc) => {
-          if (!self.cached[doc._id]) {
-            self.accounts[doc._id] = { address: doc._id, type: 0 };
-            self.cached[doc._id] = 1;
-          } else {
-            self.cached[doc._id]++;
-          }
-        });
-        callback(null);
-      });
-    }, function (callback) {
-      const len = Object.keys(self.accounts).length;
-      console.info(`* ${len} / ${self.index + len} total accounts.`);
-      if (updateCallback && (len >= 100 || ended)) {
-        self.index += len;
-        if (!('quiet' in config && config.quiet === true)) {
-          console.log(`* update ${len} accounts ...`);
-        }
-
-        // split accounts into chunks to make proper sized json-rpc batch job.
-        const accounts = Object.keys(self.accounts);
-        const chunks = [];
-
-        // about ~1000 `eth_getBalance` json rpc calls are possible in one json-rpc batchjob.
-        while (accounts.length > 200) {
-          const chunk = accounts.splice(0, 100);
-          chunks.push(chunk);
-        }
-        if (accounts.length > 0) {
-          chunks.push(accounts);
-        }
-
-        asyncL.eachSeries(chunks, (chunk, outerCallback) => {
-          const data = {};
-          asyncL.eachSeries(chunk, (account, eachCallback) => {
-            web3.eth.getCode(account, (err, code) => {
-              if (err) {
-                return eachCallback(err);
-              }
-              data[account] = { address: account };
-              if (code.length > 2) {
-                data[account].type = 1; // contract type
-              } else if (self.accounts[account]) {
-                data[account].type = self.accounts[account].type;
-              }
-
-              web3.eth.getBalance(account, (err, balance) => {
-                if (err) {
-                  return eachCallback(err);
-                }
-
-                data[account].balance = parseFloat(web3.utils.fromWei(balance, 'ether'));
-                eachCallback();
-              });
-            });
-          }, (err) => {
-            if (err) {
-              return outerCallback(err);
-            }
-            if (data) {
-              updateCallback(data, toBlock);
-            }
-
-            outerCallback();
-          });
-        }, (error) => {
-          if (error) {
-            console.log(`WARN: fail to call getBalance() ${error}`);
-          }
-          // reset accounts
-          self.accounts = {};
-
-          // check the size of the cached accounts
-          if (Object.keys(self.cached).length > ADDRESS_CACHE_MAX) {
-            console.info('** reduce cached accounts ...');
-            const sorted = Object.keys(self.cached).sort((a, b) => self.cached[b] - self.cached[a], // descend order
-            );
-            const newcached = {};
-            const reduce = parseInt(ADDRESS_CACHE_MAX * 0.6);
-            for (let j = 0; j < reduce; j++) {
-              newcached[sorted[j]] = self.cached[sorted[j]];
-            }
-            self.cached = newcached;
-          }
-
-          callback(null);
-        });
+  try {
+    // distinct("from")
+    const docsFrom = await Transaction.aggregate([
+      { $match: { blockNumber: { $lte: toBlock, $gt: fromBlock } } },
+      { $group: { _id: '$from' } },
+      { $project: { '_id': 1 } },
+    ]);
+    docsFrom.forEach((doc) => {
+      if (!self.cached[doc._id]) {
+        self.accounts[doc._id] = { address: doc._id, type: 0 };
+        self.cached[doc._id] = 1;
       } else {
-        callback(null);
+        self.cached[doc._id]++;
       }
-    },
-  ], (error) => {
-    if (error) {
-      console.log(error);
-      return;
-    }
+    });
 
+    // distinct("to")
+    const docsTo = await Transaction.aggregate([
+      { $match: { blockNumber: { $lte: toBlock, $gt: fromBlock } } },
+      { $group: { _id: '$to' } },
+      { $project: { '_id': 1 } },
+    ]);
+    docsTo.forEach((doc) => {
+      if (!doc._id) return;
+      if (!self.cached[doc._id]) {
+        self.accounts[doc._id] = { address: doc._id, type: 0 };
+        self.cached[doc._id] = 1;
+      } else {
+        self.cached[doc._id]++;
+      }
+    });
+
+    // aggregate miner's addresses
+    const docsMiner = await Block.aggregate([
+      { $match: { number: { $lte: toBlock, $gt: fromBlock } } },
+      { $group: { _id: '$miner' } },
+      { $project: { '_id': 1 } },
+    ]);
+    docsMiner.forEach((doc) => {
+      if (!self.cached[doc._id]) {
+        self.accounts[doc._id] = { address: doc._id, type: 0 };
+        self.cached[doc._id] = 1;
+      } else {
+        self.cached[doc._id]++;
+      }
+    });
+
+    // accounts chunk/batch処理
+    const len = Object.keys(self.accounts).length;
+    console.info(`* ${len} / ${self.index + len} total accounts.`);
+    if (updateCallback && (len >= 100 || ended)) {
+      self.index += len;
+      if (!('quiet' in config && config.quiet === true)) {
+        console.log(`* update ${len} accounts ...`);
+      }
+      const accounts = Object.keys(self.accounts);
+      const chunks = [];
+      while (accounts.length > 200) {
+        const chunk = accounts.splice(0, 100);
+        chunks.push(chunk);
+      }
+      if (accounts.length > 0) {
+        chunks.push(accounts);
+      }
+      for (const chunk of chunks) {
+        const data = {};
+        for (const account of chunk) {
+          try {
+            const code = await web3.eth.getCode(account);
+            data[account] = { address: account };
+            if (code.length > 2) {
+              data[account].type = 1;
+            } else if (self.accounts[account]) {
+              data[account].type = self.accounts[account].type;
+            }
+            const balance = await web3.eth.getBalance(account);
+            data[account].balance = parseFloat(web3.utils.fromWei(balance, 'ether'));
+          } catch (err) {
+            console.log(err);
+          }
+        }
+        if (data) {
+          updateCallback(data, toBlock);
+        }
+      }
+      // reset accounts
+      self.accounts = {};
+      // キャッシュサイズ調整
+      if (Object.keys(self.cached).length > ADDRESS_CACHE_MAX) {
+        console.info('** reduce cached accounts ...');
+        const sorted = Object.keys(self.cached).sort((a, b) => self.cached[b] - self.cached[a]);
+        const newcached = {};
+        const reduce = parseInt(ADDRESS_CACHE_MAX * 0.6);
+        for (let j = 0; j < reduce; j++) {
+          newcached[sorted[j]] = self.cached[sorted[j]];
+        }
+        self.cached = newcached;
+      }
+    }
     if (ended) {
       console.log('**DONE**');
     } else {
@@ -225,7 +151,10 @@ function makeRichList(toBlock, blocks, updateCallback) {
         makeRichList(fromBlock, blocks, updateCallback);
       }, 300);
     }
-  });
+  } catch (error) {
+    console.log(error);
+    return;
+  }
 }
 
 function makeParityRichList(number, offset, blockNumber, updateCallback) {
@@ -335,38 +264,24 @@ var bulkInsert = function (bulk) {
   } else {
     localbulk = bulk.splice(0, 300);
   }
-  Account.collection.insert(localbulk, (error, data) => {
+  // Use insertMany instead of deprecated insert for Mongoose 5+
+  Account.collection.insertMany(localbulk, async (error, data) => {
     if (error) {
       if (error.code == 11000) {
         // For already exists case, try upsert method.
-        asyncL.eachSeries(localbulk, (item, eachCallback) => {
-          // upsert accounts
-          item._id = undefined;
-          delete item._id; // remove _id field
-          if (item.type == 0) {
-            // do not update for normal address cases
-            item.type = undefined;
-            delete item.type;
-          }
-          Account.collection.update({ 'address': item.address }, { $set: item }, { upsert: true }, (err, updated) => {
-            if (err) {
-              if (!config.quiet) {
-                console.log(`WARN: Duplicate DB key : ${error}`);
-                console.log(`ERROR: Fail to update account: ${err}`);
-              }
-              return eachCallback(err);
+        try {
+          for (const item of localbulk) {
+            item._id = undefined;
+            delete item._id; // remove _id field
+            if (item.type == 0) {
+              item.type = undefined;
+              delete item.type;
             }
-            eachCallback();
-          });
-        }, (err) => {
-          if (err) {
-            if (err.code != 11000) {
-              console.log(`ERROR: Aborted due to error: ${JSON.stringify(err, null, 2)}`);
-              process.exit(9);
-              return;
-            }
-            console.log(`WARN: Fail to upsert (ignore) ${err}`);
-
+            await Account.collection.updateOne(
+              { 'address': item.address },
+              { $set: item },
+              { upsert: true }
+            );
           }
           if (!('quiet' in config && config.quiet === true)) {
             console.log(`* ${localbulk.length} accounts successfully updated.`);
@@ -376,14 +291,22 @@ var bulkInsert = function (bulk) {
               bulkInsert(bulk);
             }, 200);
           }
-        });
+        } catch (err) {
+          if (err.code != 11000) {
+            console.log(`ERROR: Aborted due to error: ${JSON.stringify(err, null, 2)}`);
+            process.exit(9);
+            return;
+          }
+          console.log(`WARN: Fail to upsert (ignore) ${err}`);
+        }
       } else {
         console.log(`Error: Aborted due to error on DB: ${error}`);
         process.exit(9);
       }
     } else {
       if (!('quiet' in config && config.quiet === true)) {
-        console.log(`* ${data.insertedCount} accounts successfully inserted.`);
+        // insertMany returns an array of inserted documents
+        console.log(`* ${data.length} accounts successfully inserted.`);
       }
       if (bulk.length > 0) {
         setTimeout(() => {

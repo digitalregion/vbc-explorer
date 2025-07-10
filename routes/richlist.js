@@ -10,7 +10,8 @@ require('../db.js');
 
 const Account = mongoose.model('Account');
 
-var getAccounts = function (req, res) {
+// getAccountsをasync/await形式に修正
+var getAccounts = async function (req, res) {
   const self = getAccounts;
   if (!self.totalSupply) {
     self.totalSupply = -1;
@@ -33,48 +34,23 @@ var getAccounts = function (req, res) {
   // get totalSupply only once
   const queryTotalSupply = self.totalSupply || req.body.totalSupply || null;
 
-  async.waterfall([
-    function (callback) {
-      if (queryTotalSupply < 0) {
-        Account.aggregate([
-          { $group: { _id: null, totalSupply: { $sum: '$balance' } } },
-        ]).exec((err, docs) => {
-          if (err) {
-            callbck(err);
-            return;
-          }
+  try {
+    let totalSupply;
+    if (queryTotalSupply < 0) {
+      const docs = await Account.aggregate([
+        { $group: { _id: null, totalSupply: { $sum: '$balance' } } },
+      ]);
+      totalSupply = docs[0]?.totalSupply || 0;
+      // update cache
+      self.timestamp = new Date();
+      self.totalSupply = totalSupply;
+    } else {
+      totalSupply = queryTotalSupply > 0 ? queryTotalSupply : null;
+    }
 
-          const { totalSupply } = docs[0];
-          // update cache
-          self.timestamp = new Date();
-          self.totalSupply = totalSupply;
-          callback(null, totalSupply);
-        });
-      } else {
-        callback(null, queryTotalSupply > 0 ? queryTotalSupply : null);
-      }
-    },
-    function (totalSupply, callback) {
-      if (!count) {
-        // get the number of all accounts
-        Account.count({}, (err, count) => {
-          if (err) {
-            callbck(err);
-            return;
-          }
-
-          count = parseInt(count);
-          callback(null, totalSupply, count);
-        });
-      } else {
-        callback(null, totalSupply, count);
-      }
-    },
-  ], (error, totalSupply, count) => {
-    if (error) {
-      res.write(JSON.stringify({ 'error': true }));
-      res.end();
-      return;
+    if (!count) {
+      // get the number of all accounts
+      count = await Account.countDocuments({});
     }
 
     // check sort order
@@ -103,20 +79,14 @@ var getAccounts = function (req, res) {
       data.totalSupply = totalSupply;
     }
 
-    Account.find({}).lean(true).sort(sortOrder).skip(start)
-      .limit(limit)
-      .exec((err, accounts) => {
-        if (err) {
-          res.write(JSON.stringify({ 'error': true }));
-          res.end();
-          return;
-        }
-
-        data.data = accounts.map((account, i) => [i + 1 + start, account.address, account.type, account.balance, account.blockNumber]);
-        res.write(JSON.stringify(data));
-        res.end();
-      });
-  });
+    const accounts = await Account.find({}).lean(true).sort(sortOrder).skip(start).limit(limit);
+    data.data = accounts.map((account, i) => [i + 1 + start, account.address, account.type, account.balance, account.blockNumber]);
+    res.write(JSON.stringify(data));
+    res.end();
+  } catch (error) {
+    res.write(JSON.stringify({ 'error': true }));
+    res.end();
+  }
 };
 
 module.exports = getAccounts;

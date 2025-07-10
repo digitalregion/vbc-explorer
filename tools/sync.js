@@ -94,7 +94,7 @@ const normalizeTX = async (txData, receipt, blockData) => {
 /**
   Write the whole block object to DB
 **/
-var writeBlockToDB = function (config, blockData, flush) {
+var writeBlockToDB = async function (config, blockData, flush) {
   const self = writeBlockToDB;
   if (!self.bulkOps) {
     self.bulkOps = [];
@@ -111,22 +111,21 @@ var writeBlockToDB = function (config, blockData, flush) {
     self.bulkOps = [];
     if (bulk.length === 0) return;
 
-    Block.collection.insert(bulk, (err, blocks) => {
-      if (typeof err !== 'undefined' && err) {
-        if (err.code === 11000) {
-          if (!('quiet' in config && config.quiet === true)) {
-            console.log(`Skip: Duplicate DB key : ${err}`);
-          }
-        } else {
-          console.log(`Error: Aborted due to error on DB: ${err}`);
-          process.exit(9);
+    try {
+      const blocks = await Block.collection.insertMany(bulk);
+      if (!('quiet' in config && config.quiet === true)) {
+        console.log(`* ${blocks.insertedCount} blocks successfully written.`);
+      }
+    } catch (err) {
+      if (err.code === 11000) {
+        if (!('quiet' in config && config.quiet === true)) {
+          console.log(`Skip: Duplicate DB key : ${err}`);
         }
       } else {
-        if (!('quiet' in config && config.quiet === true)) {
-          console.log(`* ${blocks.insertedCount} blocks successfully written.`);
-        }
+        console.log(`Error: Aborted due to error on DB: ${err}`);
+        process.exit(9);
       }
-    });
+    }
   }
 };
 /**
@@ -309,28 +308,27 @@ const writeTransactionsToDB = async (config, blockData, flush) => {
             }
           }
           // upsert account
-          Account.collection.update({ address: account }, { $set: data[account] }, { upsert: true });
+          Account.collection.updateOne({ address: account }, { $set: data[account] }, { upsert: true });
         });
       });
     }
 
     if (bulk.length > 0) {
-      Transaction.collection.insert(bulk, (err, tx) => {
-        if (typeof err !== 'undefined' && err) {
-          if (err.code === 11000) {
-            if (!('quiet' in config && config.quiet === true)) {
-              console.log(`Skip: Duplicate transaction key ${err}`);
-            }
-          } else {
-            console.log(`Error: Aborted due to error on Transaction: ${err}`);
-            process.exit(9);
+      try {
+        const tx = await Transaction.collection.insertMany(bulk);
+        if (!('quiet' in config && config.quiet === true)) {
+          console.log(`* ${tx.insertedCount} transactions successfully recorded.`);
+        }
+      } catch (err) {
+        if (err.code === 11000) {
+          if (!('quiet' in config && config.quiet === true)) {
+            console.log(`Skip: Duplicate transaction key ${err}`);
           }
         } else {
-          if (!('quiet' in config && config.quiet === true)) {
-            console.log(`* ${tx.insertedCount} transactions successfully recorded.`);
-          }
+          console.log(`Error: Aborted due to error on Transaction: ${err}`);
+          process.exit(9);
         }
-      });
+      }
     }
   }
 };
@@ -412,8 +410,9 @@ var syncChain = function (config, nextBlock) {
 const prepareSync = async (config, callback) => {
   let blockNumber = null;
   const oldBlockFind = Block.find({}, 'number').lean(true).sort('number').limit(1);
-  oldBlockFind.exec(async (err, docs) => {
-    if (err || !docs || docs.length < 1) {
+  try {
+    const docs = await oldBlockFind.exec();
+    if (!docs || docs.length < 1) {
       // not found in db. sync from config.endBlock or 'latest'
       if (web3.eth.net.isListening()) {
         const currentBlock = await web3.eth.getBlockNumber();
@@ -443,7 +442,7 @@ const prepareSync = async (config, callback) => {
         }
       } else {
         console.log('Error: Web3 connection error');
-        callback(err, null);
+        callback(new Error('Web3 connection error'), null);
       }
     } else {
       blockNumber = docs[0].number - 1;
@@ -453,7 +452,10 @@ const prepareSync = async (config, callback) => {
       }
       callback(null, blockNumber);
     }
-  });
+  } catch (err) {
+    console.log('Error in prepareSync:', err);
+    callback(err, null);
+  }
 };
 /**
   Block Patcher(experimental)
@@ -468,8 +470,9 @@ const runPatcher = async (config, startBlock, endBlock) => {
   if (typeof startBlock === 'undefined' || typeof endBlock === 'undefined') {
     // get the last saved block
     const blockFind = Block.find({}, 'number').lean(true).sort('-number').limit(1);
-    blockFind.exec(async (err, docs) => {
-      if (err || !docs || docs.length < 1) {
+    try {
+      const docs = await blockFind.exec();
+      if (!docs || docs.length < 1) {
         // no blocks found. terminate runPatcher()
         console.log('No need to patch blocks.');
         return;
@@ -478,7 +481,10 @@ const runPatcher = async (config, startBlock, endBlock) => {
       const lastMissingBlock = docs[0].number + 1;
       const currentBlock = await web3.eth.getBlockNumber();
       runPatcher(config, lastMissingBlock, currentBlock - 1);
-    });
+    } catch (err) {
+      console.log('Error finding blocks:', err);
+      return;
+    }
     return;
   }
 
@@ -521,15 +527,18 @@ const runPatcher = async (config, startBlock, endBlock) => {
 /**
   This will be used for the patcher(experimental)
 **/
-var checkBlockDBExistsThenWrite = function (config, patchData, flush) {
-  Block.find({ number: patchData.number }, (err, b) => {
+var checkBlockDBExistsThenWrite = async function (config, patchData, flush) {
+  try {
+    const b = await Block.find({ number: patchData.number });
     if (!b.length) {
       writeBlockToDB(config, patchData, flush);
       writeTransactionsToDB(config, patchData, flush);
     } else if (!('quiet' in config && config.quiet === true)) {
       console.log(`Block number: ${patchData.number.toString()} already exists in DB.`);
     }
-  });
+  } catch (err) {
+    console.error('Error checking block:', err);
+  }
 };
 /**
   Fetch market price from cryptocompare
@@ -553,15 +562,15 @@ const getQuote = async () => {
         quoteUSD: quoteUSD[coinname]['usd'],
     };
 
-    new Market(quoteObject).save((err, market, count) => {
-      if (typeof err !== 'undefined' && err) {
-        process.exit(9);
-      } else {
-        if (!('quiet' in config && config.quiet === true)) {
-          console.log('DB successfully written for market quote.');
-        }
+    try {
+      const market = await new Market(quoteObject).save();
+      if (!('quiet' in config && config.quiet === true)) {
+        console.log('DB successfully written for market quote.');
       }
-    });
+    } catch (err) {
+      console.error('Error saving market quote:', err);
+      process.exit(9);
+    }
   } catch (error) {
     if (!('quiet' in config && config.quiet === true)) {
       console.log(error);
@@ -572,7 +581,9 @@ const getQuote = async () => {
 // patch missing blocks
 if (config.patch === true) {
   console.log('Checking for missing blocks');
-  runPatcher(config);
+  runPatcher(config).catch(err => {
+    console.error('Error in runPatcher:', err);
+  });
 }
 
 // check NORICHLIST env

@@ -1,8 +1,8 @@
-# Nekonium Explorer
+# VirBiCoin Explorer
 
-<img src="public/img/explorer-logo.png" alt="NUKO Explorer logo" height="200" />
+<img src="public/img/explorer-logo.png" alt="VBC Explorer logo" height="200" />
 
-<b>Live Version: [explorer.nekonium.site](https://explorer.nekonium.site)</b>
+<b>Live Version: [explorer.digitalregion.jp](https://explorer.digitalregion.jp)</b>
 
 Follow the project progress at: [ETC Block Explorer Development](https://github.com/ethereumclassic/explorer)
 
@@ -45,19 +45,19 @@ Basic settings:
     "patchBlocks":  100,
     "bulkSize":     100,
     "settings": {
-        "symbol": "NUKO",
-        "name": "Nekonium",
-        "title": "Nekonium Block Explorer",
+        "symbol": "VBC",
+        "name": "VirBiCoin",
+        "title": "VirBiCoin Block Explorer",
         "author": "Elaine, Cody, Hackmod, Bakon",
-        "contact": "mailto:nekonium@nekonium.org",
+        "contact": "mailto:virbicoin@virbicoin.org",
         "about": "This is an open source Blockchain Explorer.",
-        "rss": "https://nekonium.github.io/",
+        "rss": "https://virbicoin.github.io/",
         "reddit": "",
-        "twitter": "https://twitter.com/nekoniumdev",
+        "twitter": "https://twitter.com/virbicoindev",
         "linkedin": "",
-        "github": "https://github.com/nekonium",
+        "github": "https://github.com/virbicoin",
         "logo": "/img/explorer-logo.png",
-        "copyright": "2019 &copy; Ethereum Classic. / 2020 &copy; Nekonium.",
+        "copyright": "2019 &copy; Ethereum Classic. / 2020 &copy; VirBiCoin.",
         "poweredbyCustom": false,
         "poweredbyEtcImage": "/img/powered-by-etcexplorer-w.png",
         "poweredbyEtc": true,
@@ -67,8 +67,7 @@ Basic settings:
         "useFiat": false,
         "miners": {
         "miners": {
-            "0x98be787c10d15ad15d1f53af4c516fb509db7417": "mofumofu.me",
-            "0xef2399f9c4a1f8a9a7adafa9fb7a7d86be7ef4f1": "comining.io"
+            "0x950302976387b43E042aeA242AE8DAB8e5C204D1": "digitalregion.jp"
          }
     }
 }

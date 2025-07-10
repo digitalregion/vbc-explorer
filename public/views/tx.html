@@ -18,13 +18,13 @@
           <td width="25%">Block:</td>
           <td>
             <a href="/block/{{tx.blockNumber}}">{{tx.blockNumber | number}}</a>
-            <i class="fa fa-check-circle"></i>
+            <i class="fa-regular fa-check-circle"></i>
             <ng-pluralize count="tx.confirmations" when="{'0': 'Pending confirmation', 'one': '1 block confirmation', 'other': '{} block confirmations'}"></ng-pluralize>
           </td>
         </tr>
         <tr >
           <td width="25%">TimeStamp:</td>
-          <td><i class="fa fa-clock-o"></i> {{tx.timestamp | timeDuration}} ago ({{tx.datetime | date:'yyyy-MM-dd HH:mm:ss Z' }})</td>
+          <td><i class="fa-regular fa-clock"></i> {{tx.timestamp | timeDuration}} ago ({{tx.datetime | date:'yyyy-MM-dd HH:mm:ss Z' }})</td>
         </tr>
         <tr >
           <td width="25%">From:</td>

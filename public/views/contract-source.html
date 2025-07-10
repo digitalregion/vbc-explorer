@@ -1,13 +1,13 @@
 <div class="col-md-12">
   <div class="row" style="margin-bottom:20px;" ng-show="!contract.valid">
     <span class="eth-stat" >
-    <i style="color: red" class="fa fa-wheelchair"></i> Contract Source Code Unverified
+    <i style="color: red" class="fa-solid fa-wheelchair"></i> Contract Source Code Unverified
     </span><br>
     <span class="eth-stat-text"><a href="/contract/{{addrHash}}">Verify And Publish Source Code.</a></span>
   </div>
   <div class="row" ng-show="contract.valid">
     <p class="eth-stat">
-      <i style="color: green" class="fa fa-check-circle-o"></i> Contract Source Code Verified
+      <i style="color: green" class="fa-regular fa-circle-check"></i> Contract Source Code Verified
     </p>
   </div>
   <div class="row" ng-show="contract.valid">
@@ -30,15 +30,15 @@
   </div>
   <!--end row-->
   <div class="row" ng-show="contract.valid">
-    Contract Source Code <i class="fa fa-code"></i>
+    Contract Source Code <i class="fa-solid fa-code"></i>
     <pre class="code-js" ng-model="contract.sourceCode">{{contract.sourceCode}}</pre>
     <br>
-    Contract ABI <i class="fa fa-cogs"></i>
+    Contract ABI <i class="fa-solid fa-gears"></i>
     <pre class="code-js" ng-model="contract.abi">{{contract.abi}}</pre>
     <br>
   </div>
   <div class="row">
-    Contract Bytecode <i class="fa fa-building-o"></i>
+    Contract Bytecode <i class="fa-solid fa-building"></i>
     <pre class="code-bytecode" ng-class="{verified: contract.valid}">{{addr.bytecode}}</pre>
   </div>
 </div>

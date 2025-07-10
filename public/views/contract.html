@@ -26,7 +26,7 @@
               <span class="help-block"><b>Contract Address </b></span>
               <div class="input-group">
                 <input name="contractAddress" class="form-control code" type="text" ng-model="contract.address" maxlength="42" placeholder="Contract Address">
-                <span class="input-group-addon"><i class="fa fa-user"></i></span>
+                <span class="input-group-addon"><i class="fas fa-user"></i></span>
               </div>
               <span class="help-block font-red-mint">{{errors.address}}</span>
             </div>
@@ -34,7 +34,7 @@
               <span class="help-block"><b>Contract Name </b></span>
               <div class="input-group">
                 <input name="contractName" class="form-control code" type="text" ng-model="contract.name" maxlength="100" placeholder="Contract Name" data-toggle="tooltip" data-placement="bottom" title="Must match the ContractName in the Source Code or in a MultiPart Contract it should match the ContractName you deployed">
-                <span class="input-group-addon"><i class="fa fa-child"></i></span>
+                <span class="input-group-addon"><i class="fas fa-child"></i></span>
               </div>
               <span class="help-block font-red-mint">{{errors.name}}</span>
             </div>
@@ -77,18 +77,18 @@
       <div class="tab-pane" id="tab_contract_2" ng-class="{active: contract.compiled}" ng-show="contract.compiled">
         <div class="row">
           <div class="col-sm-12" ng-show="contract.valid">
-            <h4>Contract Source Code Verified <i class="fa fa-smile-o"></i></h4>
+            <h4>Contract Source Code Verified <i class="fa-regular fa-face-smile"></i></h4>
             <p>
               <!-- can't get this without custom evm
-                <i class="fa fa-check-circle-o font-green-sharp"></i> Note: Contract was created by transaction <a href="/tx/{{contract.txHash}}">{{contract.txHash}}</a><br>-->
-              <i class="fa fa-check-circle-o font-green-sharp"></i> View the verified result at <a href="/addr/{{contract.address}}">{{contract.address}}</a>.
+                <i class="fas fa-check-circle-o font-green-sharp"></i> Note: Contract was created by transaction <a href="/tx/{{contract.txHash}}">{{contract.txHash}}</a><br>-->
+              <i class="fa-regular fa-circle-check font-green-sharp"></i> View the verified result at <a href="/addr/{{contract.address}}">{{contract.address}}</a>.
             </p>
           </div>
           <div class="col-sm-12" ng-show="!contract.valid">
             <h4>Unable to Verify Code</h4>
             <p>
-              <!--<i class="fa fa-check-circle-o"></i> Note: Contract was created by transaction <a href="/tx/{{contract.txHash}}">{{contract.txHash}}</a><br>-->
-              <i class="fa fa-times-circle-o font-red-mint"></i> The compiled result does not match the input creation bytecode located at <a href="/addr/{{contract.address}}">{{contract.address}}</a>.
+              <!--<i class="fas fa-check-circle-o"></i> Note: Contract was created by transaction <a href="/tx/{{contract.txHash}}">{{contract.txHash}}</a><br>-->
+              <i class="fa-regular fa-circle-xmark font-red-mint"></i> The compiled result does not match the input creation bytecode located at <a href="/addr/{{contract.address}}">{{contract.address}}</a>.
             </p>
           </div>
         </div>

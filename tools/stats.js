@@ -43,10 +43,11 @@ const updateStats = async (range, interval, rescan) => {
   if (interval >= 10) {
     latestBlock -= latestBlock % interval;
   }
-  getStats(web3, latestBlock, null, latestBlock - range, interval, rescan);
+  await getStats(web3, latestBlock, null, latestBlock - range, interval, rescan);
 };
 
-var getStats = function (web3, blockNumber, nextBlock, endNumber, interval, rescan) {
+// getStatsのコールバックをasync/awaitに対応
+var getStats = async function (web3, blockNumber, nextBlock, endNumber, interval, rescan) {
   if (endNumber < 0) endNumber = 0;
   if (blockNumber <= endNumber) {
     if (rescan) {
@@ -55,34 +56,28 @@ var getStats = function (web3, blockNumber, nextBlock, endNumber, interval, resc
     return;
   }
 
-  if (web3.eth.net.isListening()) {
-
-    web3.eth.getBlock(blockNumber, true, (error, blockData) => {
-      if (error) {
-        console.log(`Warning: error on getting block with hash/number: ${
-          blockNumber}: ${error}`);
-      } else if (blockData == null) {
-        console.log(`Warning: null block data received from the block with hash/number: ${
-          blockNumber}`);
+  if (await web3.eth.net.isListening()) {
+    try {
+      const blockData = await web3.eth.getBlock(blockNumber, true);
+      if (!blockData) {
+        console.log(`Warning: null block data received from the block with hash/number: ${blockNumber}`);
       } else {
-        if (nextBlock) checkBlockDBExistsThenWrite(web3, blockData, nextBlock, endNumber, interval, rescan);
-        else checkBlockDBExistsThenWrite(web3, blockData, null, endNumber, interval, rescan);
+        if (nextBlock) await checkBlockDBExistsThenWrite(web3, blockData, nextBlock, endNumber, interval, rescan);
+        else await checkBlockDBExistsThenWrite(web3, blockData, null, endNumber, interval, rescan);
       }
-    });
+    } catch (error) {
+      console.log(`Warning: error on getting block with hash/number: ${blockNumber}: ${error}`);
+    }
   } else {
-    console.log(`${'Error: Aborted due to web3 is not connected when trying to ' +
-            'get block '}${blockNumber}`);
+    console.log(`${'Error: Aborted due to web3 is not connected when trying to ' + 'get block '}${blockNumber}`);
     process.exit(9);
   }
 };
 
-/**
-  * Checks if the a record exists for the block number
-  *     if record exists: abort
-  *     if record DNE: write a file for the block
-  */
-var checkBlockDBExistsThenWrite = function (web3, blockData, nextBlock, endNumber, interval, rescan) {
-  BlockStat.find({ number: blockData.number }, (err, b) => {
+// checkBlockDBExistsThenWriteをasync/await化
+var checkBlockDBExistsThenWrite = async function (web3, blockData, nextBlock, endNumber, interval, rescan) {
+  try {
+    const b = await BlockStat.find({ number: blockData.number });
     if (!b.length && nextBlock) {
       // calc hashrate, txCount, blocktime, uncleCount
       const stat = {
@@ -96,24 +91,22 @@ var checkBlockDBExistsThenWrite = function (web3, blockData, nextBlock, endNumbe
         'blockTime': (nextBlock.timestamp - blockData.timestamp) / (nextBlock.number - blockData.number),
         'uncleCount': blockData.uncles.length,
       };
-      new BlockStat(stat).save((err, s, count) => {
+      const s = await new BlockStat(stat).save();
+      if (!('quiet' in config && config.quiet === true)) {
+        console.log(s);
+      }
+      if (!s) {
+        console.log(`${'Error: Aborted due to error on ' + 'block number '}${blockData.number.toString()}`);
+        process.exit(9);
+      } else {
         if (!('quiet' in config && config.quiet === true)) {
-          console.log(s);
+          console.log(`DB successfully written for block number ${blockData.number.toString()}`);
         }
-        if (typeof err !== 'undefined' && err) {
-          console.log(`${'Error: Aborted due to error on ' + 'block number '}${blockData.number.toString()}: ${
-            err}`);
-          process.exit(9);
-        } else {
-          if (!('quiet' in config && config.quiet === true)) {
-            console.log(`DB successfully written for block number ${blockData.number.toString()}`);
-          }
-          getStats(web3, blockData.number - interval, blockData, endNumber, interval, rescan);
-        }
-      });
+        await getStats(web3, blockData.number - interval, blockData, endNumber, interval, rescan);
+      }
     } else {
       if (rescan || !nextBlock) {
-        getStats(web3, blockData.number - interval, blockData, endNumber, interval, rescan);
+        await getStats(web3, blockData.number - interval, blockData, endNumber, interval, rescan);
         if (nextBlock) {
           if (!('quiet' in config && config.quiet === true)) {
             console.log(`WARN: block number: ${blockData.number.toString()} already exists in DB.`);
@@ -123,11 +116,12 @@ var checkBlockDBExistsThenWrite = function (web3, blockData, nextBlock, endNumbe
         if (!('quiet' in config && config.quiet === true)) {
           console.error(`Aborting because block number: ${blockData.number.toString()} already exists in DB.`);
         }
-
       }
     }
-
-  });
+  } catch (err) {
+    console.log(err);
+    process.exit(9);
+  }
 };
 
 const minutes = 1;
@@ -170,3 +164,4 @@ if (!rescan) {
     updateStats(range, interval);
   }, statInterval);
 }
+

@@ -1,18 +1,32 @@
-module.exports = {
-    "env": {
-        "browser": true,
-        "es6": true
+import { dirname } from "path";
+import { fileURLToPath } from "url";
+import { FlatCompat } from "@eslint/eslintrc";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+const compat = new FlatCompat({
+    baseDirectory: __dirname,
+});
+
+const eslintConfig = [
+    ...compat.extends("next/core-web-vitals", "next/typescript"),
+];
+
+eslintConfig.push({
+    files: ["**/*.ts", "**/*.tsx"],
+    languageOptions: {
+        parserOptions: {
+            projectService: true,
+        },
     },
-    "extends": "airbnb-base",
-    "globals": {
-        "Atomics": "readonly",
-        "SharedArrayBuffer": "readonly"
-    },
-    "parserOptions": {
-        "ecmaVersion": 2018,
-        "sourceType": "module"
-    },
-    "rules": {
+    ignores: [
+        "node_modules",
+        "db - internal.js",
+        "gulpfile.js",
+        "*.min.js"
+    ],
+    rules: {
         "array-bracket-spacing": 2,
         "block-scoped-var": 2,
         "brace-style": [2, "1tbs", { "allowSingleLine": true }],
@@ -31,7 +45,7 @@ module.exports = {
         "func-style": 0,
         "generator-star-spacing": [2, "both"],
         "guard-for-in": 0,
-        "handle-callback-err": [2, "^(err|error|anySpecificError)$" ],
+        "handle-callback-err": [2, "^(err|error|anySpecificError)$"],
         "indent": [2, 2, { "SwitchCase": 1 }],
         "key-spacing": [2, { "beforeColon": false, "afterColon": true }],
         "linebreak-style": 0,
@@ -146,7 +160,7 @@ module.exports = {
         "semi-spacing": 0,
         "sort-vars": 0,
         "space-before-blocks": [2, "always"],
-        "space-before-function-paren": [2, {"anonymous": "always", "named": "never"}],
+        "space-before-function-paren": [2, { "anonymous": "always", "named": "never" }],
         "space-in-parens": [2, "never"],
         "space-infix-ops": 2,
         "keyword-spacing": 2,
@@ -160,5 +174,7 @@ module.exports = {
         "wrap-iife": [2, "any"],
         "wrap-regex": 0,
         "yoda": [2, "never"]
-    }
-};
+    },
+});
+
+export default eslintConfig;

@@ -43,3 +43,4 @@ config.json
 /nbproject/private/
 
 .vs/*
+.env

@@ -2,6 +2,10 @@ div.page-logo {overflow: visible;}
 img.logo-default {
     max-height: 150px;
     height: 100px;
+    transition: all 0.3s ease;
+}
+img.logo-default:hover {
+    transform: scale(1.05);
 }
 .create{background-color:#36c6d3}
 .truncate-txhash, .truncate-addrhash{
@@ -9,12 +13,22 @@ img.logo-default {
     overflow:hidden;
     text-overflow: ellipsis;
     max-width:220px;
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    background: var(--bg-accent, #f3f4f6);
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 12px;
+    color: var(--text-primary, #1f2937);
+    transition: all 0.2s ease;
+}
+.truncate-txhash:hover, .truncate-addrhash:hover {
+    background: var(--border-color, #e5e7eb);
 }
 .truncate-addrhash {
     max-width:200px;
 }
 .scrollable {
-    max-height: 400px;
+    max-height: 500px;
     overflow-y: scroll;
     overflow-x: hidden;
 }
@@ -25,27 +39,45 @@ img.logo-default {
     text-overflow: ellipsis;
 }
 .eth-stat {
-    padding-bottom: 20px;
+    padding: 24px;
     font-size: 14px;
     font-weight: 600;
-    color: #7f90a4;
+    color: var(--text-secondary, #6b7280);
+    background: var(--bg-primary, #ffffff);
+    border-radius: 12px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    border: 1px solid var(--border-color, #e5e7eb);
+    transition: all 0.3s ease;
+}
+.eth-stat:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    transform: translateY(-2px);
 }
 .eth-stat-title {
-    font-size: 25px;
+    font-size: 28px;
     text-align: center;
+    color: var(--primary-color, #4f46e5);
+    font-weight: 700;
+    margin-bottom: 8px;
 }
 .eth-stat-title2 {
     font-size: 20px;
     text-align: center;
+    color: var(--text-primary, #1f2937);
+    font-weight: 600;
 }
 .eth-stat-subtitle {
     font-size: 14px;
     text-align: center;
+    color: var(--text-secondary, #6b7280);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
 }
 .eth-stat-text {
-    color: #5b9bd1;
+    color: var(--secondary-color, #06b6d4);
     font-size: 13px;
-    font-weight: 800;
+    font-weight: 600;
     text-align: center;
 }
 .fade {opacity: 0.6}
@@ -147,4 +179,25 @@ li.ng-scope {
 .page-spinner-bar{margin-top:-84px;margin-left:-98px;top:50%;left:50%;}
 .mini-logo {
   height: 1.2em;
+}
+/* ローディングスピナー */
+.loading-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.3);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.spinner {
+  border: 8px solid #f3f3f3;
+  border-top: 8px solid #3498db;
+  border-radius: 50%;
+  width: 60px; height: 60px;
+  animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  0% { transform: rotate(0deg);}
+  100% { transform: rotate(360deg);}
 }

@@ -16,4 +16,17 @@ angular.module('BlocksApp').controller('TokenListController', function($statePar
         }
       })
 
+    $scope.goToToken = function(address) {
+      window.location.href = '/token/' + address;
+    };
+
+    $scope.getVRCType = function(type) {
+      if (!type) return 'VRC-20'; // デフォルトERC20
+      switch (type.toUpperCase()) {
+        case 'ERC20': return 'VRC-20';
+        case 'ERC721': return 'VRC-721';
+        case 'ERC1155': return 'VRC-1155';
+        default: return type;
+      }
+    };
 })

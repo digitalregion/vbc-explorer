@@ -4221,7 +4221,7 @@ tbody.collapse.in {
   .breadcrumb > li {
     display: inline-block; }
     .breadcrumb > li + li:before {
-      content: "/ ";
+      content: "/ ";
       padding: 0 5px;
       color: #ccc; }
   .breadcrumb > .active {
@@ -6020,3 +6020,9 @@ button.close {
 @media print {
   .hidden-print {
     display: none !important; } }
+
+/* DataTablesのソート中セルをダークに */
+td.sorting_1, th.sorting_1 {
+  background-color: #273449 !important; /* 例: ダークブルー系 */
+  color: #f1f5f9 !important;           /* 明るい文字色 */
+}
