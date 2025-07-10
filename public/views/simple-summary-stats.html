@@ -1,62 +1,59 @@
-<div class="row" style="margin-top:10px;margin-bottom:10px;">
+<div class="row" style="margin-top:20px;margin-bottom:30px;">
   <div class="col-lg-3 col-md-3 col-sm-6 col-xs-12">
-    <div class="dashboard-stat2 ">
+    <div class="eth-stat">
       <div class="display">
-        <div class="icon">
-          <i class="fa fa-cube"></i>
+        <div class="eth-stat-icon">
+          <i class="fa-solid fa-cube"></i>
         </div>
-        <div class="number">
-          <h3>
-            <small>#</small>
-            <span data-counter="counterup" data-value="stats.blockHeight">{{stats.blockHeight | number: 0 }}</span>
-          </h3>
-          <small>Block Height</small>
+        <div class="eth-stat-value">
+          {{stats.blockHeight | number: 0 }}
+        </div>
+        <div class="eth-stat-label">LATEST BLOCK</div>
+        <div class="eth-stat-sublabel">
+          <span class="live-indicator">● Live</span>
         </div>
       </div>
     </div>
   </div>
   <div class="col-lg-3 col-md-3 col-sm-6 col-xs-12">
-    <div class="dashboard-stat2 ">
+    <div class="eth-stat">
       <div class="display">
-        <div class="icon">
-          <i class="fa fa-hourglass-half"></i>
+        <div class="eth-stat-icon">
+          <i class="fa-solid fa-hourglass-half"></i>
         </div>
-        <div class="number">
-          <h3>
-            <span data-counter="counterup" data-value="stats.blockTime">{{stats.blockTime | number: 2}} s</span>
-          </h3>
-          <small>Block Time</small>
+        <div class="eth-stat-value">
+          {{stats.blockTime | number: 2}}s
         </div>
+        <div class="eth-stat-label">AVERAGE BLOCK TIME</div>
+        <div class="eth-stat-sublabel">Last 100 blocks</div>
       </div>
     </div>
   </div>
   <div class="col-lg-3 col-md-3 col-sm-6 col-xs-12">
-    <div class="dashboard-stat2 ">
+    <div class="eth-stat">
       <div class="display">
-        <div class="icon">
-          <i class="fa fa-tachometer"></i>
+        <div class="eth-stat-icon">
+          <i class="fa-solid fa-gauge-high"></i>
         </div>
-        <div class="number">
-          <h3>
-            <span data-counter="counterup" data-value="stats.hashrate">{{stats.hashrate | totalDifficulty}}/s</span>
-          </h3>
-          <small>Network Hashrate</small>
+        <div class="eth-stat-value">
+          {{stats.hashrate | totalDifficulty}}/s
         </div>
+        <div class="eth-stat-label">NETWORK HASHRATE</div>
+        <div class="eth-stat-sublabel">Current mining power</div>
       </div>
     </div>
   </div>
   <div class="col-lg-3 col-md-3 col-sm-6 col-xs-12">
-    <div class="dashboard-stat2 ">
+    <div class="eth-stat">
       <div class="display">
-        <div class="icon">
-          <i class="icon-puzzle"></i>
+        <div class="eth-stat-icon">
+          <i class="fa-solid fa-puzzle-piece"></i>
         </div>
-        <div class="number">
-          <h3>
-            <span data-counter="counterup" data-value="stats.difficulty">{{stats.difficulty | totalDifficulty}}</span>
-          </h3>
-          <small>DIFFICULTY</small>
+        <div class="eth-stat-value">
+          {{stats.difficulty | totalDifficulty}}
         </div>
+        <div class="eth-stat-label">NETWORK DIFFICULTY</div>
+        <div class="eth-stat-sublabel">Current mining difficulty</div>
       </div>
     </div>
   </div>

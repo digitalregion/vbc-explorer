@@ -32,7 +32,7 @@ module.exports = function (req, res) {
 /**
   Aggregate miner stats
 **/
-var getMinerStats = function (req, res) {
+var getMinerStats = async function (req, res) {
   let range = 6 * 60 * 60; // 6 hours
   // check validity of range
   if (req.body.range && req.body.range < 60 * 60 * 24 * 7) {
@@ -43,54 +43,46 @@ var getMinerStats = function (req, res) {
   }
 
   const timebefore = parseInt((new Date()) / 1000) - range;
-  Block.find({ timestamp: { $lte: timebefore } }, 'timestamp number')
-    .lean(true).sort('-number').limit(1)
-    .exec((err, docs) => {
-      if (err || !docs) {
-        console.error(err);
-        res.status(500).send();
-        res.end();
-        return;
-      }
-      const blockNumber = docs[0].number;
-      console.log(`getMinerStats(): blockNumber = ${blockNumber}`);
-      Block.aggregate([
-        { $match: { number: { $gte: blockNumber } } },
-        {
-          $group: {
-            _id: '$miner',
-            timestamp: { $min: '$timestamp' },
-            count: { $sum: 1 },
-          },
+  try {
+    const docs = await Block.find({ timestamp: { $lte: timebefore } }, 'timestamp number')
+      .lean(true).sort('-number').limit(1);
+    if (!docs || docs.length === 0) {
+      res.status(500).send();
+      res.end();
+      return;
+    }
+    const blockNumber = docs[0].number;
+    console.log(`getMinerStats(): blockNumber = ${blockNumber}`);
+    let result = await Block.aggregate([
+      { $match: { number: { $gte: blockNumber } } },
+      {
+        $group: {
+          _id: '$miner',
+          timestamp: { $min: '$timestamp' },
+          count: { $sum: 1 },
         },
-      ], (err, result) => {
-        if (err) {
-          console.error(err);
-          res.status(500).send();
-        } else {
-          if (config.settings.miners) {
-            result.forEach((m) => {
-              if (config.settings.miners[m._id]) {
-                m._id = config.settings.miners[m._id];
-              }
-            });
-          }
-          res.write(JSON.stringify(result));
-          res.end();
+      },
+    ]);
+    if (config.settings.miners) {
+      result.forEach((m) => {
+        if (config.settings.miners[m._id]) {
+          m._id = config.settings.miners[m._id];
         }
       });
-    });
+    }
+    res.write(JSON.stringify(result));
+    res.end();
+  } catch (err) {
+    console.error(err);
+    res.status(500).send();
+    res.end();
+  }
 };
 
 /**
   Aggregate network hashrates
 **/
-var getHashrates = function (req, res) {
-  // setup default range
-  //var range =      7 * 24 * 60 * 60; /* 7 days */
-  //var range =     14 * 24 * 60 * 60; /* 14 days */
-  //var range =     30 * 24 * 60 * 60; /* 1 months */
-  //var range = 2 * 30 * 24 * 60 * 60; /* 2 months */
+var getHashrates = async function (req, res) {
   let range = 6 * 30 * 24 * 60 * 60; /* 6 months */
   if (req.body.days && req.body.days <= 365) {
     let days = parseInt(req.body.days);
@@ -105,7 +97,6 @@ var getHashrates = function (req, res) {
     }
   }
 
-  // select mod
   const rngs = [30 * 60, 60 * 60, 2 * 60 * 60, 4 * 60 * 60, 6 * 60 * 60,
     12 * 60 * 60, 24 * 60 * 60, 7 * 24 * 60 * 60, 14 * 24 * 60 * 60, 30 * 24 * 60 * 60,
   ];
@@ -118,36 +109,35 @@ var getHashrates = function (req, res) {
     if (range > r) {
       i++;
     }
-
   });
   const mod = mods[i];
-
   const timestamp = parseInt((new Date()) / 1000) - range;
 
-  BlockStat.aggregate([
-    { $match: { timestamp: { $gte: timestamp } } },
-    {
-      $group: {
-        _id: {
-          timestamp: {
-            $subtract: ['$timestamp', { $mod: ['$timestamp', mod] }],
+  try {
+    const docs = await BlockStat.aggregate([
+      { $match: { timestamp: { $gte: timestamp } } },
+      {
+        $group: {
+          _id: {
+            timestamp: {
+              $subtract: ['$timestamp', { $mod: ['$timestamp', mod] }],
+            },
           },
+          blockTime: { $avg: '$blockTime' },
+          difficulty: { $max: '$difficulty' },
+          count: { $sum: 1 },
         },
-        blockTime: { $avg: '$blockTime' },
-        difficulty: { $max: '$difficulty' },
-        count: { $sum: 1 },
       },
-    },
-    {
-      $project: {
-        '_id': 0,
-        'timestamp': '$_id.timestamp',
-        'blockTime': 1,
-        'difficulty': 1,
-        'count': 1,
-      },
-    }]).sort('timestamp').exec((err, docs) => {
-    const hashrates = [];
+      {
+        $project: {
+          '_id': 0,
+          'timestamp': '$_id.timestamp',
+          'blockTime': 1,
+          'difficulty': 1,
+          'count': 1,
+        },
+      }
+    ]).sort('timestamp');
     docs.forEach((doc) => {
       doc.instantHashrate = doc.difficulty / doc.blockTime;
       doc.unixtime = doc.timestamp; /* FIXME */
@@ -155,7 +145,10 @@ var getHashrates = function (req, res) {
     });
     res.write(JSON.stringify({ 'hashrates': docs }));
     res.end();
-  });
+  } catch (err) {
+    res.status(500).send();
+    res.end();
+  }
 };
 
 /**

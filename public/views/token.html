@@ -1,44 +1,45 @@
 <!-- BEGIN PAGE CONTENT-->
 <div class="row">
-<div class="col-md-12 portlet light">
-  <div class="portlet-body">
-    <div class="row">
-      <div class="col-md-6 center">
-        <div >
-          <span class="eth-stat-title2">
-          {{ token.balance | number: 10 }} </span><br>
-          <span class="eth-stat-text">
-          {{ token.name }} Address Balance ({{ settings.symbol }})
-          </span><br>
-          <div class="margin-top-20">
-            {{ token.total_supply | number:1 }} <span class="eth-stat-text">Total {{ token.symbol }} Tokens</span>
-          </div>
-          {{ token.total_holders | number:1 }}
-          <div class="margin-top-20">
-            <span class="eth-stat-text">Token Holders</span>
-          </div>
-          <div class="margin-top-20">
-            {{ token.count }} <span class="eth-stat-text">Transactions</span>
-          </div>
-        </div>
+  <div class="col-md-12 center mb-4">
+    <h2 class="text-2xl font-bold">
+      {{token.name}}
+      <span class="text-slate-400">({{token.symbol}})</span>
+      <span class="badge badge-info ml-2">{{ getVRCType(token.type) }}</span>
+      <span class="ml-2 font-mono"><a href="/addr/{{token.address}}">{{token.address}}</a></span>
+    </h2>
+  </div>
+</div>
+<!-- ローディングスピナー -->
+<div ng-show="loading" class="loading-overlay">
+  <div class="spinner"></div>
+</div>
+<div class="row">
+  <div class="col-md-12 center">
+    <div class="d-flex flex-wrap justify-content-center gap-4">
+      <div>
+        <span class="eth-stat-title2">{{ token.balance | number: 10 }} </span>
+        <span class="eth-stat-text">Address Balance ({{ settings.symbol }})</span>
       </div>
-      <div class="col-md-6 center">
-        <div>
-          <span class="eth-stat-text">Contract Creator</span><br>
-          <a href="/addr/{{token.owner}}">{{token.owner.substr(0,24)}}...</a> at txn
-          <a href="/tx/{{token.creationTransaction}}">{{token.creationTransaction.substr(0,24)}}...</a>
-        </div>
-        <div class="margin-top-20">
-          <span class="eth-stat-text">Contract Address</span><br>
-          <a href="/addr/{{token.address}}">{{token.address}}</a>
-        </div>
+      <div>
+        <span class="eth-stat-text">Total {{ token.symbol }} Tokens</span> {{ token.total_supply | number:1 }}
+      </div>
+      <div>
+        <span class="eth-stat-text">Token Holders</span> {{ token.total_holders | number:1 }}
+      </div>
+      <div>
+        <span class="eth-stat-text">Transactions</span> {{ token.count }}
+      </div>
+      <div>
+        <span class="eth-stat-text">Contract Creator</span>
+        <span ng-if="token.creator">
+          <a href="/addr/{{token.creator}}">{{token.creator}}</a>
+        </span>
+        <span ng-if="!token.creator" class="text-muted">(不明)</span>
       </div>
     </div>
-    <!--end row-->
   </div>
-  <!--end portlet-body-->
 </div>
-<!--end portlet-->
+<!-- 既存の詳細ブロックや重複表示は削除 -->
 <!-- Begin: Transaction Datatable -->
 <div class="portlet light col-md-12">
   <div class="portlet-body">
@@ -55,6 +56,9 @@
         </li>
         <li ng-class="{active: activeTab == 'tab_token_4'}">
           <a href="#tab_token_4" data-toggle="tab" aria-expanded="false"> Contract Source </a>
+        </li>
+        <li ng-class="{active: activeTab == 'tab_token_erc721'}">
+          <a href="#tab_token_erc721" data-toggle="tab" aria-expanded="false"> ERC721 TokenIDs </a>
         </li>
       </ul>
       <div class="tab-content">
@@ -106,6 +110,16 @@
         <!-- End: Datatable tab -->
         <div class="tab-pane" id="tab_token_4" ng-class="{active: activeTab == 'tab_token_4'}">
           <contract-source></contract-source>
+        </div>
+        <div class="tab-pane" id="tab_token_erc721" ng-class="{active: activeTab == 'tab_token_erc721'}">
+          <h4>ERC721 TokenIDs</h4>
+          <div ng-if="erc721Tokens.length === 0" class="text-muted">No ERC721 tokens found.</div>
+          <div ng-repeat="nft in erc721Tokens" class="mb-4">
+            <div class="font-bold">Contract: {{ nft.contract }}</div>
+            <div class="flex flex-wrap gap-2">
+              <span ng-repeat="tokenId in nft.tokenIds" class="label label-info">TokenID: {{ tokenId }}</span>
+            </div>
+          </div>
         </div>
       </div>
       <!-- end tab content -->

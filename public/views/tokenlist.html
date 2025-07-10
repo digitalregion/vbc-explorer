@@ -2,9 +2,22 @@
   <div class="col-md-12 portlet light">
     <div class="portlet-body">
       <table class="col-md-6 table">
-        <tr ng-repeat="t in tokens track by $index">
-          <td> <a class="font-green" href="/token/{{t.address}}">{{t.name}} ({{t.symbol}})</a> </td>
-          <td > <a href="/token/{{t.address}}">{{t.address}}</a> </td>
+        <tr ng-repeat="t in tokens track by $index" ng-click="goToToken(t.address)" style="cursor:pointer;">
+          <td>
+            <a class="font-green" href="/token/{{t.address}}" ng-click="$event.stopPropagation()">
+              {{t.name}} ({{t.symbol}})
+            </a>
+          </td>
+          <td>
+            <a href="/token/{{t.address}}" ng-click="$event.stopPropagation()">
+              {{t.address}}
+            </a>
+          </td>
+          <td>
+            <a class="btn btn-xs btn-info" href="/token/{{t.address}}" ng-click="$event.stopPropagation()">
+              {{ getVRCType(t.type) }}
+            </a>
+          </td>
         </tr>
       </table>
     </div>

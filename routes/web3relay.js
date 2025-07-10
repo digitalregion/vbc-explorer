@@ -67,78 +67,82 @@ exports.data = async (req, res) => {
   if ('tx' in req.body) {
     var txHash = req.body.tx.toLowerCase();
 
-    Transaction.findOne({ hash: txHash }).lean(true).exec(async (err, doc) => {
-      if (err || !doc) {
-        web3.eth.getTransaction(txHash, (err, tx) => {
-          if (err || !tx) {
-            console.error(`TxWeb3 error :${err}`);
-            if (!tx) {
-              web3.eth.getBlock(txHash, (err, block) => {
-                if (err || !block) {
-                  console.error(`BlockWeb3 error :${err}`);
-                  res.write(JSON.stringify({ 'error': true }));
-                } else {
-                  console.log(`BlockWeb3 found: ${txHash}`);
-                  res.write(JSON.stringify({ 'error': true, 'isBlock': true }));
-                }
-                res.end();
-              });
-            } else {
-              res.write(JSON.stringify({ 'error': true }));
+    let txResponse;
+    let doc;
+    try {
+      doc = await Transaction.findOne({ hash: txHash }).lean(true).exec();
+    } catch (err) {
+      console.error(err);
+    }
+    if (!doc) {
+      web3.eth.getTransaction(txHash, (err, tx) => {
+        if (err || !tx) {
+          console.error(`TxWeb3 error :${err}`);
+          if (!tx) {
+            web3.eth.getBlock(txHash, (err, block) => {
+              if (err || !block) {
+                console.error(`BlockWeb3 error :${err}`);
+                res.write(JSON.stringify({ 'error': true }));
+              } else {
+                console.log(`BlockWeb3 found: ${txHash}`);
+                res.write(JSON.stringify({ 'error': true, 'isBlock': true }));
+              }
               res.end();
-            }
+            });
           } else {
-            const ttx = tx;
-            ttx.value = etherUnits.toEther(new BigNumber(tx.value), 'wei');
-            //get TxReceipt status & gasUsed
-            web3.eth.getTransactionReceipt(txHash, (err, receipt) => {
-              if (err) {
-                console.error(err);
-                return;
-              }
-              ttx.gasUsed = receipt.gasUsed;
-              if (receipt.status) {
-                ttx.status = receipt.status;
-              }
-              if (!tx.to && !tx.creates) {
-                if (receipt && receipt.contractAddress) {
-                  ttx.creates = receipt.contractAddress;
-                }
-              }
-            });
-            //get timestamp from block
-            const block = web3.eth.getBlock(tx.blockNumber, (err, block) => {
-              if (!err && block) ttx.timestamp = block.timestamp;
-              ttx.isTrace = (ttx.input != '0x');
-              txResponse = ttx;
-            });
+            res.write(JSON.stringify({ 'error': true }));
+            res.end();
           }
-        });
-      } else {
-        txResponse = doc;
-      }
+        } else {
+          const ttx = tx;
+          ttx.value = etherUnits.toEther(new BigNumber(tx.value), 'wei');
+          //get TxReceipt status & gasUsed
+          web3.eth.getTransactionReceipt(txHash, (err, receipt) => {
+            if (err) {
+              console.error(err);
+              return;
+            }
+            ttx.gasUsed = receipt.gasUsed;
+            if (receipt.status) {
+              ttx.status = receipt.status;
+            }
+            if (!tx.to && !tx.creates) {
+              if (receipt && receipt.contractAddress) {
+                ttx.creates = receipt.contractAddress;
+              }
+            }
+          });
+          //get timestamp from block
+          const block = web3.eth.getBlock(tx.blockNumber, (err, block) => {
+            if (!err && block) ttx.timestamp = block.timestamp;
+            ttx.isTrace = (ttx.input != '0x');
+            txResponse = ttx;
+          });
+        }
+      });
+    } else {
+      txResponse = doc;
+    }
 
-      const latestBlock = await web3.eth.getBlockNumber() + 1;
+    const latestBlock = await web3.eth.getBlockNumber() + 1;
 
-      txResponse.confirmations = latestBlock - txResponse.blockNumber;
+    txResponse.confirmations = latestBlock - txResponse.blockNumber;
 
-      if (txResponse.confirmations === latestBlock) {
-        txResponse.confirmation = 0;
-      }
-      txResponse.gasPriceGwei = etherUnits.toGwei(new BigNumber(txResponse.gasPrice), 'wei');
-      txResponse.gasPriceEther = etherUnits.toEther(new BigNumber(txResponse.gasPrice), 'wei');
-      txResponse.txFee = txResponse.gasPriceEther * txResponse.gasUsed;
+    if (txResponse.confirmations === latestBlock) {
+      txResponse.confirmation = 0;
+    }
+    txResponse.gasPriceGwei = etherUnits.toGwei(new BigNumber(txResponse.gasPrice), 'wei');
+    txResponse.gasPriceEther = etherUnits.toEther(new BigNumber(txResponse.gasPrice), 'wei');
+    txResponse.txFee = txResponse.gasPriceEther * txResponse.gasUsed;
 
-      if (config.settings.useFiat) {
-        const latestPrice = await Market.findOne().sort({ timestamp: -1 });
-        txResponse.txFeeUSD = txResponse.txFee * latestPrice.quoteUSD;
-        txResponse.valueUSD = txResponse.value * latestPrice.quoteUSD;
-      }
+    if (config.settings.useFiat) {
+      const latestPrice = await Market.findOne().sort({ timestamp: -1 });
+      txResponse.txFeeUSD = txResponse.txFee * latestPrice.quoteUSD;
+      txResponse.valueUSD = txResponse.value * latestPrice.quoteUSD;
+    }
 
-      res.write(JSON.stringify(txResponse));
-      res.end();
-    });
-
+    res.write(JSON.stringify(txResponse));
+    res.end();
   } else if ('tx_trace' in req.body) {
     var txHash = req.body.tx_trace.toLowerCase();
 
@@ -153,20 +157,23 @@ exports.data = async (req, res) => {
     });
   } else if ('addr_trace' in req.body) {
     var addr = req.body.addr_trace.toLowerCase();
-    // need to filter both to and from
-    // from block to end block, paging "toAddress":[addr],
-    // start from creation block to speed things up
     // TODO: store creation block
     const filter = { 'fromBlock': '0x1d4c00', 'toAddress': [addr] };
-    web3.trace.filter(filter, (err, tx) => {
-      if (err || !tx) {
-        console.error(`TraceWeb3 error :${err}`);
-        res.write(JSON.stringify({ 'error': true }));
-      } else {
-        res.write(JSON.stringify(filterTrace(tx)));
-      }
+    try {
+      // web3.trace.filterはコールバック形式なのでPromiseラップ
+      const tx = await new Promise((resolve, reject) => {
+        web3.trace.filter(filter, (err, tx) => {
+          if (err) return reject(err);
+          resolve(tx);
+        });
+      });
+      res.write(JSON.stringify(filterTrace(tx)));
       res.end();
-    });
+    } catch (err) {
+      console.error(`TraceWeb3 error :${err}`);
+      res.write(JSON.stringify({ 'error': true }));
+      res.end();
+    }
   } else if ('addr' in req.body) {
     var addr = req.body.addr.toLowerCase();
     const { options } = req.body;
@@ -216,9 +223,9 @@ exports.data = async (req, res) => {
       blockNumOrHash = parseInt(req.body.block);
     }
 
-    Block.findOne({ $or: [{ hash: blockNumOrHash }, { number: blockNumOrHash }] },
-      { '_id': 0 }).lean(true).exec('findOne', (err, doc) => {
-      if (err || !doc) {
+    try {
+      const doc = await Block.findOne({ $or: [{ hash: blockNumOrHash }, { number: blockNumOrHash }] }, { '_id': 0 }).lean(true);
+      if (!doc) {
         web3.eth.getBlock(blockNumOrHash, (err, block) => {
           if (err || !block) {
             console.error(`BlockWeb3 error :${err}`);
@@ -229,13 +236,22 @@ exports.data = async (req, res) => {
           res.end();
         });
       } else {
-        Transaction.find({ blockNumber: doc.number }).distinct('hash', (err, txs) => {
+        try {
+          const txs = await Transaction.find({ blockNumber: doc.number }).distinct('hash');
           doc['transactions'] = txs;
           res.write(JSON.stringify(filterBlocks(doc)));
           res.end();
-        });
+        } catch (err) {
+          console.error(`Transaction find error :${err}`);
+          res.write(JSON.stringify({ 'error': true }));
+          res.end();
+        }
       }
-    });
+    } catch (err) {
+      console.error(`Block findOne error :${err}`);
+      res.write(JSON.stringify({ 'error': true }));
+      res.end();
+    }
 
     /*
     / TODO: Refactor, "block" / "uncle" determinations should likely come later
