@@ -80,6 +80,7 @@ app.use((err, req, res, next) => {
 
 const http = require('http').Server(app);
 
-http.listen(app.get('port'), '0.0.0.0', () => {
-  console.log(`Express server listening on port ${app.get('port')}`);
+http.listen(app.get('port'), '0.0.0.0', function () {
+  const actualPort = http.address().port;
+  console.log(`Express server listening on port ${actualPort}`);
 });
