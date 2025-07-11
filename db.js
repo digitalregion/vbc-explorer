@@ -149,11 +149,4 @@ mongoose.Promise = global.Promise;
 // Mongoose 7対応の設定
 mongoose.set('strictQuery', false);
 
-mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost/explorerDB', {
-  // useMongoClient: true, // この行を削除またはコメントアウト
-  // poolSize: 5,
-  // rs_name: 'myReplicaSetName',
-  // 認証情報は接続文字列に含める方が推奨
-});
-
 // mongoose.set('debug', true);

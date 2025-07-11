@@ -1,0 +1,188 @@
+@import "tailwindcss";
+
+/* Custom animations for new blocks */
+@keyframes newBlockFlash {
+  0% { 
+    background-color: rgba(34, 197, 94, 0.4);
+    border-color: rgba(34, 197, 94, 0.8);
+    box-shadow: 0 0 25px rgba(34, 197, 94, 0.6);
+    transform: scale(1.05);
+  }
+  25% { 
+    background-color: rgba(34, 197, 94, 0.3);
+    border-color: rgba(34, 197, 94, 0.6);
+    box-shadow: 0 0 20px rgba(34, 197, 94, 0.4);
+    transform: scale(1.02);
+  }
+  50% { 
+    background-color: rgba(34, 197, 94, 0.2);
+    border-color: rgba(34, 197, 94, 0.4);
+    box-shadow: 0 0 15px rgba(34, 197, 94, 0.3);
+    transform: scale(1.01);
+  }
+  100% { 
+    background-color: rgba(34, 197, 94, 0.1);
+    border-color: rgba(34, 197, 94, 0.2);
+    box-shadow: 0 0 10px rgba(34, 197, 94, 0.2);
+    transform: scale(1);
+  }
+}
+
+.new-block-animation {
+  animation: newBlockFlash 3s ease-in-out;
+}
+
+/* Links */
+a {
+  color: #66bfff;
+}
+a:hover {
+  color: #89cff0;
+  text-decoration: none;
+}
+
+/* Custom styles adapted from VirBiCoin Pool */
+@layer base {
+  body {
+    @apply bg-gray-900 text-gray-200;
+    padding-top: 0;
+    margin-bottom: 0;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply text-white;
+  }
+}
+
+@layer components {
+  .container {
+    @apply w-full px-2 mx-auto;
+  }
+
+  @media (min-width: 768px) {
+    .container {
+      @apply max-w-[750px];
+    }
+  }
+  @media (min-width: 992px) {
+    .container {
+      @apply max-w-[970px];
+    }
+  }
+  @media (min-width: 1200px) {
+    .container {
+      @apply max-w-[1170px];
+    }
+  }
+  @media (min-width: 1440px) {
+    .container {
+      @apply max-w-[1400px];
+    }
+  }
+
+  .panel {
+    @apply bg-gray-800 border border-gray-700 rounded-lg mb-5;
+  }
+
+  .panel-body {
+    @apply p-5;
+  }
+
+  .table {
+    @apply w-full bg-gray-800 text-gray-200;
+  }
+
+  .table > thead > tr > th {
+    @apply border-b-2 border-gray-700 text-white p-3;
+  }
+
+  .table > tbody > tr > td {
+    @apply border-t border-gray-700 p-3;
+  }
+
+  .table-striped > tbody > tr:nth-of-type(odd) {
+    @apply bg-gray-700;
+  }
+
+  .table-hover > tbody > tr:hover {
+    @apply bg-gray-600 text-white;
+  }
+
+  .form-control {
+    @apply bg-gray-700 border border-gray-600 text-gray-200 rounded px-3 py-2;
+  }
+
+  .form-control:focus {
+    @apply border-blue-500 outline-none;
+  }
+
+  .btn-primary {
+    @apply bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded;
+  }
+
+  .hash {
+    @apply font-mono;
+  }
+
+  .nav-link {
+    @apply px-3 py-2;
+    color: inherit !important;
+    transition: background 0.2s, border-radius 0.2s, color 0.2s;
+  }
+
+  .nav-link:hover {
+    background: #004a7c !important;
+    border-radius: 0.375rem !important;
+    padding-left: 0.75rem !important;
+    padding-right: 0.75rem !important;
+    padding-top: 0.5rem !important;
+    padding-bottom: 0.5rem !important;
+    transition-property: background, border-radius, color;
+    transition-duration: 200ms;
+    transition-timing-function: ease;
+  }
+
+  .nav-link.active {
+    @apply text-white bg-blue-600;
+  }
+
+  .tab-link {
+    color: inherit !important;
+  }
+
+  .tab-link-active {
+    color: inherit !important;
+  }
+
+  .tab-link-inactive {
+    color: #9ca3af !important;
+  }
+}
+
+@layer utilities {
+  .page-header-container {
+    @apply bg-gray-800 border-b border-gray-700 py-8 w-full;
+  }
+
+  .page-header-container h1 {
+    @apply text-3xl font-bold mb-2 text-gray-100;
+  }
+
+  .page-header-container p {
+    @apply text-gray-400;
+  }
+
+  .page-header-container .container {
+    @apply pt-0;
+  }
+}
+
+/* ダークモード用のスタイル */
+.dark body {
+  @apply bg-gray-900 text-gray-200;
+}
+
+.dark {
+  --background: #111827;
+  --foreground: #e5e7eb;
+}

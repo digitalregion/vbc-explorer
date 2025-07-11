@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="_layer_1" data-name="layer_1" xmlns="http://www.w3.org/2000/svg" version="1.1" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 512 512">
+  <!-- Generator: Adobe Illustrator 29.5.1, SVG Export Plug-In . SVG Version: 2.1.0 Build 141)  -->
+  <defs>
+    <style>
+      .st0 {
+        stroke: url(#_gradation);
+      }
+
+      .st0, .st1 {
+        isolation: isolate;
+        opacity: .98;
+        stroke-linecap: round;
+        stroke-width: 40.96px;
+      }
+
+      .st0, .st1, .st2 {
+        fill: none;
+        stroke-miterlimit: 10.24;
+      }
+
+      .st1 {
+        stroke: url(#_gradation_2);
+      }
+
+      .st3 {
+        fill: url(#_gradation_3);
+      }
+
+      .st2 {
+        stroke: #f472b6;
+        stroke-width: 20.48px;
+      }
+
+      .st4 {
+        fill: #19122a;
+      }
+    </style>
+    <linearGradient id="_gradation" data-name="gradation" x1="-697.19" y1="796.07" x2="-696.19" y2="795.07" gradientTransform="translate(85419.36 225690) scale(122.4 -283.39)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffa7e7"/>
+      <stop offset=".33" stop-color="#f472b6"/>
+      <stop offset=".66" stop-color="#a78bfa"/>
+      <stop offset=".9" stop-color="#7f80fd"/>
+      <stop offset="1" stop-color="#5ee7ff"/>
+    </linearGradient>
+    <linearGradient id="_gradation_2" data-name="gradation 2" x1="-697.22" y1="796.04" x2="-696.22" y2="795.04" gradientTransform="translate(85654.38 225690) scale(122.4 -283.39)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffa7e7"/>
+      <stop offset=".33" stop-color="#f472b6"/>
+      <stop offset=".66" stop-color="#a78bfa"/>
+      <stop offset=".9" stop-color="#7f80fd"/>
+      <stop offset="1" stop-color="#5ee7ff"/>
+    </linearGradient>
+    <linearGradient id="_gradation_3" data-name="gradation 3" x1="-699.95" y1="795.77" x2="-698.95" y2="794.77" gradientTransform="translate(161409 183486.6) scale(230.4 -230.4)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffa7e7"/>
+      <stop offset=".33" stop-color="#f472b6"/>
+      <stop offset=".66" stop-color="#a78bfa"/>
+      <stop offset=".9" stop-color="#7f80fd"/>
+      <stop offset="1" stop-color="#5ee7ff"/>
+    </linearGradient>
+  </defs>
+  <circle class="st4" cx="256" cy="256" r="256"/>
+  <circle class="st2" cx="256" cy="256" r="235.52"/>
+  <path class="st0" d="M199.68,122.88c-44.37-23.89-79.36-2.56-104.96,64-32.43,93.87-19.63,163.84,38.4,209.92"/>
+  <path class="st1" d="M312.32,122.88c44.37-23.89,79.36-2.56,104.96,64,32.43,93.87,19.63,163.84-38.4,209.92"/>
+  <circle class="st3" cx="256" cy="256" r="115.2"/>
+</svg>

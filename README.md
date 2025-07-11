@@ -2,7 +2,7 @@
 
 <img src="public/img/explorer-logo.png" alt="VBC Explorer logo" height="200" />
 
-<b>Live Version: [explorer.digitalregion.jp](https://explorer.digitalregion.jp)</b>
+<b>Live Version: [explore.digitalregion.jp](https://explore.digitalregion.jp)</b>
 
 Follow the project progress at: [ETC Block Explorer Development](https://github.com/ethereumclassic/explorer)
 
