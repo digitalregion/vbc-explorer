@@ -85,7 +85,16 @@ const updateStats = async (range: number, interval: number, rescan: boolean): Pr
   if (interval >= 10) {
     latestBlock -= latestBlock % interval;
   }
-  getStats(latestBlock, null, latestBlock - range, interval, rescan);
+  
+  // Check which blocks already have statistics
+  const existingStats = await BlockStat.find({ 
+    number: { $gte: latestBlock - range, $lte: latestBlock } 
+  }).select('number').lean();
+  
+  const existingStatNumbers = new Set(existingStats.map(s => s.number));
+  console.log(`Found ${existingStats.length} existing block statistics in range ${latestBlock - range}-${latestBlock}`);
+  
+  getStats(latestBlock, null, latestBlock - range, interval, rescan, existingStatNumbers);
 };
 
 /**
@@ -96,7 +105,8 @@ const getStats = async function (
   nextBlock: any | null,
   endNumber: number,
   interval: number,
-  rescan: boolean
+  rescan: boolean,
+  existingStatNumbers?: Set<number>
 ): Promise<void> {
   if (endNumber < 0) endNumber = 0;
 
@@ -123,9 +133,9 @@ const getStats = async function (
     }
 
     if (nextBlock) {
-      checkBlockDBExistsThenWrite(blockData, nextBlock, endNumber, interval, rescan);
+      checkBlockDBExistsThenWrite(blockData, nextBlock, endNumber, interval, rescan, existingStatNumbers);
     } else {
-      checkBlockDBExistsThenWrite(blockData, null, endNumber, interval, rescan);
+      checkBlockDBExistsThenWrite(blockData, null, endNumber, interval, rescan, existingStatNumbers);
     }
 
   } catch (error) {
@@ -142,22 +152,34 @@ const checkBlockDBExistsThenWrite = async function (
   nextBlock: any | null,
   endNumber: number,
   interval: number,
-  rescan: boolean
+  rescan: boolean,
+  existingStatNumbers?: Set<number>
 ): Promise<void> {
   try {
-    const existingStat = await BlockStat.findOne({ number: toNumber(blockData.number) });
+    const blockNumber = toNumber(blockData.number);
+    
+    // Skip if statistics already exist and we're not rescanning
+    if (existingStatNumbers && existingStatNumbers.has(blockNumber) && !rescan) {
+      if (!config.quiet) {
+        console.log(`Skipping existing block statistics for block #${blockNumber}`);
+      }
+      getStats(blockNumber - interval, blockData, endNumber, interval, rescan, existingStatNumbers);
+      return;
+    }
+
+    const existingStat = await BlockStat.findOne({ number: blockNumber });
 
     if (!existingStat && nextBlock) {
       // Calculate hashrate, txCount, blocktime, uncleCount
       const stat: BlockStatData = {
-        number: toNumber(blockData.number),
+        number: blockNumber,
         timestamp: toNumber(blockData.timestamp),
         difficulty: toString(blockData.difficulty),
         txCount: blockData.transactions.length,
         gasUsed: toNumber(blockData.gasUsed),
         gasLimit: toNumber(blockData.gasLimit),
         miner: toString(blockData.miner),
-        blockTime: (toNumber(nextBlock.timestamp) - toNumber(blockData.timestamp)) / (toNumber(nextBlock.number) - toNumber(blockData.number)),
+        blockTime: (toNumber(nextBlock.timestamp) - toNumber(blockData.timestamp)) / (toNumber(nextBlock.number) - blockNumber),
         uncleCount: blockData.uncles.length,
       };
 
@@ -165,17 +187,17 @@ const checkBlockDBExistsThenWrite = async function (
       await blockStat.save();
 
       if (!config.quiet) {
-        console.log(`DB successfully written for block number ${toNumber(blockData.number)}`);
+        console.log(`DB successfully written for block number ${blockNumber}`);
       }
 
-      getStats(toNumber(blockData.number) - interval, blockData, endNumber, interval, rescan);
+      getStats(blockNumber - interval, blockData, endNumber, interval, rescan, existingStatNumbers);
 
     } else {
       // Always continue processing even if block exists, but log warning
       if (!config.quiet) {
-        console.log(`WARN: block number: ${toNumber(blockData.number)} already exists in DB.`);
+        console.log(`WARN: block number: ${blockNumber} already exists in DB.`);
       }
-      getStats(toNumber(blockData.number) - interval, blockData, endNumber, interval, rescan);
+      getStats(blockNumber - interval, blockData, endNumber, interval, rescan, existingStatNumbers);
     }
 
   } catch (error) {

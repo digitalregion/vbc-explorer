@@ -390,13 +390,34 @@ const syncChain = async function (startBlock?: number, endBlock?: number): Promi
 
   console.log(`Syncing blocks from ${startBlock} to ${endBlock}...`);
 
+  // Check which blocks already exist in database
+  const existingBlocks = await Block.find({ 
+    number: { $gte: startBlock, $lte: endBlock } 
+  }).select('number').lean();
+  
+  const existingBlockNumbers = new Set(existingBlocks.map(b => b.number));
+  console.log(`Found ${existingBlocks.length} existing blocks in range ${startBlock}-${endBlock}`);
+
+  let processedCount = 0;
+  let skippedCount = 0;
+
   for (let blockNum = startBlock; blockNum <= endBlock; blockNum++) {
     try {
+      // Skip if block already exists
+      if (existingBlockNumbers.has(blockNum)) {
+        if (!config.quiet) {
+          console.log(`Skipping existing block #${blockNum}`);
+        }
+        skippedCount++;
+        continue;
+      }
+
       const blockData = await web3.eth.getBlock(blockNum, true);
 
       if (blockData) {
         await writeBlockToDB(blockData);
         await writeTransactionsToDB(blockData);
+        processedCount++;
       }
 
       // Flush every bulkSize blocks
@@ -414,7 +435,9 @@ const syncChain = async function (startBlock?: number, endBlock?: number): Promi
   await writeBlockToDB(null, true);
   await writeTransactionsToDB(null, true);
 
-  console.log('*** Sync Completed ***');
+  console.log(`*** Sync Completed ***`);
+  console.log(`Processed: ${processedCount} blocks`);
+  console.log(`Skipped: ${skippedCount} existing blocks`);
 };
 
 /**

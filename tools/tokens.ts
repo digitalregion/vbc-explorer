@@ -359,6 +359,13 @@ async function scanForTokens() {
       const toBlock = Math.min(fromBlock + BLOCKS_PER_BATCH - 1, Number(latestBlockNumber));
       console.log(`Scanning blocks from ${fromBlock} to ${toBlock}...`);
 
+      // Check which blocks in this range have already been scanned for tokens
+      const existingTokens = await Token.find({}).select('address').lean();
+      const existingTokenAddresses = new Set(existingTokens.map(t => t.address.toLowerCase()));
+      
+      let newTokensFound = 0;
+      let existingTokensSkipped = 0;
+
       for (let i = fromBlock; i <= toBlock; i++) {
         const block = await web3.eth.getBlock(i, true);
         if (block && block.transactions) {
@@ -369,6 +376,13 @@ async function scanForTokens() {
               const receipt = await web3.eth.getTransactionReceipt(txFull.hash);
               if (receipt && receipt.contractAddress) {
                 const contractAddress = receipt.contractAddress as string;
+                
+                // Skip if token already exists
+                if (existingTokenAddresses.has(contractAddress.toLowerCase())) {
+                  existingTokensSkipped++;
+                  continue;
+                }
+
                 console.log(`Potential contract found at address: ${contractAddress} in block ${i}`);
 
                 // Check if it's an ERC20 token
@@ -402,6 +416,9 @@ async function scanForTokens() {
                         },
                         { upsert: true, new: true, setDefaultsOnInsert: true }
                     );
+                    
+                    newTokensFound++;
+                    existingTokenAddresses.add(contractAddress.toLowerCase());
                 } else if (await isErc721Token(contractAddress)) {
                   console.log(`Contract ${contractAddress} is a VRC-721 (ERC721 Compatible) token.`);
                   const tokenContract = new web3.eth.Contract(minimalErc721Abi as any, contractAddress);
@@ -433,6 +450,9 @@ async function scanForTokens() {
                             },
                             { upsert: true, new: true, setDefaultsOnInsert: true }
                         );
+                        
+                        newTokensFound++;
+                        existingTokenAddresses.add(contractAddress.toLowerCase());
                   } catch (e) {
                       console.error(`Error fetching details for VRC-721 token ${contractAddress}:`, e);
                       continue; // Skip this token if details can't be fetched
@@ -444,6 +464,7 @@ async function scanForTokens() {
         }
       }
 
+      console.log(`Block range ${fromBlock}-${toBlock}: Found ${newTokensFound} new tokens, skipped ${existingTokensSkipped} existing tokens`);
       fromBlock = toBlock + 1;
     }
   } catch (error) {
