@@ -387,6 +387,14 @@ async function scanForTokens() {
 
                 // Check if it's an ERC20 token
                 if (await isErc20Token(contractAddress)) {
+                    // Check if token already exists in DB
+                    const existingToken = await Token.findOne({ address: contractAddress.toLowerCase() }).lean();
+                    
+                    if (existingToken) {
+                        console.log(`Skipping existing ERC20 token: ${contractAddress} (already in DB)`);
+                        continue;
+                    }
+                    
                     const contract = new web3.eth.Contract(humanStandardTokenAbi, contractAddress);
                     const name = await contract.methods.name().call() as string;
                     const symbol = await contract.methods.symbol().call() as string;
@@ -401,26 +409,32 @@ async function scanForTokens() {
                       await connectDB();
                     }
 
-                    // Add or update the token in the database
-                    await Token.findOneAndUpdate(
-                        { address: contractAddress.toLowerCase() },
-                        {
-                            name,
-                            symbol,
-                            address: contractAddress.toLowerCase(),
-                            decimals: Number(decimals),
-                            totalSupply: totalSupply.toString(),
-                            type: 'ERC20',
-                            holders: 0, // This would be updated by another script like richlist
-                            supply: totalSupply.toString(),
-                        },
-                        { upsert: true, new: true, setDefaultsOnInsert: true }
-                    );
+                    // Add new token to the database
+                    const newToken = new Token({
+                        name,
+                        symbol,
+                        address: contractAddress.toLowerCase(),
+                        decimals: Number(decimals),
+                        totalSupply: totalSupply.toString(),
+                        type: 'ERC20',
+                        holders: 0, // This would be updated by another script like richlist
+                        supply: totalSupply.toString(),
+                    });
+                    await newToken.save();
                     
                     newTokensFound++;
                     existingTokenAddresses.add(contractAddress.toLowerCase());
                 } else if (await isErc721Token(contractAddress)) {
                   console.log(`Contract ${contractAddress} is a VRC-721 (ERC721 Compatible) token.`);
+                  
+                  // Check if token already exists in DB
+                  const existingToken = await Token.findOne({ address: contractAddress.toLowerCase() }).lean();
+                  
+                  if (existingToken) {
+                      console.log(`Skipping existing VRC-721 token: ${contractAddress} (already in DB)`);
+                      continue;
+                  }
+                  
                   const tokenContract = new web3.eth.Contract(minimalErc721Abi as any, contractAddress);
                    try {
                         const name = await tokenContract.methods.name().call();
@@ -436,20 +450,18 @@ async function scanForTokens() {
                           await connectDB();
                         }
 
-                        await Token.findOneAndUpdate(
-                            { address: contractAddress.toLowerCase() },
-                            {
-                                name,
-                                symbol,
-                                address: contractAddress.toLowerCase(),
-                                decimals,
-                                totalSupply: totalSupply.toString(),
-                                type: 'VRC-721',
-                                holders: 0,
-                                supply: totalSupply.toString(),
-                            },
-                            { upsert: true, new: true, setDefaultsOnInsert: true }
-                        );
+                        // Add new token to the database
+                        const newToken = new Token({
+                            name,
+                            symbol,
+                            address: contractAddress.toLowerCase(),
+                            decimals,
+                            totalSupply: totalSupply.toString(),
+                            type: 'VRC-721',
+                            holders: 0,
+                            supply: totalSupply.toString(),
+                        });
+                        await newToken.save();
                         
                         newTokensFound++;
                         existingTokenAddresses.add(contractAddress.toLowerCase());

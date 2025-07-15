@@ -158,18 +158,18 @@ const checkBlockDBExistsThenWrite = async function (
   try {
     const blockNumber = toNumber(blockData.number);
     
-    // Skip if statistics already exist and we're not rescanning
-    if (existingStatNumbers && existingStatNumbers.has(blockNumber) && !rescan) {
+    // Check if block statistics already exist in DB
+    const existingStat = await BlockStat.findOne({ number: blockNumber });
+    
+    if (existingStat && !rescan) {
       if (!config.quiet) {
-        console.log(`Skipping existing block statistics for block #${blockNumber}`);
+        console.log(`Skipping existing block statistics for block #${blockNumber} (already in DB)`);
       }
       getStats(blockNumber - interval, blockData, endNumber, interval, rescan, existingStatNumbers);
       return;
     }
 
-    const existingStat = await BlockStat.findOne({ number: blockNumber });
-
-    if (!existingStat && nextBlock) {
+    if (nextBlock) {
       // Calculate hashrate, txCount, blocktime, uncleCount
       const stat: BlockStatData = {
         number: blockNumber,
@@ -193,10 +193,7 @@ const checkBlockDBExistsThenWrite = async function (
       getStats(blockNumber - interval, blockData, endNumber, interval, rescan, existingStatNumbers);
 
     } else {
-      // Always continue processing even if block exists, but log warning
-      if (!config.quiet) {
-        console.log(`WARN: block number: ${blockNumber} already exists in DB.`);
-      }
+      // Continue processing for blocks without next block data
       getStats(blockNumber - interval, blockData, endNumber, interval, rescan, existingStatNumbers);
     }
 
