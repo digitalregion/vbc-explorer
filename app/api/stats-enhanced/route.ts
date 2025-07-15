@@ -1,10 +1,37 @@
 // Enhanced stats API for VirBiCoin Explorer
 import { NextResponse } from 'next/server';
 import { getChainStats } from '../../../lib/stats';
+import { connectDB } from '../../../lib/mongodb';
+import { Block } from '../../../models/index';
 
 export async function GET() {
   try {
     const stats = await getChainStats();
+    
+    // Calculate active miners from recent blocks
+    let activeMiners = 0;
+    try {
+      await connectDB();
+      
+      // Get the last 100 blocks and count unique miners
+      const recentBlocks = await Block.find({})
+        .sort({ number: -1 })
+        .limit(100)
+        .select('miner')
+        .lean();
+      
+      const uniqueMiners = new Set();
+      recentBlocks.forEach(block => {
+        if (block.miner) {
+          uniqueMiners.add(block.miner.toLowerCase());
+        }
+      });
+      
+      activeMiners = uniqueMiners.size;
+    } catch (error) {
+      console.error('Error calculating active miners:', error);
+      activeMiners = 0;
+    }
     
     // Transform basic stats to enhanced stats format
     const enhancedStats = {
@@ -15,7 +42,7 @@ export async function GET() {
       isConnected: stats.isConnected,
       totalTransactions: stats.totalTransactions,
       avgGasPrice: stats.avgTransactionFee, // Convert fee to gas price
-      activeMiners: 1, // Default for now
+      activeMiners: activeMiners,
       lastBlockTime: stats.lastBlockTime // Add this field
     };
     
