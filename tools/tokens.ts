@@ -332,6 +332,12 @@ async function scanForTokens() {
   }
 
   try {
+    // Ensure DB connection before database operations
+    if (mongoose.connection.readyState !== 1) {
+      console.log('Reconnecting to database...');
+      await connectDB();
+    }
+    
     // Get the last scanned block from the database
     let syncState = await SyncState.findOne({ scannerName: 'tokenScanner' });
     if (!syncState) {
@@ -375,6 +381,12 @@ async function scanForTokens() {
 
                     console.log(`Found ERC20 Token: ${name} (${symbol})`);
 
+                    // Ensure DB connection before database operations
+                    if (mongoose.connection.readyState !== 1) {
+                      console.log('Reconnecting to database for ERC20 token...');
+                      await connectDB();
+                    }
+
                     // Add or update the token in the database
                     await Token.findOneAndUpdate(
                         { address: contractAddress.toLowerCase() },
@@ -400,6 +412,12 @@ async function scanForTokens() {
                         const decimals = 0; // NFTs are non-fungible
                         // Total supply for VRC-721 is often tracked differently. Placeholder.
                         const totalSupply = 0;
+
+                        // Ensure DB connection before database operations
+                        if (mongoose.connection.readyState !== 1) {
+                          console.log('Reconnecting to database for VRC-721 token...');
+                          await connectDB();
+                        }
 
                         await Token.findOneAndUpdate(
                             { address: contractAddress.toLowerCase() },
@@ -454,12 +472,27 @@ async function updateOsatoTokenData() {
 
 // 全VRC-721トークンを一括で更新する関数
 async function updateAllVrc721Tokens() {
-  await connectDB();
-  const tokens = await Token.find({ type: { $in: ['VRC-721', 'ERC721', 'VRC721'] } });
-  for (const token of tokens) {
-    await updateTokenWithRealData(token.address);
+  try {
+    // Ensure DB connection
+    if (mongoose.connection.readyState !== 1) {
+      console.log('Reconnecting to database for VRC-721 update...');
+      await connectDB();
+    }
+    
+    const tokens = await Token.find({ type: { $in: ['VRC-721', 'ERC721', 'VRC721'] } });
+    console.log(`Found ${tokens.length} VRC-721 tokens to update`);
+    
+    for (const token of tokens) {
+      try {
+        await updateTokenWithRealData(token.address);
+      } catch (error) {
+        console.error(`Error updating token ${token.address}:`, error);
+        // Continue with next token even if one fails
+      }
+    }
+  } catch (error) {
+    console.error('Error in updateAllVrc721Tokens:', error);
   }
-  await disconnect();
 }
 
 // Export for use by other scripts
