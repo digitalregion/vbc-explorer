@@ -171,18 +171,11 @@ const checkBlockDBExistsThenWrite = async function (
       getStats(toNumber(blockData.number) - interval, blockData, endNumber, interval, rescan);
 
     } else {
-      if (rescan || !nextBlock) {
-        getStats(toNumber(blockData.number) - interval, blockData, endNumber, interval, rescan);
-        if (nextBlock) {
-          if (!config.quiet) {
-            console.log(`WARN: block number: ${toNumber(blockData.number)} already exists in DB.`);
-          }
-        }
-      } else {
-        if (!config.quiet) {
-          console.error(`Aborting because block number: ${toNumber(blockData.number)} already exists in DB.`);
-        }
+      // Always continue processing even if block exists, but log warning
+      if (!config.quiet) {
+        console.log(`WARN: block number: ${toNumber(blockData.number)} already exists in DB.`);
       }
+      getStats(toNumber(blockData.number) - interval, blockData, endNumber, interval, rescan);
     }
 
   } catch (error) {

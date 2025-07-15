@@ -63,7 +63,7 @@ const fetchVBCPrice = async (): Promise<PriceData | null> => {
         const response = await fetch(source);
         if (!response.ok) continue;
 
-        const data = await response.json();
+        const data = await response.json() as any;
         
         // Parse different API formats
         let quoteBTC = 0;

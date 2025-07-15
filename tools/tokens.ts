@@ -322,8 +322,13 @@ async function updateTokenWithRealData(tokenAddress: string) {
 
 async function scanForTokens() {
   console.log('Starting token scan...');
-  if (mongoose.connection.readyState !== 1) {
-    await connectDB();
+  try {
+    if (mongoose.connection.readyState !== 1) {
+      await connectDB();
+    }
+  } catch (error) {
+    console.error('Failed to connect to database:', error);
+    return; // Skip this scan if DB connection fails
   }
 
   try {
@@ -469,31 +474,52 @@ if (require.main === module) {
 }
 
 async function main() {
-  // Check command line arguments
-  const args = process.argv.slice(2);
-  
-  if (args.includes('--update-all-vrc721')) {
-    await updateAllVrc721Tokens();
-    return;
-  }
-  if (args.includes('--update-osato')) {
-    await updateOsatoTokenData();
-    return;
-  }
-  // Default: 通常のトークンスキャン＋VRC-721トークンの定期自動更新
-  await scanForTokens(); // Run once on start
-  setInterval(scanForTokens, SCAN_INTERVAL_MS);
+  try {
+    // Check command line arguments
+    const args = process.argv.slice(2);
+    
+    if (args.includes('--update-all-vrc721')) {
+      await updateAllVrc721Tokens();
+      return;
+    }
+    if (args.includes('--update-osato')) {
+      await updateOsatoTokenData();
+      return;
+    }
+    
+    // Ensure initial DB connection
+    await connectDB();
+    
+    // Default: 通常のトークンスキャン＋VRC-721トークンの定期自動更新
+    await scanForTokens(); // Run once on start
+    setInterval(async () => {
+      try {
+        await scanForTokens();
+      } catch (error) {
+        console.error('Error in scanForTokens interval:', error);
+      }
+    }, SCAN_INTERVAL_MS);
 
-  // VRC-721トークンの自動更新（scanForTokensと同じ間隔で60秒ごと）
-  setInterval(updateAllVrc721Tokens, SCAN_INTERVAL_MS);
+    // VRC-721トークンの自動更新（scanForTokensと同じ間隔で60秒ごと）
+    setInterval(async () => {
+      try {
+        await updateAllVrc721Tokens();
+      } catch (error) {
+        console.error('Error in updateAllVrc721Tokens interval:', error);
+      }
+    }, SCAN_INTERVAL_MS);
 
-  // Graceful shutdown
-  process.on('SIGINT', async () => {
-    console.log('Caught interrupt signal. Shutting down gracefully.');
-    await disconnect();
-    console.log('Database disconnected.');
-    process.exit(0);
-  });
+    // Graceful shutdown
+    process.on('SIGINT', async () => {
+      console.log('Caught interrupt signal. Shutting down gracefully.');
+      await disconnect();
+      console.log('Database disconnected.');
+      process.exit(0);
+    });
+  } catch (error) {
+    console.error('Error in main function:', error);
+    process.exit(1);
+  }
 }
 
 main().catch(error => {
