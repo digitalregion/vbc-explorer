@@ -65,3 +65,4 @@ config.json
 .next/
 next-env.d.ts
 dist/
+tsconfig.tsbuildinfo

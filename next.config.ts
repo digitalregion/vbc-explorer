@@ -6,6 +6,10 @@ const nextConfig: NextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
+  env: {
+    MONGODB_URI: process.env.MONGODB_URI,
+    PORT: process.env.PORT,
+  },
   images: {
     dangerouslyAllowSVG: true,
     contentDispositionType: 'attachment',

@@ -1,21 +1,38 @@
 {
   "name": "vbc-explorer",
-  "version": "0.4.0",
-  "description": "A lightweight virbicoin classic block explorer",
-  "repository": "https://github.com/virbicoin/explorer",
+  "version": "0.4.1",
+  "description": "A modern blockchain explorer for VirBiCoin network with NFT support, contract verification, and real-time statistics",
+  "keywords": ["blockchain", "explorer", "virbicoin", "cryptocurrency", "nft", "smart-contracts", "web3"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/virbicoin/vbc-explorer.git"
+  },
   "license": "MIT",
-  "author": "Elaine, Cody, Hackmod, Bakon",
-  "homepage": "https://vbc.digitalregion.jp",
+  "author": "Aoi Emerauda",
+  "contributors": [
+    "Elaine",
+    "Cody", 
+    "Hackmod",
+    "Bakon"
+  ],
+  "homepage": "https://explorer.digitalregion.jp",
   "bugs": {
-    "url": "https://github.com/virbicoin/explorer/issues"
+    "url": "https://github.com/virbicoin/vbc-explorer/issues"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
   },
   "scripts": {
-    "start": "next build && next start",
-    "build": "npm run lint && next build",
+    "start": "bash -c 'set -a && source .env.local 2>/dev/null || true && set +a && next build && next start'",
     "dev": "next dev",
+    "build": "next build",
+    "build:production": "npm run lint && npm run build",
     "lint": "next lint",
     "lint:fix": "next lint --fix",
+    "type-check": "tsc --noEmit",
     "test": "mocha --exit",
+    "clean": "rm -rf .next out dist",
     "sync": "ts-node --project tsconfig.tools.json tools/sync.ts",
     "stats": "ts-node --project tsconfig.tools.json tools/stats.ts",
     "rich": "ts-node --project tsconfig.tools.json tools/richlist.ts",
@@ -43,12 +60,14 @@
     "data:logs:stats": "./manage-data.sh logs stats",
     "data:logs:rich": "./manage-data.sh logs richlist",
     "data:logs:tokens": "./manage-data.sh logs tokens",
-    "production": "npm run build && npm start",
-    "production:with-data": "npm run data:start && npm run production"
+    "production": "npm run build:production && npm start",
+    "production:with-data": "npm run data:start && npm run production",
+    "docker:build": "docker build -t vbc-explorer .",
+    "docker:run": "docker-compose up -d",
+    "docker:stop": "docker-compose down"
   },
   "dependencies": {
     "@heroicons/react": "^2.2.0",
-    "concurrently": "^9.2.0",
     "human-standard-token-abi": "^2.0.0",
     "mongoose": "^8.16.3",
     "next": "15.3.5",
@@ -70,6 +89,7 @@
     "@types/web3": "^1.2.2",
     "autoprefixer": "^10.4.21",
     "chai": "^5.2.1",
+    "concurrently": "^9.2.0",
     "eslint": "^9.31.0",
     "eslint-config-next": "15.3.5",
     "eslint-plugin-import": "^2.32.0",
@@ -80,5 +100,26 @@
     "tailwindcss": "^4.1.11",
     "ts-node": "^10.9.2",
     "typescript": "^5.8.3"
+  },
+  "peerDependencies": {
+    "react": ">=18.0.0",
+    "react-dom": ">=18.0.0"
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  },
+  "config": {
+    "mongodbMemoryServer": {
+      "version": "6.0.0"
+    }
   }
 }

@@ -14,31 +14,35 @@ A modern, real-time blockchain explorer for the VirBiCoin network built with Nex
 
 ## Features
 
-- **Real-time Blockchain Sync** - Live synchronization of blocks and transactions
-- **NFT Support** - VRC-721 and VRC-1155 token tracking with metadata
-- **Contract Verification** - Smart contract source code verification and publication
-- **Rich List** - Account balance tracking and ranking
-- **Advanced Statistics** - Network statistics and mining information
-- **Contract Interaction** - Direct smart contract interaction interface
-- **Search Functionality** - Search blocks, transactions, addresses, and tokens
-- **Responsive Design** - Modern UI optimized for all devices
-- **TypeScript** - Full TypeScript support for better development experience
-- **Price Tracking** - Real-time VBC price updates from external APIs
+- **Real-time Blockchain Sync** - Live synchronization of blocks and transactions from VirBiCoin network
+- **Advanced Statistics** - Network hashrate, difficulty, mining analytics, and performance metrics
+- **NFT Support** - Complete VRC-721 and VRC-1155 token tracking with metadata and image loading
+- **Contract Verification** - Smart contract source code verification with Solidity compiler integration
+- **Rich List** - Real-time account balance tracking and wealth distribution analysis
+- **Token Management** - VRC-20 token tracking with holder analytics and transfer history
+- **Price Tracking** - Real-time VBC price updates from multiple external APIs
+- **Contract Interaction** - Direct smart contract interaction interface with ABI support
+- **Advanced Search** - Search blocks, transactions, addresses, tokens, and contracts
+- **Responsive Design** - Modern UI optimized for desktop, tablet, and mobile devices
+- **TypeScript** - Full TypeScript support for enhanced development experience
+- **Production Ready** - Optimized builds, error handling, and performance monitoring
 
 ## Tech Stack
 
 - **Frontend**: Next.js 15+ (App Router), React 19+, TypeScript 5+, Tailwind CSS v4
-- **Backend**: Node.js, TypeScript, MongoDB
-- **Blockchain**: Web3.js v4, Ethers.js
-- **Deployment**: Docker, PM2
+- **Backend**: Node.js 18+, TypeScript, MongoDB 6.0+, Mongoose ODM
+- **Blockchain**: Web3.js v4, VirBiCoin RPC (port 8329)
+- **Development**: ts-node, ESLint, Prettier
+- **Deployment**: Docker, PM2, production builds
 
 ## Local Installation
 
 ### Prerequisites
 
-- Node.js 18+ and npm
-- MongoDB 6.0+
-- VirBiCoin node running on localhost:8329
+- **Node.js 18+** and npm
+- **MongoDB 6.0+** with authentication enabled
+- **VirBiCoin node** running on localhost:8329 with RPC enabled
+- **Minimum 4GB RAM** and **20GB storage** for full blockchain data
 
 ### Setup
 
@@ -53,47 +57,72 @@ cd vbc-explorer
 npm install
 ```
 
-3. **Install MongoDB**
-
-**macOS:**
+3. **Configure MongoDB Authentication**
 ```bash
-brew install mongodb-community
+# Start MongoDB and create database user
+mongosh
+use explorerDB
+db.createUser({
+  user: "explorer",
+  pwd: "your_secure_password",
+  roles: [{ role: "readWrite", db: "explorerDB" }]
+})
+exit
 ```
 
-**Ubuntu:**
+4. **Set up environment variables**
 ```bash
-sudo apt-get install -y mongodb-org
+# Create environment configuration
+cat > .env.local << EOF
+MONGODB_URI=mongodb://explorer:your_secure_password@localhost:27017/explorerDB
+NODE_ENV=development
+PORT=3000
+EOF
 ```
 
-**Windows:**
-Download from [MongoDB official site](https://www.mongodb.com/try/download/community)
-
-4. **Configure the application**
-
-Copy the example configuration:
+5. **Configure application settings** (optional)
 ```bash
+# Copy and customize configuration
 cp config.example.json config.json
+# Edit config.json for your VirBiCoin node settings
 ```
 
-Edit `config.json` with your settings:
-```json
-{
-  "nodeAddr": "localhost",
-  "port": 8329,
-  "wsPort": 8330,
-  "bulkSize": 100,
-  "syncAll": true,
-  "quiet": false,
-  "useRichList": true,
-  "enableNFT": true,
-  "enableContractVerification": true,
-  "settings": {
-    "useFiat": true,
-    "symbol": "VBC",
-    "name": "VirBiCoin"
-  },
-  "miners": {
-    "0x950302976387b43E042aeA242AE8DAB8e5C204D1": "digitalregion.jp",
+6. **Start VirBiCoin node** (ensure RPC is enabled)
+```bash
+# Verify node is running and accessible
+curl -X POST -H "Content-Type: application/json" \
+     --data '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' \
+     http://localhost:8329
+```
+
+7. **Start the development server**
+```bash
+npm run dev
+```
+
+8. **Initialize blockchain data** (in a separate terminal)
+```bash
+# Start all data synchronization services
+npm run data:start
+
+# Or start services individually
+npm run data:start:sync    # Blockchain synchronization
+npm run data:start:stats   # Network statistics
+npm run data:start:rich    # Account richlist
+npm run data:start:tokens  # Token tracking
+```
+
+The explorer will be available at `http://localhost:3000`
+
+### Alternative: Docker Setup
+
+```bash
+# Start with Docker Compose
+docker-compose up -d
+
+# The explorer will be available at http://localhost:3000
+# MongoDB will be accessible on localhost:27017
+```
     "0x6C0DB3Ea9EEd7ED145f36da461D84A8d02596B08": "coolpool.top"
   }
 }
@@ -155,20 +184,61 @@ export MONGODB_URI="mongodb://explorer:<password>@localhost:27017/vbc-explorer"
 # Start the development server
 npm run dev
 
-# Start blockchain sync in another terminal
-npm run sync
+# Start data services (in separate terminals or background)
+npm run data:start          # Start all services
+npm run data:start:sync     # Blockchain synchronization
+npm run data:start:stats    # Network statistics calculation  
+npm run data:start:rich     # Rich list calculation
+npm run data:start:tokens   # Token and NFT tracking
+npm run data:start:price    # Price monitoring
 
-# Start statistics calculation
-npm run stats
+# Check service status
+npm run data:status
 
-# Start rich list calculation
-npm run rich
+# View service logs
+npm run data:logs:sync
+npm run data:logs:stats
+npm run data:logs:rich
+npm run data:logs:tokens
+```
 
-# Start token tracking
-npm run tokens
+### Production Mode
 
-# Start price monitoring
-npm run price
+```bash
+# Build and start production server
+npm run production
+
+# Or with data services
+npm run production:with-data
+
+# Manual production deployment
+npm run build               # Build optimized application
+npm start                   # Start production server
+```
+
+### Available NPM Scripts
+
+| Script | Description |
+|--------|-------------|
+| `npm run dev` | Start development server |
+| `npm run build` | Build production application |
+| `npm start` | Start production server |
+| `npm run lint` | Run ESLint checks |
+| `npm run lint:fix` | Fix ESLint issues automatically |
+| `npm test` | Run test suite |
+| **Data Management** |
+| `npm run data:start` | Start all data services |
+| `npm run data:stop` | Stop all data services |
+| `npm run data:restart` | Restart all data services |
+| `npm run data:status` | Check service status |
+| `npm run data:sync` | Initial blockchain sync |
+| `npm run data:rescan` | Rescan statistics |
+| **Individual Services** |
+| `npm run sync` | Manual blockchain sync |
+| `npm run stats` | Manual statistics calculation |
+| `npm run rich` | Manual rich list update |
+| `npm run tokens` | Manual token tracking |
+| `npm run price` | Manual price update |
 ```
 
 ### Production Mode

@@ -1,19 +1,44 @@
 import { NextResponse } from 'next/server';
-import { connectDB, Transaction } from '../../../models/index';
+import mongoose from 'mongoose';
 import { weiToVBC } from '../../../lib/bigint-utils';
+
+// Database connection function
+async function connectDB() {
+  if (mongoose.connection.readyState < 1) {
+    const uri = process.env.MONGODB_URI || 'mongodb://localhost/explorerDB';
+    try {
+      await mongoose.connect(uri);
+    } catch (error) {
+      console.error('[Transactions API] Connection failed:', error);
+      throw error;
+    }
+  }
+}
 
 export async function GET() {
   try {
     await connectDB();
 
+    const db = mongoose.connection.db;
+
     // Get latest 15 transactions
-    const latestTransactions = await Transaction.find()
+    const latestTransactions = await db?.collection('Transaction').find()
       .sort({ blockNumber: -1, transactionIndex: -1 })
       .limit(15)
-      .lean();
+      .project({
+        hash: 1,
+        from: 1,
+        to: 1,
+        value: 1,
+        timestamp: 1,
+        blockNumber: 1,
+        gasUsed: 1,
+        status: 1
+      })
+      .toArray();
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const transactions = latestTransactions.map((tx: any) => ({
+    const transactions = (latestTransactions || []).map((tx: any) => ({
       hash: tx.hash,
       from: tx.from,
       to: tx.to,

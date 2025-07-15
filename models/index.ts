@@ -1,8 +1,8 @@
 import mongoose, { Schema, Document } from 'mongoose';
 
 // 環境変数の設定
-if (!process.env.MONGO_URI) {
-  process.env.MONGO_URI = 'mongodb://localhost/explorerDB';
+if (!process.env.MONGODB_URI) {
+  process.env.MONGODB_URI = 'mongodb://localhost/explorerDB';
 }
 
 // Interfaces for TypeScript
@@ -230,18 +230,17 @@ export const connectDB = async (): Promise<void> => {
     
     // Only connect if not connected and not connecting
     if (mongoose.connection.readyState === 0) {
-      await mongoose.connect(process.env.MONGO_URI!, {
+      const uri = process.env.MONGODB_URI || 'mongodb://localhost/explorerDB';
+      await mongoose.connect(uri, {
         maxPoolSize: 10,
         serverSelectionTimeoutMS: 5000,
         socketTimeoutMS: 45000,
       });
-      console.log('MongoDB connected via models/index.ts');
     }
   } catch (error) {
     // If connection fails but there's an existing connection, use it
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     if ((mongoose.connection.readyState as any) === 1) {
-      console.log('Using existing MongoDB connection');
       return;
     }
     console.error('MongoDB connection error:', error);

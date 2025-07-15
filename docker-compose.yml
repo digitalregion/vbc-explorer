@@ -5,7 +5,7 @@ services:
     command: npm start
     restart: always
     environment:
-      MONGO_URI: 'mongodb://db/explorerDB'
+      MONGODB_URI: 'mongodb://db/explorerDB'
     ports:
       - '3000:3000'
     depends_on:
@@ -15,7 +15,7 @@ services:
     command: npm run sync
     restart: always
     environment:
-      MONGO_URI: 'mongodb://db/explorerDB'
+      MONGODB_URI: 'mongodb://db/explorerDB'
     depends_on:
       - db
   stats:
@@ -23,7 +23,7 @@ services:
     command: npm run stats
     restart: always
     environment:
-      MONGO_URI: 'mongodb://db/explorerDB'
+      MONGODB_URI: 'mongodb://db/explorerDB'
     depends_on:
       - db
   price:
@@ -31,7 +31,7 @@ services:
     command: npm run price
     restart: always
     environment:
-      MONGO_URI: 'mongodb://db/explorerDB'
+      MONGODB_URI: 'mongodb://db/explorerDB'
     depends_on:
       - db
   richlist:
@@ -39,7 +39,7 @@ services:
     command: npm run rich
     restart: "no"
     environment:
-      MONGO_URI: 'mongodb://db/explorerDB'
+      MONGODB_URI: 'mongodb://db/explorerDB'
     depends_on:
       - db
   db:

@@ -33,10 +33,14 @@ interface StatsData {
   networkDifficulty: string;
   isConnected: boolean;
   totalTransactions: number;
-  avgGasPrice: string;
-  activeMiners: number;
-  blockReward: string;
+  avgGasPrice?: string;
+  activeMiners?: number;
+  blockReward?: string;
   lastBlockTimestamp?: number;
+  avgTransactionFee?: string;
+  lastBlockTime?: string;
+  activeAddresses?: number;
+  totalSupply?: string;
 }
 
 interface Transaction {
@@ -501,13 +505,13 @@ export default function Page() {
           />
           <SummaryCard
             title='Last Block Found'
-            value={stats.lastBlockTimestamp ? (() => {
+            value={stats.lastBlockTime || (stats.lastBlockTimestamp ? (() => {
               const secondsAgo = Math.floor(now / 1000 - stats.lastBlockTimestamp);
               if (secondsAgo < 60) return `${secondsAgo}s ago`;
               if (secondsAgo < 3600) return `${Math.floor(secondsAgo / 60)}m ago`;
               if (secondsAgo < 86400) return `${Math.floor(secondsAgo / 3600)}h ago`;
               return `${Math.floor(secondsAgo / 86400)}d ago`;
-            })() : 'Unknown'}
+            })() : 'Unknown')}
             sub='Time since last block'
             icon={<CalendarIcon className='w-8 h-8 text-emerald-400' />}
           />
@@ -529,13 +533,13 @@ export default function Page() {
           />
           <SummaryCard
             title='Active Miners'
-            value={stats.activeMiners.toString()}
+            value={(stats.activeMiners || 0).toString()}
             sub='Last 100 blocks'
             icon={<UserGroupIcon className='w-8 h-8 text-cyan-400' />}
           />
           <SummaryCard
             title='Avg Transaction Fee'
-            value={stats.avgGasPrice}
+            value={stats.avgTransactionFee || stats.avgGasPrice || '0 Gwei'}
             sub='Gas price (Gwei)'
             icon={<ChartBarIcon className='w-8 h-8 text-rose-400' />}
           />

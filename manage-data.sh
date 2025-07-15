@@ -7,6 +7,18 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TOOLS_DIR="$SCRIPT_DIR/tools"
 LOG_DIR="$SCRIPT_DIR/logs"
 
+# Load environment variables
+if [ -f "$SCRIPT_DIR/.env" ]; then
+    source "$SCRIPT_DIR/.env"
+fi
+
+if [ -f "$SCRIPT_DIR/.env.local" ]; then
+    source "$SCRIPT_DIR/.env.local"
+fi
+
+# Export environment variables
+export MONGODB_URI="${MONGODB_URI:-mongodb://localhost/explorerDB}"
+
 # Create logs directory if it doesn't exist
 mkdir -p "$LOG_DIR"
 

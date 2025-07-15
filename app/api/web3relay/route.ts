@@ -20,19 +20,15 @@ if (process.env.NODE_ENV === 'development') {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const local = require('../../../config.json');
     Object.assign(config, local);
-    console.log('config.json found.');
   } catch {
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const local = require('../../../config.example.json');
       Object.assign(config, local);
-      console.log('No config file found. Using default configuration... (config.example.json)');
     } catch {
-      console.log('Using hardcoded default configuration');
+      // Using hardcoded default configuration
     }
   }
-} else {
-  console.log('Using hardcoded default configuration for production');
 }
 
 // Create Web3 connection

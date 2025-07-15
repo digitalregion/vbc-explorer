@@ -23,10 +23,11 @@ async function connectDB() {
     return;
   }
   try {
-    await mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost/explorerDB');
+    const uri = process.env.MONGODB_URI || process.env.MONGO_URI || 'mongodb://localhost/explorerDB';
+    await mongoose.connect(uri);
   } catch (error) {
     console.error('DB connection error:', error);
-    // In a real app, you might want to throw the error or handle it differently
+    throw error;
   }
 }
 
