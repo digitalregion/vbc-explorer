@@ -323,8 +323,16 @@ async function updateTokenWithRealData(tokenAddress: string) {
 async function scanForTokens() {
   console.log('Starting token scan...');
   try {
+    // Ensure DB connection is active
     if (mongoose.connection.readyState !== 1) {
+      console.log('Reconnecting to database...');
       await connectDB();
+    }
+    
+    // Double-check connection
+    if (mongoose.connection.readyState !== 1) {
+      console.error('Database connection failed after reconnection attempt');
+      return;
     }
   } catch (error) {
     console.error('Failed to connect to database:', error);
@@ -500,7 +508,8 @@ async function updateOsatoTokenData() {
     console.error('=== Error updating OSATO token data ===', error);
   }
   
-  await disconnect();
+  // Don't disconnect here as it affects subsequent operations
+  // await disconnect();
 }
 
 // 全VRC-721トークンを一括で更新する関数
@@ -546,10 +555,12 @@ async function main() {
     
     if (args.includes('--update-all-vrc721')) {
       await updateAllVrc721Tokens();
+      await disconnect();
       return;
     }
     if (args.includes('--update-osato')) {
       await updateOsatoTokenData();
+      await disconnect();
       return;
     }
     
