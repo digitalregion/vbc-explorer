@@ -403,10 +403,12 @@ const syncChain = async function (startBlock?: number, endBlock?: number): Promi
 
   for (let blockNum = startBlock; blockNum <= endBlock; blockNum++) {
     try {
-      // Skip if block already exists
-      if (existingBlockNumbers.has(blockNum)) {
+      // Check if block already exists in DB
+      const existingBlock = await Block.findOne({ number: blockNum }).lean();
+      
+      if (existingBlock) {
         if (!config.quiet) {
-          console.log(`Skipping existing block #${blockNum}`);
+          console.log(`Skipping existing block #${blockNum} (already in DB)`);
         }
         skippedCount++;
         continue;
@@ -415,6 +417,7 @@ const syncChain = async function (startBlock?: number, endBlock?: number): Promi
       const blockData = await web3.eth.getBlock(blockNum, true);
 
       if (blockData) {
+        // Process new block
         await writeBlockToDB(blockData);
         await writeTransactionsToDB(blockData);
         processedCount++;
