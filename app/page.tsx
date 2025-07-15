@@ -333,6 +333,7 @@ export default function Page() {
         // Fetch enhanced stats
         const statsResponse = await fetch('/api/stats-enhanced');
         const statsData = await statsResponse.json();
+        console.log('Stats data:', statsData); // Debug log
         setStats(statsData);
 
         // Fetch blocks
@@ -505,13 +506,14 @@ export default function Page() {
           />
           <SummaryCard
             title='Last Block Found'
-            value={stats.lastBlockTime || (stats.lastBlockTimestamp ? (() => {
+            value={stats.lastBlockTimestamp && stats.lastBlockTimestamp > 0 ? (() => {
               const secondsAgo = Math.floor(now / 1000 - stats.lastBlockTimestamp);
+              if (secondsAgo < 0) return '0s ago';
               if (secondsAgo < 60) return `${secondsAgo}s ago`;
               if (secondsAgo < 3600) return `${Math.floor(secondsAgo / 60)}m ago`;
               if (secondsAgo < 86400) return `${Math.floor(secondsAgo / 3600)}h ago`;
               return `${Math.floor(secondsAgo / 86400)}d ago`;
-            })() : 'Unknown')}
+            })() : (stats.lastBlockTime || 'Unknown')}
             sub='Time since last block'
             icon={<CalendarIcon className='w-8 h-8 text-emerald-400' />}
           />

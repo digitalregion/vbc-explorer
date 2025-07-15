@@ -213,6 +213,7 @@ export async function getChainStats() {
     totalSupply,
     avgTransactionFee,
     lastBlockTime,
+    lastBlockTimestamp: latestBlockDoc?.timestamp || 0,
     isConnected: true,
   };
 }

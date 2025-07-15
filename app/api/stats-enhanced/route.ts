@@ -42,7 +42,8 @@ export async function GET() {
       totalTransactions: stats.totalTransactions,
       avgGasPrice: stats.avgTransactionFee, // Convert fee to gas price
       activeMiners: activeMiners,
-      lastBlockTime: stats.lastBlockTime // Add this field
+      lastBlockTime: stats.lastBlockTime, // Add this field
+      lastBlockTimestamp: stats.lastBlockTimestamp // Add timestamp for frontend calculation
     };
     
     return NextResponse.json(enhancedStats);
