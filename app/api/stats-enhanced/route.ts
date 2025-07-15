@@ -1,8 +1,7 @@
 // Enhanced stats API for VirBiCoin Explorer
 import { NextResponse } from 'next/server';
 import { getChainStats } from '../../../lib/stats';
-import { connectDB } from '../../../lib/mongodb';
-import { Block } from '../../../models/index';
+import { connectDB, Block } from '../../../models/index';
 
 export async function GET() {
   try {
