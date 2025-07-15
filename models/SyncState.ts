@@ -22,9 +22,6 @@ const SyncStateSchema = new mongoose.Schema({
   collection: 'syncstates',
 });
 
-// Ensure index for faster lookups
-SyncStateSchema.index({ scannerName: 1 });
-
 const SyncState = mongoose.model<ISyncState>('SyncState', SyncStateSchema);
 
 export default SyncState;
