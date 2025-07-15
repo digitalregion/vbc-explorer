@@ -4,26 +4,35 @@ import { Transaction, Market } from '@/lib/models';
 import { connectToDatabase } from '@/lib/db';
 import { toEther, toGwei } from '@/lib/etherUnits';
 
-// Load config
+// Load config with fallback - using hardcoded defaults for CI compatibility
 const config: { nodeAddr: string; wsPort: number; settings?: { useFiat?: boolean }; miners: Record<string, string> } = {
   nodeAddr: 'localhost',
   wsPort: 8330,
-  miners: {}
-};
-try {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const local = require('../../../config.json');
-  Object.assign(config, local);
-  console.log('config.json found.');
-} catch (error: unknown) {
-  if (error && typeof error === 'object' && 'code' in error && error.code === 'MODULE_NOT_FOUND') {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const local = require('../../../config.example.json');
-    Object.assign(config, local);
-    console.log('No config file found. Using default configuration... (config.example.json)');
-  } else {
-    throw error;
+  miners: {
+    "0x950302976387b43E042aeA242AE8DAB8e5C204D1": "digitalregion.jp",
+    "0x6C0DB3Ea9EEd7ED145f36da461D84A8d02596B08": "coolpool.top"
   }
+};
+
+// Try to load config files at runtime (only in development)
+if (process.env.NODE_ENV === 'development') {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const local = require('../../../config.json');
+    Object.assign(config, local);
+    console.log('config.json found.');
+  } catch {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const local = require('../../../config.example.json');
+      Object.assign(config, local);
+      console.log('No config file found. Using default configuration... (config.example.json)');
+    } catch {
+      console.log('Using hardcoded default configuration');
+    }
+  }
+} else {
+  console.log('Using hardcoded default configuration for production');
 }
 
 // Create Web3 connection

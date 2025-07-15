@@ -15,7 +15,13 @@ import {
 } from '@heroicons/react/24/outline';
 import { useState, useEffect } from 'react';
 import { weiToVBC, weiToGwei, formatVBC, formatGwei } from '../lib/bigint-utils';
-import config from '../config.json';
+// Dynamic config loading
+const config: Record<string, unknown> = {
+  miners: {
+    "0x950302976387b43E042aeA242AE8DAB8e5C204D1": "digitalregion.jp",
+    "0x6C0DB3Ea9EEd7ED145f36da461D84A8d02596B08": "coolpool.top"
+  }
+};
 
 interface TransactionData {
   hash: string;

@@ -6,7 +6,14 @@ import { useRouter } from 'next/navigation';
 import Header from '../components/Header';
 import Link from 'next/link';
 import { MagnifyingGlassIcon, ArrowLeftIcon, HashtagIcon, UserIcon } from '@heroicons/react/24/outline';
-import config from '../../config.json';
+
+// Dynamic config loading
+const config: Record<string, unknown> = {
+  miners: {
+    "0x950302976387b43E042aeA242AE8DAB8e5C204D1": "digitalregion.jp",
+    "0x6C0DB3Ea9EEd7ED145f36da461D84A8d02596B08": "coolpool.top"
+  }
+};
 
 interface SearchResult {
   type: 'block' | 'transaction' | 'address' | 'token';
