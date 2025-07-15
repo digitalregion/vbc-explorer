@@ -65,7 +65,7 @@ const getPoolName = (address: string) => {
     key => key.toLowerCase() === address.toLowerCase()
   );
   
-  return minerKey ? config.miners[minerKey] : null;
+  return minerKey ? (config.miners as Record<string, string>)[minerKey] : null;
 };
 
 export default function AccountDetails({ address }: AccountDetailsProps) {

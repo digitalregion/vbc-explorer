@@ -189,9 +189,13 @@ export async function GET(
       let totalGasFees = 0;
       if (blockInfo.transactions && blockInfo.transactions.length > 0) {
         for (const tx of blockInfo.transactions) {
-          if (tx.gasPrice && tx.gasUsed) {
-            const gasFee = (parseInt(tx.gasUsed) * parseInt(tx.gasPrice)) / 1e18;
-            totalGasFees += gasFee;
+          // 型ガード: txがオブジェクトでgasPriceとgasUsedプロパティを持つかチェック
+          if (typeof tx === 'object' && tx !== null && 'gasPrice' in tx && 'gasUsed' in tx) {
+            const txObj = tx as { gasPrice?: bigint; gasUsed?: bigint };
+            if (typeof txObj.gasPrice === 'bigint' && typeof txObj.gasUsed === 'bigint') {
+              const gasFee = Number(txObj.gasUsed) * Number(txObj.gasPrice) / 1e18;
+              totalGasFees += gasFee;
+            }
           }
         }
       }
@@ -201,7 +205,7 @@ export async function GET(
         if (block.number > 0) {
           const balanceBefore = await web3.eth.getBalance(address, block.number - 1);
           const balanceAfter = await web3.eth.getBalance(address, block.number);
-          const balanceChange = (parseInt(balanceAfter) - parseInt(balanceBefore)) / 1e18;
+          const balanceChange = (Number(balanceAfter) - Number(balanceBefore)) / 1e18;
           
           // バランス変化が正の値の場合、それを実際の報酬として使用
           if (balanceChange > 0) {

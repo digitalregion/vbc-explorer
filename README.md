@@ -2,6 +2,12 @@
 
 <img src="public/img/explorer-logo.png" alt="VBC Explorer logo" height="200" />
 
+[![Lint/Format](https://github.com/virbicoin/vbc-explorer/actions/workflows/lint.yml/badge.svg)](https://github.com/virbicoin/vbc-explorer/actions/workflows/lint.yml)
+[![Node.js CI](https://github.com/virbicoin/vbc-explorer/actions/workflows/node.js.yml/badge.svg)](https://github.com/virbicoin/vbc-explorer/actions/workflows/node.js.yml)
+[![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=flat&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Node.js](https://img.shields.io/badge/Node.js-22.x-green.svg)](https://nodejs.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 <b>Live Version: [explorer.digitalregion.jp](https://explorer.digitalregion.jp)</b>
 
 A modern, real-time blockchain explorer for the VirBiCoin network built with Next.js App Router, TypeScript, and MongoDB.

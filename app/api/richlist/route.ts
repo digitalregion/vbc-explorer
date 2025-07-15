@@ -201,7 +201,7 @@ export async function POST(request: NextRequest) {
 
     const accounts = await Account.find({})
       .lean(true)
-      .sort(sortOrder)
+      .sort(sortOrder as { [key: string]: 1 | -1 })
       .skip(start)
       .limit(limit);
       

@@ -38,8 +38,8 @@ export async function getChainStats() {
       const uniqueAddresses = new Set();
       
       transactions.forEach((tx: Record<string, unknown>) => {
-        if (tx.from) uniqueAddresses.add(tx.from.toLowerCase());
-        if (tx.to) uniqueAddresses.add(tx.to.toLowerCase());
+        if (tx.from) uniqueAddresses.add((tx.from as string).toLowerCase());
+        if (tx.to) uniqueAddresses.add((tx.to as string).toLowerCase());
       });
       
       activeAddresses = uniqueAddresses.size;

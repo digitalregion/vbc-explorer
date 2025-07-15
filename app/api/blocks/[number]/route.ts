@@ -30,7 +30,16 @@ export async function GET(
     }
 
     // Get transactions for this block
-    const transactions = await Transaction.find({ blockNumber: (block as { number: number }).number })
+    let blockNumber: number | undefined = undefined;
+    if (Array.isArray(block)) {
+      blockNumber = block[0]?.number;
+    } else if (block && typeof block === 'object' && 'number' in block) {
+      blockNumber = (block as unknown as { number: number }).number;
+    }
+    if (blockNumber === undefined) {
+      return NextResponse.json({ error: 'Block number not found' }, { status: 500 });
+    }
+    const transactions = await Transaction.find({ blockNumber })
       .sort({ transactionIndex: 1 })
       .lean();
 
@@ -61,27 +70,27 @@ export async function GET(
     }
 
     const blockData: BlockData = {
-      number: (block as { number: number }).number,
-      hash: (block as { hash: string }).hash,
-      parentHash: (block as { parentHash: string }).parentHash,
-      timestamp: (block as { timestamp: number }).timestamp,
-      miner: (block as { miner: string }).miner,
-      difficulty: (block as { difficulty: string }).difficulty,
-      totalDifficulty: (block as { totalDifficulty: string }).totalDifficulty,
-      size: (block as { size: number }).size,
-      gasLimit: (block as { gasLimit: number }).gasLimit,
-      gasUsed: (block as { gasUsed: number }).gasUsed,
-      nonce: (block as { nonce: string }).nonce,
+      number: (block as unknown as { number: number }).number,
+      hash: (block as unknown as { hash: string }).hash,
+      parentHash: (block as unknown as { parentHash: string }).parentHash,
+      timestamp: (block as unknown as { timestamp: number }).timestamp,
+      miner: (block as unknown as { miner: string }).miner,
+      difficulty: (block as unknown as { difficulty: string }).difficulty,
+      totalDifficulty: (block as unknown as { totalDifficulty: string }).totalDifficulty,
+      size: (block as unknown as { size: number }).size,
+      gasLimit: (block as unknown as { gasLimit: number }).gasLimit,
+      gasUsed: (block as unknown as { gasUsed: number }).gasUsed,
+      nonce: (block as unknown as { nonce: string }).nonce,
       transactionCount: transactions.length,
       transactions: transactions.map((tx) => ({
-        hash: (tx as { hash: string }).hash,
-        from: (tx as { from: string }).from,
-        to: (tx as { to: string }).to,
-        value: (tx as { value: string }).value,
-        gasUsed: (tx as { gasUsed: number }).gasUsed,
-        gasPrice: (tx as { gasPrice: string }).gasPrice,
-        status: (tx as { status: number }).status,
-        transactionIndex: (tx as { transactionIndex: number }).transactionIndex
+        hash: (tx as unknown as { hash: string }).hash,
+        from: (tx as unknown as { from: string }).from,
+        to: (tx as unknown as { to: string }).to,
+        value: (tx as unknown as { value: string }).value,
+        gasUsed: (tx as unknown as { gasUsed: number }).gasUsed,
+        gasPrice: (tx as unknown as { gasPrice: string }).gasPrice,
+        status: (tx as unknown as { status: number }).status,
+        transactionIndex: (tx as unknown as { transactionIndex: number }).transactionIndex
       }))
     };
 

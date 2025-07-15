@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import mongoose from 'mongoose';
 import Token from '../../../models/Token.js'; // Assuming ESM syntax
 import { getChainStats } from '../../../lib/stats'; // Import the stats function
-import { connectDB, Contract } from '../../../models/index';
+import { Contract } from '../../../models/index';
 
 // Define the structure of a token, including the optional fields
 interface IToken {
@@ -118,7 +118,7 @@ export async function GET() {
       type,
       holders: actualHolders,
       supply: actualSupply,
-      verified: verificationMap.get(token.address.toLowerCase()) || false
+      verified: (typeof token.address === 'string' ? verificationMap.get(token.address.toLowerCase()) : null) || false
     };
   }));
 

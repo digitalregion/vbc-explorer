@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { Transaction, Block } from '../../../../../models/index';
+import { Transaction, Block } from '../../../../models/index';
 
 export async function GET(
   request: NextRequest,

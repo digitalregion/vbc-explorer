@@ -3,10 +3,13 @@ import Web3 from 'web3';
 import { Transaction, Market } from '@/lib/models';
 import { connectToDatabase } from '@/lib/db';
 import { toEther, toGwei } from '@/lib/etherUnits';
-import BigNumber from 'bignumber.js';
 
 // Load config
-const config = { nodeAddr: 'localhost', wsPort: 8546 };
+const config: { nodeAddr: string; wsPort: number; settings?: { useFiat?: boolean }; miners: Record<string, string> } = {
+  nodeAddr: 'localhost',
+  wsPort: 8330,
+  miners: {}
+};
 try {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const local = require('../../../config.json');
@@ -59,8 +62,8 @@ export async function POST(request: NextRequest) {
             }
           }
           
-          txResponse = tx;
-          txResponse.value = toEther(new BigNumber(tx.value), 'wei');
+          txResponse = tx as Record<string, unknown>;
+          txResponse.value = toEther(BigInt(tx.value), 'wei');
           
           // Get transaction receipt
           const receipt = await web3.eth.getTransactionReceipt(txHash);
@@ -69,7 +72,7 @@ export async function POST(request: NextRequest) {
             if (receipt.status !== undefined) {
               txResponse.status = receipt.status;
             }
-            if (!tx.to && !tx.creates && receipt.contractAddress) {
+            if (!tx.to && receipt.contractAddress) {
               txResponse.creates = receipt.contractAddress;
             }
           }
@@ -87,25 +90,26 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: true });
         }
       } else {
-        txResponse = doc;
+        const docData = Array.isArray(doc) ? doc[0] : doc;
+        txResponse = docData as Record<string, unknown>;
       }
 
-      const latestBlock = await web3.eth.getBlockNumber() + 1;
-      txResponse.confirmations = latestBlock - txResponse.blockNumber;
+      const latestBlock = (await web3.eth.getBlockNumber()) + 1n;
+      txResponse.confirmations = latestBlock - BigInt(String(txResponse.blockNumber || 0));
 
       if (txResponse.confirmations === latestBlock) {
         txResponse.confirmation = 0;
       }
       
-      txResponse.gasPriceGwei = toGwei(new BigNumber(txResponse.gasPrice), 'wei');
-      txResponse.gasPriceEther = toEther(new BigNumber(txResponse.gasPrice), 'wei');
-      txResponse.txFee = txResponse.gasPriceEther * txResponse.gasUsed;
+      txResponse.gasPriceGwei = toGwei(BigInt(String(txResponse.gasPrice || 0)), 'wei');
+      txResponse.gasPriceEther = toEther(BigInt(String(txResponse.gasPrice || 0)), 'wei');
+      txResponse.txFee = Number(txResponse.gasPriceEther) * Number(txResponse.gasUsed || 0);
 
       if (config.settings?.useFiat) {
         const latestPrice = await Market.findOne().sort({ timestamp: -1 });
         if (latestPrice) {
-          txResponse.txFeeUSD = txResponse.txFee * latestPrice.quoteUSD;
-          txResponse.valueUSD = txResponse.value * latestPrice.quoteUSD;
+          txResponse.txFeeUSD = Number(txResponse.txFee) * Number(latestPrice.quoteUSD);
+          txResponse.valueUSD = Number(txResponse.value) * Number(latestPrice.quoteUSD);
         }
       }
 

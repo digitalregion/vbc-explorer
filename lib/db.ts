@@ -6,15 +6,24 @@ if (!MONGODB_URI) {
   throw new Error('Please define the MONGODB_URI environment variable');
 }
 
-let cached = (global as Record<string, unknown>).mongoose;
+interface CachedConnection {
+  conn: mongoose.Connection | null;
+  promise: Promise<mongoose.Connection> | null;
+}
+
+let cached = (global as Record<string, unknown>).mongoose as CachedConnection | undefined;
 if (!cached) {
   cached = (global as Record<string, unknown>).mongoose = { conn: null, promise: null };
 }
 
 async function dbConnect() {
+  // Ensure cached is defined
+  if (!cached) {
+    cached = { conn: null, promise: null };
+  }
+
   // Check if mongoose is already connected (existing Express app connection)
-  // @ts-expect-error - readyState comparison is valid
-  if (mongoose.connection.readyState === 1) {
+  if (mongoose.connection.readyState === mongoose.ConnectionStates.connected) {
     return mongoose.connection;
   }
 
@@ -31,14 +40,13 @@ async function dbConnect() {
 
   try {
     // Only create new connection if absolutely necessary
-    // @ts-expect-error - readyState comparison is valid
-    if (mongoose.connection.readyState === 0) {
-      cached.promise = mongoose.connect(MONGODB_URI, {
+    if (mongoose.connection.readyState === mongoose.ConnectionStates.disconnected) {
+      cached.promise = (mongoose.connect(MONGODB_URI, {
         bufferCommands: false,
         maxPoolSize: 10,
         serverSelectionTimeoutMS: 5000,
         socketTimeoutMS: 45000,
-      });
+      }) as unknown) as Promise<mongoose.Connection>;
       cached.conn = await cached.promise;
     } else {
       // Use existing connection
@@ -48,8 +56,7 @@ async function dbConnect() {
     return cached.conn;
   } catch (error) {
     // If connection fails, try to use existing connection if available
-    // @ts-expect-error - readyState comparison is valid
-    if (mongoose.connection.readyState === 1) {
+    if ((mongoose.connection.readyState as number) === mongoose.ConnectionStates.connected) {
       return mongoose.connection;
     }
 

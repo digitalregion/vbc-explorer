@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { connectDB, Contract } from '../../../../../models/index';
+import { connectDB, Contract } from '../../../../models/index';
 import Web3 from 'web3';
 import solc from 'solc';
 
@@ -118,13 +118,19 @@ export async function POST(request: NextRequest) {
         compiledOutput = JSON.parse(solc.compile(JSON.stringify(input)));
       } else {
         // Load specific compiler version
-        const solcVersion = await new Promise((resolve, reject) => {
-          solc.loadRemoteVersion(compilerVersion, (err, solcV) => {
+        const solcVersion = await new Promise<unknown>((resolve, reject) => {
+          solc.loadRemoteVersion(compilerVersion, (err: Error | null, solcV: unknown) => {
             if (err) reject(err);
             else resolve(solcV);
           });
         });
-        compiledOutput = JSON.parse(solcVersion.compile(JSON.stringify(input)));
+        
+        // 型ガードでsolcVersionがcompileメソッドを持つかチェック
+        if (typeof solcVersion === 'object' && solcVersion !== null && 'compile' in solcVersion && typeof (solcVersion as { compile: unknown }).compile === 'function') {
+          compiledOutput = JSON.parse((solcVersion as { compile: (input: string) => string }).compile(JSON.stringify(input)));
+        } else {
+          throw new Error('Invalid solc version loaded');
+        }
       }
     } catch (compileError) {
       return NextResponse.json(

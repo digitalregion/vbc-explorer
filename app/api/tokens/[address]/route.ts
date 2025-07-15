@@ -297,7 +297,8 @@ export async function GET(
     if (token.type !== 'Native') {
       try {
         const contract = await Contract.findOne({ address: address.toLowerCase() }).lean();
-        verified = contract?.verified || false;
+        const contractDoc = Array.isArray(contract) ? contract[0] : contract;
+        verified = contractDoc?.verified || false;
       } catch {
         console.error('Error fetching contract verification status');
       }
@@ -320,7 +321,11 @@ export async function GET(
       },
       statistics: {
         holders: token.type === 'Native' ? token.holders : realHolders,
-        transfers: token.type === 'Native' ? (chainStats?.totalTransactions || 0) : realTransfers,
+        transfers: token.type === 'Native'
+          ? (typeof chainStats === 'object' && chainStats !== null && 'totalTransactions' in chainStats
+              ? (chainStats as { totalTransactions: number }).totalTransactions
+              : 0)
+          : realTransfers,
         age: ageInDays === -1 ? 'N/A' : ageInDays,
         marketCap: 'N/A' // Will need external API for price data
       },

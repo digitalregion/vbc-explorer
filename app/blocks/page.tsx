@@ -66,7 +66,7 @@ export default function BlocksPage() {
       );
       if (minerKey) {
         return {
-          name: config.miners[minerKey],
+          name: (config.miners as Record<string, string>)[minerKey],
           isPool: true,
           address: miner
         };

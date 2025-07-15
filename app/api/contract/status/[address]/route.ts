@@ -21,7 +21,9 @@ export async function GET(
       address: address.toLowerCase() 
     }).lean();
 
-    if (!contract) {
+    const contractDoc = Array.isArray(contract) ? contract[0] : contract;
+
+    if (!contractDoc) {
       return NextResponse.json({
         verified: false,
         message: 'Contract not found in database',
@@ -30,15 +32,15 @@ export async function GET(
     }
 
     return NextResponse.json({
-      verified: contract.verified || false,
-      contractName: contract.contractName,
-      compilerVersion: contract.compilerVersion,
-      optimization: contract.optimization,
-      verifiedAt: contract.verifiedAt,
-      hasSourceCode: !!contract.sourceCode,
-      hasABI: !!contract.abi,
-      address: contract.address,
-      message: contract.verified ? 'Contract is verified' : 'Contract is not verified'
+      verified: contractDoc.verified || false,
+      contractName: contractDoc.contractName,
+      compilerVersion: contractDoc.compilerVersion,
+      optimization: contractDoc.optimization,
+      verifiedAt: contractDoc.verifiedAt,
+      hasSourceCode: !!contractDoc.sourceCode,
+      hasABI: !!contractDoc.abi,
+      address: contractDoc.address,
+      message: contractDoc.verified ? 'Contract is verified' : 'Contract is not verified'
     });
 
   } catch (error) {

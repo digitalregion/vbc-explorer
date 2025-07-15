@@ -38,7 +38,7 @@ export async function GET(
     const { address } = await params;
 
     // Get NFT token info - search without case sensitivity
-    let token: Record<string, unknown> = await db.collection('tokens').findOne({ 
+    let token: Record<string, unknown> | null = await db.collection('tokens').findOne({ 
       address: { $regex: new RegExp(`^${address}$`, 'i') },
       type: { $in: ['VRC-721', 'VRC-1155'] } // Only NFT tokens
     });
@@ -99,7 +99,9 @@ export async function GET(
     });
 
     // Calculate age in days
-    const ageInDays = token.createdAt ? Math.floor((Date.now() - new Date(token.createdAt).getTime()) / (1000 * 60 * 60 * 24)) : 0;
+    const ageInDays = token.createdAt && typeof token.createdAt === 'string' || token.createdAt instanceof Date 
+      ? Math.floor((Date.now() - new Date(token.createdAt as string | Date).getTime()) / (1000 * 60 * 60 * 24)) 
+      : 0;
 
     // Format NFT data
     const formatNFTAmount = (amount: string) => {
@@ -145,8 +147,8 @@ export async function GET(
         symbol: token.symbol,
         type: token.type,
         decimals: token.decimals || 0,
-        totalSupply: token.supply ? formatNFTAmount(token.supply) : 'Unknown',
-        totalSupplyRaw: token.supply || '0',
+        totalSupply: token.supply && typeof token.supply === 'string' ? formatNFTAmount(token.supply) : 'Unknown',
+        totalSupplyRaw: token.supply && typeof token.supply === 'string' ? token.supply : '0',
         description: `Unique digital collectibles on VirBiCoin network. ${token.type} standard NFT collection with verified smart contract.`,
         floorPrice: floorPrice,
         volume24h: volume24h,
@@ -163,7 +165,7 @@ export async function GET(
       holders: holders.map((holder: Record<string, unknown>, index: number) => {
         // For OSATO NFT collection, there are exactly 6 tokens total (0, 1, 2, 3, 4, 5)
         const totalTokens = token.symbol === 'OSATO' ? 6 : 50;
-        const balanceNumber = Math.min(parseInt(holder.balance) || 1, totalTokens);
+        const balanceNumber = Math.min(parseInt(String(holder.balance)) || 1, totalTokens);
         
         // Distribute the 6 tokens (0-5) among top holders only
         let tokenIds: number[] = [];

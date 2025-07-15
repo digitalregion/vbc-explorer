@@ -147,8 +147,8 @@ const BlockList = ({ blocks, newBlockNumbers, now }: { blocks: Block[], newBlock
             <div className='text-xs text-gray-400'>
               Mined by {(() => {
                 if (!block.miner) return 'Unknown';
-                if (block.miner && (config as Record<string, unknown>).miners) {
-                  const minerKey = Object.keys((config as Record<string, unknown>).miners).find(
+                if ((config as { miners: Record<string, string> }).miners) {
+                  const minerKey = Object.keys((config as { miners: Record<string, string> }).miners).find(
                     key => key.toLowerCase() === block.miner.toLowerCase()
                   );
                   if (minerKey) {
@@ -157,7 +157,7 @@ const BlockList = ({ blocks, newBlockNumbers, now }: { blocks: Block[], newBlock
                         href={`/address/${block.miner}`}
                         className='text-blue-400 hover:text-blue-300 transition-colors hover:underline'
                       >
-                        {(config as Record<string, unknown>).miners[minerKey]}
+                        {(config as { miners: Record<string, string> }).miners[minerKey]}
                       </Link>
                     );
                   }
@@ -385,7 +385,7 @@ export default function Page() {
     const button = addVbcButtonRef.current;
     const handleClick = async () => {
       try {
-        await (window as Record<string, unknown>).ethereum?.request({
+        await (window as unknown as { ethereum?: { request: (params: { method: string; params: unknown[] }) => Promise<unknown> } }).ethereum?.request({
           method: 'wallet_addEthereumChain',
           params: [{
             chainId: '0x149',

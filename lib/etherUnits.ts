@@ -90,4 +90,13 @@ const virBiCoinUnits: VirBiCoinUnits = {
   }
 };
 
+// Export individual functions for compatibility
+export const toEther = (number: string | number | bigint, unit?: string): string => {
+  return virBiCoinUnits.toEther(number, unit);
+};
+
+export const toGwei = (number: string | number | bigint, unit?: string): string => {
+  return virBiCoinUnits.toGwei(number, unit);
+};
+
 export default virBiCoinUnits;

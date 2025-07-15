@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { connectDB, Block } from '../../../../../models/index';
+import { connectDB, Block } from '../../../../models/index';
 
 export async function GET(request: Request) {
   try {

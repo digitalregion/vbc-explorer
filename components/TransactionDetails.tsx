@@ -158,12 +158,12 @@ export default function TransactionDetails({ hash }: TransactionDetailsProps) {
 
   const formatMiner = (miner: string) => {
     if (!miner) return 'Unknown';
-    if ((config as Record<string, unknown>).settings?.miners) {
-      const minerKey = Object.keys((config as Record<string, unknown>).settings.miners).find(
+    if ((config as { miners: Record<string, string> }).miners) {
+      const minerKey = Object.keys((config as { miners: Record<string, string> }).miners).find(
         key => key.toLowerCase() === miner.toLowerCase()
       );
       if (minerKey) {
-        return (config as Record<string, unknown>).settings.miners[minerKey];
+        return (config as { miners: Record<string, string> }).miners[minerKey];
       }
     }
     return `${miner.slice(0, 12)}...${miner.slice(-12)}`;

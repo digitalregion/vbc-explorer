@@ -28,6 +28,11 @@ interface TraceTransaction {
     gasUsed?: string | number;
     address?: string;
   };
+  from?: string;
+  to?: string;
+  gas?: number;
+  gasUsed?: number;
+  value?: string | number;
 }
 
 /**

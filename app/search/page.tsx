@@ -24,13 +24,13 @@ function SearchPageContent() {
   const getMinerDisplayInfo = (miner: string) => {
     if (!miner) return { name: 'Unknown', isPool: false, address: null };
 
-    if ((config as Record<string, unknown>).settings?.miners) {
-      const minerKey = Object.keys((config as Record<string, unknown>).settings.miners).find(
+    if ((config as { miners: Record<string, string> }).miners) {
+      const minerKey = Object.keys((config as { miners: Record<string, string> }).miners).find(
         key => key.toLowerCase() === miner.toLowerCase()
       );
       if (minerKey) {
         return {
-          name: (config as Record<string, unknown>).settings.miners[minerKey],
+          name: (config as { miners: Record<string, string> }).miners[minerKey],
           isPool: true,
           address: miner
         };
@@ -188,22 +188,22 @@ function SearchPageContent() {
                           <Link
                             href={`/block/${result.data.hash}`}
                             className='font-mono text-blue-400 hover:text-blue-300 ml-2 break-all transition-colors hover:underline'
-                            title={result.data.hash}
+                            title={String(result.data.hash)}
                           >
-                            {result.data.hash}
+                            {String(result.data.hash)}
                           </Link>
                         </div>
                         <div className='flex items-center'>
                           <span className='text-gray-400'>Miner:</span>
                           <UserIcon className='w-4 h-4 text-green-400 ml-2 mr-1' />
                           {(() => {
-                            const minerInfo = getMinerDisplayInfo(result.data.miner);
+                            const minerInfo = getMinerDisplayInfo(String(result.data.miner));
                             if (minerInfo.isPool) {
                               return (
                                 <Link
-                                  href={`/search?q=${encodeURIComponent(result.data.miner)}`}
+                                  href={`/search?q=${encodeURIComponent(String(result.data.miner))}`}
                                   className='text-green-400 hover:text-green-300 font-mono text-sm transition-colors hover:underline'
-                                  title={`Search blocks mined by ${minerInfo.name} (${result.data.miner})`}
+                                  title={`Search blocks mined by ${minerInfo.name} (${String(result.data.miner)})`}
                                 >
                                   {minerInfo.name}
                                 </Link>
@@ -211,9 +211,9 @@ function SearchPageContent() {
                             }
                             return (
                               <Link
-                                href={`/search?q=${encodeURIComponent(result.data.miner)}`}
+                                href={`/search?q=${encodeURIComponent(String(result.data.miner))}`}
                                 className='text-green-400 hover:text-green-300 font-mono text-sm transition-colors hover:underline'
-                                title={`Search for address ${result.data.miner}`}
+                                title={`Search for address ${String(result.data.miner)}`}
                               >
                                 {minerInfo.name}
                               </Link>
@@ -224,14 +224,14 @@ function SearchPageContent() {
                         <div>
                           <span className='text-gray-400'>Transactions:</span>
                           <span className='text-gray-200 ml-2'>
-                            {result.data.transactionCount || result.data.transactions?.length || 0}
+                            {String(result.data.transactionCount || (Array.isArray(result.data.transactions) ? result.data.transactions.length : 0) || 0)}
                           </span>
                         </div>
                         <div>
                           <span className='text-gray-400'>Timestamp:</span>
                           <span className='text-gray-200 ml-2'>
                             {result.data.timestamp ?
-                              new Date(result.data.timestamp * 1000).toLocaleString(undefined, { timeZoneName: 'short' }) :
+                              new Date(Number(result.data.timestamp) * 1000).toLocaleString(undefined, { timeZoneName: 'short' }) :
                               'Unknown'
                             }
                           </span>
@@ -262,58 +262,7 @@ function SearchPageContent() {
   );
 }
 
-export default function SearchPage({ searchParams }: { searchParams: Promise<{ q: string }> }) {
-  useEffect(() => {
-    const fetchSearchParams = async () => {
-      try {
-        const params = await searchParams;
-        if (params.q) {
-          await performSearch(params.q);
-        }
-      } catch (err) {
-        console.error(err);
-      }
-    };
-    fetchSearchParams();
-  }, [searchParams]);
-
-  const performSearch = async (searchQuery: string) => {
-    if (!searchQuery.trim()) return;
-
-    setLoading(true);
-    try {
-      // For miner addresses, redirect to blocks filtered by that miner
-      if (searchQuery.startsWith('0x') && searchQuery.length === 42) {
-        // It's likely an address - search for blocks mined by this address
-        const response = await fetch(`/api/search/blocks-by-miner?miner=${encodeURIComponent(searchQuery)}`);
-        if (response.ok) {
-          const blocks = await response.json();
-          setResults(blocks.map((block: Record<string, unknown>) => ({ type: 'block' as const, data: block })));
-        } else {
-          setResults([]);
-        }
-      } else {
-        // Try to find by block number or hash
-        try {
-          const blockResponse = await fetch(`/api/blocks/${searchQuery}`);
-          if (blockResponse.ok) {
-            const block = await blockResponse.json();
-            setResults([{ type: 'block', data: block }]);
-          } else {
-            setResults([]);
-          }
-        } catch {
-          setResults([]);
-        }
-      }
-    } catch (error) {
-      console.error('Search error:', error);
-      setResults([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
+export default function SearchPage() {
   return (
     <Suspense fallback={<div>Loading...</div>}>
       <SearchPageContent />
