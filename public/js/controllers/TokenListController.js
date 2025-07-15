@@ -24,7 +24,7 @@ angular.module('BlocksApp').controller('TokenListController', function($statePar
       if (!type) return 'VRC-20'; // デフォルトERC20
       switch (type.toUpperCase()) {
         case 'ERC20': return 'VRC-20';
-        case 'ERC721': return 'VRC-721';
+        case 'VRC-721': return 'VRC-721';
         case 'ERC1155': return 'VRC-1155';
         default: return type;
       }

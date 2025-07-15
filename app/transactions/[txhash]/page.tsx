@@ -1,20 +1,25 @@
-import Header from '../../components/Header';
+'use client';
 
-export default async function TransactionDetailPage({ params }: { params: Promise<{ txhash: string }> }) {
-  const { txhash } = await params;
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+
+export default function TransactionsRedirectPage({ params }: { params: Promise<{ txhash: string }> }) {
+  const router = useRouter();
+
+  useEffect(() => {
+    async function redirect() {
+      const { txhash } = await params;
+      router.replace(`/tx/${txhash}`);
+    }
+    redirect();
+  }, [params, router]);
+
   return (
-    <>
-      <Header />
-      <main className='max-w-4xl mx-auto py-8 px-4'>
-        <h1 className='text-2xl font-bold mb-6 text-cyan-400'>Transaction Detail</h1>
-        <div className='bg-[#232c3b] rounded-lg p-4 shadow mb-6'>
-          <div className='mb-2'><span className='text-gray-400'>TxHash:</span> <span className='font-mono text-cyan-200'>{txhash}</span></div>
-          <div className='mb-2'><span className='text-gray-400'>From:</span> 0x9503...</div>
-          <div className='mb-2'><span className='text-gray-400'>To:</span> 0x1fc3...</div>
-          <div className='mb-2'><span className='text-gray-400'>Value:</span> 1212.017029372 VBC</div>
-          <div className='mb-2'><span className='text-gray-400'>Time:</span> 1 hour ago</div>
-        </div>
-      </main>
-    </>
+    <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-400 mx-auto mb-4"></div>
+        <p className="text-gray-400">Redirecting to transaction...</p>
+      </div>
+    </div>
   );
 }

@@ -6,11 +6,32 @@ This file will start syncing the blockchain from the VirBiCoin node
 */
 
 import Web3 from 'web3';
-import { TransactionReceipt, Transaction as Web3Transaction, Block as Web3Block } from 'web3-eth';
+import type { Transaction as Web3Transaction, Block as Web3Block, TransactionReceipt } from 'web3-types';
 import { connectDB, Block, Transaction, IBlock, ITransaction } from '../models/index';
 
 // Initialize database connection
 connectDB().catch(console.error);
+
+// Utility functions for web3 v4 type conversions
+const toNumber = (value: any): number => {
+  if (typeof value === 'bigint') return Number(value);
+  if (typeof value === 'string') return parseInt(value, 10);
+  return Number(value) || 0;
+};
+
+const toString = (value: any): string => {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'bigint') return value.toString();
+  if (value instanceof Uint8Array) return Web3.utils.bytesToHex(value);
+  return String(value);
+};
+
+const toBoolean = (value: any): boolean | null => {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'bigint') return value > 0n;
+  if (typeof value === 'string') return value === '1' || value.toLowerCase() === 'true';
+  return Boolean(value);
+};
 
 // Interface definitions
 interface Config {
@@ -88,6 +109,54 @@ try {
   console.log('No config file found. Using default configuration...');
 }
 
+// Parse command line arguments
+const args = process.argv.slice(2);
+for (let i = 0; i < args.length; i++) {
+  switch (args[i]) {
+    case '--start':
+      if (i + 1 < args.length) {
+        config.startBlock = parseInt(args[++i]) || 0;
+      }
+      break;
+    case '--end':
+      if (i + 1 < args.length) {
+        config.endBlock = parseInt(args[++i]) || null;
+      }
+      break;
+    case '--sync-all':
+      config.syncAll = true;
+      break;
+    case '--quiet':
+      config.quiet = true;
+      break;
+    case '--help':
+      console.log(`
+Usage: npm run sync [options]
+
+Options:
+  --start <block>     Start block number (default: 0)
+  --end <block>       End block number (default: latest)
+  --sync-all          Force full sync from start block
+  --quiet             Reduce console output
+  --help              Show this help message
+
+Examples:
+  npm run sync                    # Sync from config.json settings
+  npm run sync --start 0 --end 1000  # Sync blocks 0-1000
+  npm run sync --sync-all        # Force full sync from block 0
+      `);
+      process.exit(0);
+  }
+}
+
+// Override config with command line arguments if provided
+if (args.length >= 2 && !isNaN(parseInt(args[0])) && !isNaN(parseInt(args[1]))) {
+  config.startBlock = parseInt(args[0]);
+  config.endBlock = parseInt(args[1]);
+  config.syncAll = true;
+  console.log(`Command line override: syncing blocks ${config.startBlock} to ${config.endBlock}`);
+}
+
 console.log(`Connecting to VirBiCoin node ${config.nodeAddr}:${config.port}...`);
 
 // Web3 connection
@@ -97,28 +166,28 @@ const web3 = new Web3(new Web3.providers.HttpProvider(`http://${config.nodeAddr}
  * Normalize transaction data
  */
 const normalizeTX = async (
-  txData: Web3Transaction,
-  receipt: TransactionReceipt | null,
-  blockData: Web3Block
+  txData: any, // Using any due to web3 v4 type complexity
+  receipt: any | null,
+  blockData: any
 ): Promise<NormalizedTransaction> => {
   const tx: NormalizedTransaction = {
-    blockHash: txData.blockHash,
-    blockNumber: txData.blockNumber,
-    from: txData.from ? txData.from.toLowerCase() : null,
-    hash: txData.hash.toLowerCase(),
-    value: txData.value,
-    nonce: txData.nonce,
-    gas: txData.gas,
-    gasUsed: receipt ? receipt.gasUsed : 0,
-    gasPrice: txData.gasPrice,
-    input: txData.input,
-    transactionIndex: txData.transactionIndex,
-    timestamp: blockData.timestamp as number,
-    status: receipt ? receipt.status : null
+    blockHash: toString(txData.blockHash || blockData.hash),
+    blockNumber: toNumber(txData.blockNumber || blockData.number),
+    from: txData.from ? toString(txData.from).toLowerCase() : null,
+    hash: toString(txData.hash).toLowerCase(),
+    value: toString(txData.value || '0'),
+    nonce: toNumber(txData.nonce),
+    gas: toNumber(txData.gas),
+    gasUsed: receipt ? toNumber(receipt.gasUsed) : 0,
+    gasPrice: toString(txData.gasPrice || '0'),
+    input: toString(txData.input || txData.data || '0x'),
+    transactionIndex: toNumber(txData.transactionIndex),
+    timestamp: toNumber(blockData.timestamp),
+    status: receipt ? toBoolean(receipt.status) : null
   };
 
   if (txData.to) {
-    tx.to = txData.to.toLowerCase();
+    tx.to = toString(txData.to).toLowerCase();
   }
 
   return tx;
@@ -128,36 +197,38 @@ const normalizeTX = async (
  * Write block to database
  */
 interface WriteBlockToDB {
-  (blockData: Web3Block | null, flush?: boolean): Promise<void>;
+  (blockData: any | null, flush?: boolean): Promise<void>;
   bulkOps?: BlockDocument[];
 }
 
-const writeBlockToDB: WriteBlockToDB = async function (blockData: Web3Block | null, flush = false): Promise<void> {
+const writeBlockToDB: WriteBlockToDB = async function (blockData: any | null, flush = false): Promise<void> {
   const self = writeBlockToDB;
   if (!self.bulkOps) {
     self.bulkOps = [];
   }
 
-  if (blockData && blockData.number >= 0) {
+  if (blockData && toNumber(blockData.number) >= 0) {
     const blockDoc: BlockDocument = {
-      number: blockData.number,
-      hash: blockData.hash,
-      parentHash: blockData.parentHash,
-      nonce: blockData.nonce,
-      sha3Uncles: blockData.sha3Uncles,
-      logsBloom: blockData.logsBloom,
-      transactionsRoot: blockData.transactionsRoot,
-      stateRoot: blockData.stateRoot,
-      receiptsRoot: blockData.receiptsRoot,
-      miner: blockData.miner ? blockData.miner.toLowerCase() : null,
-      difficulty: String(blockData.difficulty),
-      totalDifficulty: String(blockData.totalDifficulty),
-      extraData: blockData.extraData,
-      size: blockData.size,
-      gasLimit: blockData.gasLimit,
-      gasUsed: blockData.gasUsed,
-      timestamp: blockData.timestamp as number,
-      transactions: blockData.transactions.map(tx => typeof tx === 'string' ? tx : tx.hash),
+      number: toNumber(blockData.number),
+      hash: toString(blockData.hash),
+      parentHash: toString(blockData.parentHash),
+      nonce: toString(blockData.nonce),
+      sha3Uncles: toString(blockData.sha3Uncles),
+      logsBloom: toString(blockData.logsBloom),
+      transactionsRoot: toString(blockData.transactionsRoot),
+      stateRoot: toString(blockData.stateRoot),
+      receiptsRoot: toString(blockData.receiptsRoot),
+      miner: blockData.miner ? toString(blockData.miner).toLowerCase() : null,
+      difficulty: toString(blockData.difficulty),
+      totalDifficulty: toString(blockData.totalDifficulty),
+      extraData: toString(blockData.extraData),
+      size: toNumber(blockData.size),
+      gasLimit: toNumber(blockData.gasLimit),
+      gasUsed: toNumber(blockData.gasUsed),
+      timestamp: toNumber(blockData.timestamp),
+      transactions: blockData.transactions.map((tx: any) => 
+        typeof tx === 'string' ? tx : toString(tx.hash)
+      ),
       uncles: blockData.uncles || []
     };
 
@@ -174,22 +245,16 @@ const writeBlockToDB: WriteBlockToDB = async function (blockData: Web3Block | nu
 
     if (bulk.length === 0) return;
 
-    // Use MongoDB insertMany with ordered: false to handle duplicates
-    try {
-      const docs = await Block.insertMany(bulk, { ordered: false });
-      if (!config.quiet) {
-        console.log(`* ${docs.length} blocks successfully written.`);
+    // Use upsert to avoid duplicates
+    for (const block of bulk) {
+      try {
+        await Block.updateOne({ number: block.number }, { $set: block }, { upsert: true });
+      } catch (err) {
+        console.log(`Error: Failed to upsert block #${block.number}: ${err}`);
       }
-    } catch (err: any) {
-      // Handle duplicate key errors
-      if (err.code === 11000) {
-        if (!config.quiet) {
-          console.log('Skip: Duplicate block keys detected');
-        }
-      } else {
-        console.log(`Error: Failed to insert blocks: ${err}`);
-        process.exit(9);
-      }
+    }
+    if (!config.quiet) {
+      console.log(`* ${bulk.length} blocks upserted.`);
     }
   }
 };
@@ -198,13 +263,13 @@ const writeBlockToDB: WriteBlockToDB = async function (blockData: Web3Block | nu
  * Write transactions to database
  */
 interface WriteTransactionsToDB {
-  (blockData: Web3Block | null, flush?: boolean): Promise<void>;
+  (blockData: any | null, flush?: boolean): Promise<void>;
   bulkOps?: NormalizedTransaction[];
   blocks?: number;
 }
 
 const writeTransactionsToDB: WriteTransactionsToDB = async function (
-  blockData: Web3Block | null,
+  blockData: any | null,
   flush = false
 ): Promise<void> {
   const self = writeTransactionsToDB;
@@ -218,12 +283,12 @@ const writeTransactionsToDB: WriteTransactionsToDB = async function (
       if (typeof txData === 'string') continue; // Skip if only hash
 
       try {
-        const receipt = await web3.eth.getTransactionReceipt(txData.hash);
-        const tx = await normalizeTX(txData as Web3Transaction, receipt, blockData);
+        const receipt = await web3.eth.getTransactionReceipt(toString(txData.hash));
+        const tx = await normalizeTX(txData, receipt, blockData);
         self.bulkOps.push(tx);
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
-        console.log(`Warning: Failed to get receipt for tx ${(txData as Web3Transaction).hash}: ${errorMessage}`);
+        console.log(`Warning: Failed to get receipt for tx ${toString(txData.hash)}: ${errorMessage}`);
       }
     }
 
@@ -271,7 +336,8 @@ const listenBlocks = function (): void {
 
   const poll = async (): Promise<void> => {
     try {
-      const currentBlock = await web3.eth.getBlockNumber();
+      const currentBlockBigInt = await web3.eth.getBlockNumber();
+      const currentBlock = toNumber(currentBlockBigInt);
 
       if (currentBlock > lastProcessedBlock) {
         console.log(`New block detected: ${currentBlock}`);
@@ -296,9 +362,9 @@ const listenBlocks = function (): void {
 
   // Get initial block number
   web3.eth.getBlockNumber()
-    .then(blockNumber => {
-      lastProcessedBlock = blockNumber;
-      console.log(`Starting from block: ${blockNumber}`);
+    .then(blockNumberBigInt => {
+      lastProcessedBlock = toNumber(blockNumberBigInt);
+      console.log(`Starting from block: ${lastProcessedBlock}`);
 
       // Start polling
       setInterval(poll, pollInterval);
@@ -313,11 +379,13 @@ const listenBlocks = function (): void {
  * Sync chain from specific block range
  */
 const syncChain = async function (startBlock?: number, endBlock?: number): Promise<void> {
+  // Use config values if not provided
   if (!startBlock) {
-    startBlock = (await web3.eth.getBlockNumber()) - 100; // Last 100 blocks by default
+    startBlock = config.startBlock;
   }
   if (!endBlock) {
-    endBlock = await web3.eth.getBlockNumber();
+    const latestBlockBigInt = await web3.eth.getBlockNumber();
+    endBlock = config.endBlock ? Math.min(config.endBlock, toNumber(latestBlockBigInt)) : toNumber(latestBlockBigInt);
   }
 
   console.log(`Syncing blocks from ${startBlock} to ${endBlock}...`);
@@ -359,7 +427,8 @@ const prepareSync = async (): Promise<void> => {
 
     if (latestBlockDoc) {
       const dbLatestBlock = latestBlockDoc.number;
-      const nodeLatestBlock = await web3.eth.getBlockNumber();
+      const nodeLatestBlockBigInt = await web3.eth.getBlockNumber();
+      const nodeLatestBlock = toNumber(nodeLatestBlockBigInt);
 
       console.log(`Database latest block: ${dbLatestBlock}`);
       console.log(`Node latest block: ${nodeLatestBlock}`);
@@ -372,6 +441,7 @@ const prepareSync = async (): Promise<void> => {
       }
     } else {
       console.log('No blocks found in database, starting initial sync...');
+      // Use config values for initial sync
       await syncChain(config.startBlock, config.endBlock || undefined);
     }
   } catch (error) {
@@ -396,6 +466,9 @@ const main = async (): Promise<void> => {
 
     // Run initial sync if requested
     if (config.syncAll) {
+      console.log('Starting full sync as requested...');
+      await syncChain(config.startBlock, config.endBlock || undefined);
+    } else {
       await prepareSync();
     }
 

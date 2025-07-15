@@ -48,7 +48,7 @@ export interface ITransaction extends Document {
 
 export interface IAccount extends Document {
   address: string;
-  balance: number;
+  balance: string; // Changed from number to string
   blockNumber: number;
   type: number; // address: 0x0, contract: 0x1
 }
@@ -127,7 +127,7 @@ const BlockSchema = new Schema({
 
 const AccountSchema = new Schema({
   'address': { type: String, index: { unique: true } },
-  'balance': Number,
+  'balance': String, // Changed from Number to String to avoid scientific notation
   'blockNumber': Number,
   'type': { type: Number, default: 0 }, // address: 0x0, contract: 0x1
 }, { collection: 'Account' });
@@ -148,6 +148,8 @@ const ContractSchema = new Schema({
   'sourceCode': String,
   'abi': String,
   'byteCode': String,
+  'verified': { type: Boolean, default: false },
+  'verifiedAt': { type: Date },
 }, { collection: 'Contract' });
 
 const TransactionSchema = new Schema({
@@ -237,7 +239,8 @@ export const connectDB = async (): Promise<void> => {
     }
   } catch (error) {
     // If connection fails but there's an existing connection, use it
-    if (mongoose.connection.readyState === 1) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    if ((mongoose.connection.readyState as any) === 1) {
       console.log('Using existing MongoDB connection');
       return;
     }

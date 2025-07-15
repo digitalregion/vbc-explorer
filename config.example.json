@@ -1,36 +1,87 @@
 {
     "nodeAddr": "localhost",
-    "wsPort": 8294,
-    "startBlock": 0,
-    "endBlock": "latest",
-    "quiet": true,
-    "syncAll": true,
-    "patch": true,
-    "patchBlocks": 100,
+    "port": 8329,
+    "wsPort": 8330,
     "bulkSize": 100,
-    "settings": {
-        "symbol": "NUKO",
-        "name": "Nekonium",
-        "title": "Nekonium Block Explorer",
-        "author": "Elaine, Cody, Hackmod, Bakon",
-        "contact": "mailto:nekonium@nekonium.org",
-        "about": "This is an open source Blockchain Explorer.",
-        "rss": "https://nekonium.github.io/",
-        "reddit": "",
-        "twitter": "https://twitter.com/nekoniumdev",
-        "linkedin": "",
-        "github": "https://github.com/nekonium",
-        "logo": "/img/explorer-logo.png",
-        "copyright": "2019 &copy; Ethereum Classic. / 2020 &copy; Nekonium.",
-        "poweredbyCustom": false,
-        "poweredbyEtcImage": "/img/powered-by-etcexplorer-w.png",
-        "poweredbyEtc": true,
-        "tokenList": "tokens.json",
-        "useRichList": true,
-        "useFiat": false,
-        "miners": {
-            "0x98be787c10d15ad15d1f53af4c516fb509db7417": "mofumofu.me",
-            "0xef2399f9c4a1f8a9a7adafa9fb7a7d86be7ef4f1": "comining.io"
-        }
+    "syncAll": true,
+    "patch": false,
+    "quiet": false,
+    "useRichList": true,
+    "startBlock": 0,
+    "endBlock": null,
+    "maxRetries": 3,
+    "retryDelay": 1000,
+    "logLevel": "info",
+    "enableNFT": true,
+    "enableContractVerification": true,
+    "enableTokenTracking": true,
+    "metadataCacheTTL": 3600,
+    "imageCacheTTL": 86400,
+    "apiRateLimit": 100,
+    "webSocketEnabled": true,
+    "miners": {
+      "0x950302976387b43E042aeA242AE8DAB8e5C204D1": "digitalregion.jp",
+      "0x6C0DB3Ea9EEd7ED145f36da461D84A8d02596B08": "coolpool.top"
+    },
+    "features": {
+      "nft": {
+        "enabled": true,
+        "metadataProviders": ["ipfs", "http"],
+        "imageFallback": true,
+        "cacheEnabled": true
+      },
+      "contractVerification": {
+        "enabled": true,
+        "compilerVersions": ["0.8.30", "0.8.29", "0.8.28", "0.8.27", "0.8.26"],
+        "optimizationEnabled": true,
+        "maxSourceSize": 50000
+      },
+      "richlist": {
+        "enabled": true,
+        "updateInterval": 3600,
+        "minBalance": "1000000000000000000"
+      },
+      "statistics": {
+        "enabled": true,
+        "updateInterval": 300,
+        "blockRange": 100
+      }
+    },
+    "api": {
+      "rateLimit": {
+        "windowMs": 900000,
+        "max": 100
+      },
+      "cors": {
+        "origin": ["https://explorer.digitalregion.jp", "http://localhost:3000"],
+        "credentials": true
+      }
+    },
+    "database": {
+      "uri": "mongodb://localhost:27017/vbc-explorer",
+      "options": {
+        "useNewUrlParser": true,
+        "useUnifiedTopology": true
+      }
+    },
+    "logging": {
+      "level": "info",
+      "file": {
+        "enabled": true,
+        "maxSize": "10m",
+        "maxFiles": 5
+      },
+      "console": {
+        "enabled": true,
+        "colorize": true
+      }
+    },
+    "explorer": {
+      "name": "VirBiCoin Explorer",
+      "description": "Real-time blockchain explorer for VirBiCoin network",
+      "version": "0.4.0",
+      "url": "https://explorer.digitalregion.jp",
+      "apiUrl": "https://explorer.digitalregion.jp/api"
     }
-}
+  }
+  

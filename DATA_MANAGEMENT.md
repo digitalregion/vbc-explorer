@@ -1,148 +1,212 @@
 # VirBiCoin Explorer Data Management
 
-このドキュメントでは、VirBiCoinエクスプローラーのリアルタイム性のある情報とスタティックな情報をDBに読み書きする機能について説明します。
+This document describes the data management functionality for the VirBiCoin Explorer, including real-time blockchain synchronization, statistical calculations, richlist management, NFT tracking, and contract verification.
 
-## 概要
+## Overview
 
-VirBiCoinエクスプローラーは、以下の3つの主要なデータ同期ツールを提供します：
+The VirBiCoin Explorer provides several data synchronization and management tools:
 
-1. **Blockchain Sync** (`sync.js`) - ブロックチェーンからブロックとトランザクションデータをリアルタイムで同期
-2. **Statistics Calculator** (`stats.js`) - ブロック統計情報を計算・保存
-3. **Richlist Calculator** (`richlist.js`) - アカウント残高情報を計算・更新
+1. **Blockchain Sync** (`tools/sync.ts`) - Real-time synchronization of blocks and transaction data from the blockchain
+2. **Statistics Calculator** (`tools/stats.ts`) - Calculation and storage of block statistics
+3. **Richlist Calculator** (`tools/richlist.ts`) - Calculation and updating of account balance information
+4. **Token Management** (`tools/tokens.ts`) - Token tracking and metadata management
+5. **NFT Support** - VRC-721 and VRC-1155 token tracking with metadata
+6. **Contract Verification** - Smart contract source code verification and publication
 
-## データベースモデル
+## Database Models
 
 ### Block
-ブロック情報を格納します（リアルタイム）：
-- number, hash, parentHash
-- miner, timestamp, difficulty
-- gasUsed, gasLimit, transactions
+Stores block information (real-time):
+- `number`: Block number
+- `hash`: Block hash
+- `parentHash`: Parent block hash
+- `miner`: Miner address
+- `timestamp`: Block timestamp
+- `difficulty`: Block difficulty
+- `gasUsed`: Gas used by the block
+- `gasLimit`: Gas limit of the block
+- `transactions`: Array of transaction hashes
 
 ### Transaction
-トランザクション情報を格納します（リアルタイム）：
-- hash, from, to, value
-- blockNumber, gasUsed, gasPrice
-- timestamp, status
+Stores transaction information (real-time):
+- `hash`: Transaction hash
+- `from`: Sender address
+- `to`: Recipient address
+- `value`: Transaction value in wei
+- `blockNumber`: Block number containing the transaction
+- `gasUsed`: Gas used by the transaction
+- `gasPrice`: Gas price
+- `timestamp`: Transaction timestamp
+- `status`: Transaction status (success/failed)
 
 ### BlockStat
-ブロック統計情報を格納します（スタティック）：
-- blockTime, txCount, difficulty
-- gasUsed, gasLimit, uncleCount
-- timestamp, miner
+Stores block statistics (static):
+- `blockTime`: Time between blocks
+- `txCount`: Number of transactions in the block
+- `difficulty`: Block difficulty
+- `gasUsed`: Gas used by the block
+- `gasLimit`: Gas limit of the block
+- `uncleCount`: Number of uncle blocks
+- `timestamp`: Block timestamp
+- `miner`: Miner address
 
 ### Account
-アカウント残高情報を格納します（スタティック）：
-- address, balance, type
-- blockNumber（最終更新ブロック）
+Stores account balance information (static):
+- `address`: Account address
+- `balance`: Account balance in wei
+- `type`: Account type (contract/external)
+- `blockNumber`: Last updated block number
 
-## セットアップ
+### Token
+Stores token information:
+- `address`: Token contract address
+- `name`: Token name
+- `symbol`: Token symbol
+- `decimals`: Token decimals
+- `totalSupply`: Total supply
+- `type`: Token type (VRC-20, VRC-721, VRC-1155)
+- `verified`: Verification status
+- `metadata`: Token metadata
 
-### 1. 必要な依存関係のインストール
+### Contract
+Stores verified contract information:
+- `address`: Contract address
+- `contractName`: Contract name
+- `compilerVersion`: Solidity compiler version
+- `optimization`: Optimization settings
+- `sourceCode`: Verified source code
+- `abi`: Contract ABI
+- `byteCode`: Contract bytecode
+- `verified`: Verification status
+- `verifiedAt`: Verification timestamp
+
+## Setup
+
+### 1. Install Required Dependencies
 
 ```bash
-npm install web3 mongoose
+npm install web3 mongoose ethers
 ```
 
-### 2. VirBiCoinノードの起動
+### 2. Start VirBiCoin Node
 
-VirBiCoinノードがlocalhost:8545で稼働していることを確認してください。
+Ensure the VirBiCoin node is running on localhost:8545.
 
-### 3. MongoDBの起動
+### 3. Start MongoDB
 
 ```bash
-# MongoDBが稼働していることを確認
+# Verify MongoDB is running
 mongosh --eval "db.runCommand('ping')"
 ```
 
-## 使用方法
+## Usage
 
-### 管理スクリプトの使用
+### Management Script Usage
 
 ```bash
-# すべてのデータサービスを開始
+# Start all data services
 ./manage-data.sh start all
 
-# 個別サービスの開始
-./manage-data.sh start sync     # ブロックチェーン同期のみ
-./manage-data.sh start stats    # 統計計算のみ
-./manage-data.sh start richlist # リッチリスト計算のみ
+# Start individual services
+./manage-data.sh start sync     # Blockchain sync only
+./manage-data.sh start stats    # Statistics calculation only
+./manage-data.sh start richlist # Richlist calculation only
+./manage-data.sh start tokens   # Token tracking only
 
-# サービスの停止
+# Stop services
 ./manage-data.sh stop all
 ./manage-data.sh stop sync
 
-# サービス状態の確認
+# Check service status
 ./manage-data.sh status
 
-# ログの確認
+# View logs
 ./manage-data.sh logs sync
 ./manage-data.sh logs stats
 ./manage-data.sh logs richlist
+./manage-data.sh logs tokens
 
-# 初期同期の実行
+# Perform initial sync
 ./manage-data.sh initial-sync
 
-# 統計情報の再計算
+# Rescan statistics
 ./manage-data.sh rescan-stats
 ```
 
-### npmスクリプトの使用
+### NPM Script Usage
 
 ```bash
-# データサービスの開始・停止
+# Data service management
 npm run data:start
 npm run data:stop
 npm run data:status
 
-# 初期同期
+# Initial synchronization
 npm run data:sync
 
-# 個別ツールの実行
+# Individual tool execution
 npm run sync:virbicoin
 npm run stats:virbicoin
 npm run richlist:virbicoin
+npm run tokens:virbicoin
 ```
 
-### 直接実行
+### Direct Execution
 
 ```bash
-# ブロックチェーン同期
-node tools/sync.js
+# Blockchain synchronization
+npx tsx tools/sync.ts
 
-# 統計計算
-node tools/stats.js
+# Statistics calculation
+npx tsx tools/stats.ts
 
-# リッチリスト計算
-node tools/richlist.js
+# Richlist calculation
+npx tsx tools/richlist.ts
 
-# 環境変数での設定
-RESCAN=100:10000 node tools/stats.js  # 統計再計算
-SYNCALL=true node tools/sync.js       # 全ブロック同期
+# Token tracking
+npx tsx tools/tokens.ts
+
+# Environment variable configuration
+RESCAN=100:10000 npx tsx tools/stats.ts  # Statistics rescan
+SYNCALL=true npx tsx tools/sync.ts       # Full block sync
 ```
 
-## API エンドポイント
+## API Endpoints
 
 ### Enhanced Statistics API
 `GET /api/stats-enhanced`
 
-拡張された統計情報を提供：
-- latestBlock: 最新ブロック番号
-- avgBlockTime: 平均ブロック時間
-- networkHashrate: ネットワークハッシュレート
-- networkDifficulty: ネットワーク難易度
-- totalTransactions: 総トランザクション数
-- avgGasPrice: 平均ガス価格
-- activeMiners: アクティブマイナー数
+Provides enhanced statistical information:
+- `latestBlock`: Latest block number
+- `avgBlockTime`: Average block time
+- `networkHashrate`: Network hashrate
+- `networkDifficulty`: Network difficulty
+- `totalTransactions`: Total transaction count
+- `avgGasPrice`: Average gas price
+- `activeMiners`: Number of active miners
+- `isConnected`: Node connection status
+- `lastBlockTimestamp`: Last block timestamp
 
 ### Richlist API
 `GET /api/richlist?page=1&limit=50`
 
-リッチリスト情報を提供：
-- richlist: 残高順のアカウントリスト
-- pagination: ページネーション情報
-- statistics: 総供給量、アカウント統計
+Provides richlist information:
+- `richlist`: Account list sorted by balance
+- `pagination`: Pagination information
+- `statistics`: Total supply, account statistics
 
-## 設定オプション
+### Token APIs
+- `GET /api/tokens` - List all tokens
+- `GET /api/tokens/[address]` - Token details
+- `GET /api/nft/[address]` - NFT collection details
+- `GET /api/nft/[address]/metadata/[tokenId]` - NFT metadata
+
+### Contract APIs
+- `GET /api/contract/status/[address]` - Contract verification status
+- `POST /api/contract/verify` - Verify contract source code
+- `POST /api/contract/interact` - Interact with smart contracts
+
+## Configuration Options
 
 ### config.json
 ```json
@@ -153,62 +217,242 @@ SYNCALL=true node tools/sync.js       # 全ブロック同期
   "bulkSize": 100,
   "syncAll": false,
   "quiet": false,
-  "useRichList": true
+  "useRichList": true,
+  "maxRetries": 3,
+  "retryDelay": 1000,
+  "logLevel": "info",
+  "miners": {
+    "0x123...": "Miner Pool 1",
+    "0x456...": "Miner Pool 2"
+  }
 }
 ```
 
-## ログとモニタリング
+## Logging and Monitoring
 
-ログファイルは `logs/` ディレクトリに保存されます：
-- `logs/sync.log` - ブロックチェーン同期ログ
-- `logs/stats.log` - 統計計算ログ
-- `logs/richlist.log` - リッチリスト計算ログ
+Log files are saved in the `logs/` directory:
+- `logs/sync.log` - Blockchain synchronization logs
+- `logs/stats.log` - Statistics calculation logs
+- `logs/richlist.log` - Richlist calculation logs
+- `logs/tokens.log` - Token tracking logs
 
-## トラブルシューティング
+## Troubleshooting
 
-### 1. VirBiCoinノードに接続できない
+### 1. Cannot Connect to VirBiCoin Node
 ```bash
-# ノードの状態確認
+# Check node status
 curl -X POST -H "Content-Type: application/json" \
      --data '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' \
      http://localhost:8545
 ```
 
-### 2. MongoDBに接続できない
+### 2. Cannot Connect to MongoDB
 ```bash
-# MongoDB接続確認
+# Verify MongoDB connection
 mongosh --eval "db.runCommand('ping')"
 ```
 
-### 3. サービスが停止する
+### 3. Services Stop Unexpectedly
 ```bash
-# ログの確認
+# Check logs
 ./manage-data.sh logs sync
 ./manage-data.sh logs stats
 ./manage-data.sh logs richlist
+./manage-data.sh logs tokens
 ```
 
-### 4. データが更新されない
+### 4. Data Not Updating
 ```bash
-# サービス状態確認
+# Check service status
 ./manage-data.sh status
 
-# サービス再起動
+# Restart services
 ./manage-data.sh restart all
 ```
 
-## パフォーマンス最適化
+### 5. NFT Metadata Issues
+```bash
+# Check token metadata
+curl http://localhost:3000/api/nft/[address]/metadata/[tokenId]
 
-1. **bulkSize調整**: 大量データ処理時はbulkSizeを増やす
-2. **インデックス**: MongoDBに適切なインデックスを作成
-3. **メモリ**: 大きなブロックチェーンの場合、十分なメモリを確保
-4. **ネットワーク**: VirBiCoinノードとの高速接続を確保
+# Verify contract verification
+curl http://localhost:3000/api/contract/status/[address]
+```
 
-## セキュリティ
+## Performance Optimization
 
-1. MongoDBのアクセス制御を設定
-2. VirBiCoinノードのRPCアクセスを適切に制限
-3. ログファイルのアクセス権限を適切に設定
-4. 本番環境では適切なファイアウォール設定を実装
+1. **Adjust bulkSize**: Increase bulkSize for large data processing
+2. **Indexes**: Create appropriate indexes in MongoDB
+3. **Memory**: Ensure sufficient memory for large blockchains
+4. **Network**: Ensure high-speed connection to VirBiCoin node
+5. **Caching**: Implement Redis caching for frequently accessed data
+6. **CDN**: Use CDN for static assets and images
 
-これらのツールにより、VirBiCoinエクスプローラーは最新のブロックチェーンデータをリアルタイムで追跡し、統計情報とリッチリスト情報を定期的に更新できます。
+## Security
+
+1. Configure MongoDB access control
+2. Properly restrict RPC access to VirBiCoin node
+3. Set appropriate permissions for log files
+4. Implement proper firewall settings in production
+5. Validate contract verification inputs
+6. Implement rate limiting for API endpoints
+
+## Advanced Features
+
+### Real-time WebSocket Support
+The system supports WebSocket connections for real-time updates:
+- Block notifications
+- Transaction confirmations
+- Network statistics updates
+- NFT transfer notifications
+
+### NFT Support
+Complete NFT functionality:
+- VRC-721 and VRC-1155 token tracking
+- Metadata retrieval and caching
+- Image loading and fallback handling
+- Token holder tracking
+- Transfer history
+
+### Contract Verification
+Smart contract verification system:
+- Source code compilation
+- Bytecode comparison
+- ABI generation
+- Contract interaction interface
+- Verification status tracking
+
+### Data Export
+Export functionality for backup and analysis:
+```bash
+# Export blocks
+npm run export:blocks -- --start=1000 --end=2000
+
+# Export transactions
+npm run export:transactions -- --date=2024-01-01
+
+# Export statistics
+npm run export:stats -- --format=csv
+
+# Export tokens
+npm run export:tokens -- --type=VRC-721
+```
+
+### Health Monitoring
+Built-in health monitoring endpoints:
+- `GET /health/sync` - Sync service health
+- `GET /health/stats` - Stats service health
+- `GET /health/richlist` - Richlist service health
+- `GET /health/tokens` - Token service health
+
+## Development
+
+### Adding New Data Sources
+To add new data sources, create a new sync module:
+```typescript
+// tools/custom-sync.ts
+import Web3 from 'web3';
+import mongoose from 'mongoose';
+
+class CustomSync {
+  constructor(config: any) {
+    this.web3 = new Web3(config.nodeAddr);
+    this.config = config;
+  }
+
+  async sync(): Promise<void> {
+    // Implementation
+  }
+}
+
+export default CustomSync;
+```
+
+### Custom Statistics
+To add custom statistics, extend the stats calculator:
+```typescript
+// tools/custom-stats.ts
+class CustomStats {
+  async calculate(): Promise<void> {
+    // Custom calculation logic
+  }
+}
+```
+
+### NFT Metadata Providers
+Implement custom metadata providers:
+```typescript
+// lib/metadata-provider.ts
+interface MetadataProvider {
+  getMetadata(tokenId: number): Promise<TokenMetadata>;
+  getImageUrl(tokenId: number): Promise<string>;
+}
+```
+
+## Deployment
+
+### Production Setup
+1. Use PM2 for process management
+2. Configure log rotation
+3. Set up monitoring and alerting
+4. Implement backup strategies
+5. Configure CDN for static assets
+6. Set up Redis for caching
+
+### Docker Support
+```dockerfile
+FROM node:18-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN npm install
+COPY . .
+RUN npm run build
+CMD ["npm", "start"]
+```
+
+### Environment Variables
+```bash
+# Database
+MONGODB_URI=mongodb://localhost:27017/vbc-explorer
+
+# Blockchain
+VBC_NODE_URL=http://localhost:329
+VBC_WS_URL=ws://localhost:8330
+
+# API
+NEXT_PUBLIC_API_URL=http://localhost:3000
+NEXT_PUBLIC_EXPLORER_URL=https://explorer.digitalregion.jp
+
+# Features
+ENABLE_NFT=true
+ENABLE_CONTRACT_VERIFICATION=true
+ENABLE_RICHLIST=true
+```
+
+## Migration Guide
+
+### From JavaScript to TypeScript
+1. Rename `.js` files to `.ts`
+2. Add type definitions
+3. Update import/export statements
+4. Configure `tsconfig.json`
+
+### From Pages Router to App Router
+1. Move pages to `app/` directory
+2. Update routing structure
+3. Implement server components
+4. Update API routes
+
+### Database Schema Updates
+```typescript
+// Add new fields to existing collections
+await db.collection('tokens').updateMany({}, {
+  $set: {
+    type: 'VRC-20',
+    verified: false,
+    metadata: null
+  }
+});
+```
+
+These tools enable the VirBiCoin Explorer to track the latest blockchain data in real-time, manage NFT collections, verify smart contracts, and provide comprehensive statistical information for the VirBiCoin network.

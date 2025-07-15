@@ -1,8 +1,8 @@
-"use client";
+'use client';
 import Header from '../components/Header';
 import Link from 'next/link';
 import Image from 'next/image';
-import { CubeTransparentIcon } from '@heroicons/react/24/outline';
+import { CubeTransparentIcon, CheckCircleIcon } from '@heroicons/react/24/outline';
 import { useEffect, useState } from 'react';
 
 type Token = {
@@ -12,11 +12,13 @@ type Token = {
   holders: number;
   supply: string;
   type: string;
+  verified?: boolean;
 };
 
 export default function TokensPage() {
   const [tokens, setTokens] = useState<Token[]>([]);
   const [loading, setLoading] = useState(true);
+  const [blockHeight, setBlockHeight] = useState<number | null>(null);
 
   useEffect(() => {
     async function fetchTokens() {
@@ -25,24 +27,38 @@ export default function TokensPage() {
         if (!res.ok) throw new Error('Failed to fetch tokens');
         const data = await res.json();
         setTokens(data.tokens || []);
-      } catch (e) {
+      } catch {
         setTokens([]);
       } finally {
         setLoading(false);
       }
     }
     fetchTokens();
+
+    // ブロック高をAPIから取得
+    async function fetchBlockHeight() {
+      try {
+        const res = await fetch('/api/blockheight');
+        if (res.ok) {
+          const data = await res.json();
+          setBlockHeight(data.height);
+        }
+      } catch {}
+    }
+    fetchBlockHeight();
   }, []);
 
-
   return (
-    <>
+    <div className='min-h-screen bg-gray-900 text-white'>
       <Header />
 
       {/* Page Header */}
-      <div className='page-header-container'>
+      <div className='bg-gray-800 border-b border-gray-700'>
         <div className='container mx-auto px-4 py-8'>
-          <h1 className='text-3xl font-bold mb-2 text-gray-100'>Tokens</h1>
+          <div className='flex items-center gap-3 mb-4'>
+            <CubeTransparentIcon className='w-8 h-8 text-purple-400' />
+            <h1 className='text-3xl font-bold text-gray-100'>Tokens</h1>
+          </div>
           <p className='text-gray-400'>Explore tokens and smart contracts on the VirBiCoin network</p>
         </div>
       </div>
@@ -66,6 +82,7 @@ export default function TokensPage() {
                   <th className='text-left py-3 px-4 text-sm font-medium text-gray-300'>Token</th>
                   <th className='text-left py-3 px-4 text-sm font-medium text-gray-300'>Type</th>
                   <th className='text-left py-3 px-4 text-sm font-medium text-gray-300'>Contract Address</th>
+                  <th className='text-left py-3 px-4 text-sm font-medium text-gray-300 w-32'>Verify</th>
                   <th className='text-left py-3 px-4 text-sm font-medium text-gray-300'>Holders</th>
                   <th className='text-left py-3 px-4 text-sm font-medium text-gray-300'>Total Supply</th>
                 </tr>
@@ -120,18 +137,45 @@ export default function TokensPage() {
                         </span>
                       </td>
                       <td className='py-3 px-4'>
-                        <Link
-                          href={`/tokens/${token.address}`}
-                          className='font-mono text-blue-400 hover:text-blue-300 transition-colors break-all'
-                        >
-                          {token.address}
-                        </Link>
+                        <div className='flex items-center gap-2'>
+                          {token.address === 'N/A' ? (
+                            token.type === 'Native' ? (
+                              <Link
+                                href={`/tokens/0x0000000000000000000000000000000000000000`}
+                                className='font-mono text-blue-400 hover:text-blue-300 transition-colors break-all'
+                              >
+                                N/A
+                              </Link>
+                            ) : (
+                              <span className='font-mono text-gray-400 break-all'>N/A</span>
+                            )
+                          ) : (
+                            <Link
+                              href={`/tokens/${token.address}`}
+                              className='font-mono text-blue-400 hover:text-blue-300 transition-colors break-all'
+                            >
+                              {token.address}
+                            </Link>
+                          )}
+                        </div>
+                      </td>
+                      <td className='py-3 px-4 w-32'>
+                        {token.type !== 'Native' && token.verified ? (
+                          <span className='flex items-center gap-0.5 px-2 py-0.5 bg-green-500/20 text-green-400 rounded text-base font-medium w-fit'>
+                            <CheckCircleIcon className='w-4 h-4' />
+                            <span>Verified</span>
+                          </span>
+                        ) : (
+                          <span className='text-gray-400 text-xs'>-</span>
+                        )}
                       </td>
                       <td className='py-3 px-4'>
                         <span className='text-gray-200 font-medium'>{token.holders?.toLocaleString?.() ?? '-'}</span>
                       </td>
                       <td className='py-3 px-4'>
-                        <span className='text-green-400 font-bold'>{token.supply ?? '-'}</span>
+                        <span className='text-green-400 font-bold'>
+                          {token.type === 'Native' ? (blockHeight ?? '-') : (token.supply ?? '-')}
+                        </span>
                       </td>
                     </tr>
                   ))
@@ -141,11 +185,16 @@ export default function TokensPage() {
           </div>
 
           {/* Summary Stats */}
-          <div className='mt-8 grid grid-cols-1 md:grid-cols-3 gap-4'>
+          <div className='mt-8 grid grid-cols-1 md:grid-cols-4 gap-4'>
             <div className='bg-gray-700/50 rounded-lg p-4 border border-gray-600/50'>
               <h3 className='text-sm font-medium text-gray-300 mb-2'>Total Tokens</h3>
               <p className='text-2xl font-bold text-blue-400'>{loading ? '-' : tokens.length}</p>
               <p className='text-xs text-gray-400'>Contracts deployed</p>
+            </div>
+            <div className='bg-gray-700/50 rounded-lg p-4 border border-gray-600/50'>
+              <h3 className='text-sm font-medium text-gray-300 mb-2'>NFT Collections</h3>
+              <p className='text-2xl font-bold text-purple-400'>{loading ? '-' : tokens.filter(t => t.type === 'VRC-721' || t.type === 'VRC-1155').length}</p>
+              <p className='text-xs text-gray-400'>NFT contracts</p>
             </div>
             <div className='bg-gray-700/50 rounded-lg p-4 border border-gray-600/50'>
               <h3 className='text-sm font-medium text-gray-300 mb-2'>Total Holders</h3>
@@ -154,12 +203,12 @@ export default function TokensPage() {
             </div>
             <div className='bg-gray-700/50 rounded-lg p-4 border border-gray-600/50'>
               <h3 className='text-sm font-medium text-gray-300 mb-2'>Contract Types</h3>
-              <p className='text-2xl font-bold text-purple-400'>{loading ? '-' : new Set(tokens.map(t => t.type)).size}</p>
+              <p className='text-2xl font-bold text-orange-400'>{loading ? '-' : new Set(tokens.map(t => t.type)).size}</p>
               <p className='text-xs text-gray-400'>Different standards</p>
             </div>
           </div>
         </div>
       </main>
-    </>
+    </div>
   );
 }

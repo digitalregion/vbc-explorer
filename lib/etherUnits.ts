@@ -1,19 +1,31 @@
-import BigNumber from 'bignumber.js';
+// VirBiCoin units converter using native BigInt
+// Supports VirBiCoin-specific unit naming conventions
 
 interface UnitMap {
   [key: string]: string;
 }
 
-interface EtherUnits {
+interface VirBiCoinUnits {
   unitMap: UnitMap;
-  getValueOfUnit(unit: string): BigNumber;
-  toEther(number: string | number, unit?: string): string;
-  toGwei(number: string | number, unit?: string): string;
-  toWei(number: string | number, unit?: string): string;
+  getValueOfUnit(unit: string): bigint;
+  toVBC(number: string | number | bigint, unit?: string): string;
+  toGwei(number: string | number | bigint, unit?: string): string;
+  toNiku(number: string | number | bigint, unit?: string): string;
+  // Legacy compatibility methods
+  toEther(number: string | number | bigint, unit?: string): string;
+  toWei(number: string | number | bigint, unit?: string): string;
 }
 
-const etherUnits: EtherUnits = {
+const virBiCoinUnits: VirBiCoinUnits = {
   unitMap: {
+    // VirBiCoin specific naming (niku instead of wei)
+    'niku': '1',
+    'kniku': '1000',
+    'mniku': '1000000',
+    'gniku': '1000000000',
+    'vbc': '1000000000000000000',
+
+    // Legacy Ethereum-compatible names for compatibility
     'wei': '1',
     'kwei': '1000',
     'ada': '1000',
@@ -40,29 +52,42 @@ const etherUnits: EtherUnits = {
     'tether': '1000000000000000000000000000000',
   },
 
-  getValueOfUnit(unit: string): BigNumber {
-    unit = unit ? unit.toLowerCase() : 'ether';
+  getValueOfUnit(unit: string): bigint {
+    unit = unit ? unit.toLowerCase() : 'vbc';
     const unitValue = this.unitMap[unit];
     if (unitValue === undefined) {
       throw new Error('Invalid unit: ' + unit + '. Supported units: ' + JSON.stringify(this.unitMap, null, 2));
     }
-    return new BigNumber(unitValue, 10);
+    return BigInt(unitValue);
   },
 
-  toEther(number: string | number, unit?: string): string {
-    const returnValue = new BigNumber(this.toWei(number, unit)).div(this.getValueOfUnit('ether'));
-    return returnValue.toString(10);
+  toVBC(number: string | number | bigint, unit?: string): string {
+    const nikuValue = BigInt(this.toNiku(number, unit));
+    const vbcValue = nikuValue * 1000000000000000000n / this.getValueOfUnit('vbc');
+    return (Number(vbcValue) / 1000000000000000000).toString();
   },
 
-  toGwei(number: string | number, unit?: string): string {
-    const returnValue = new BigNumber(this.toWei(number, unit)).div(this.getValueOfUnit('gwei'));
-    return returnValue.toString(10);
+  toGwei(number: string | number | bigint, unit?: string): string {
+    const nikuValue = BigInt(this.toNiku(number, unit));
+    const gweiValue = nikuValue / this.getValueOfUnit('gwei');
+    return gweiValue.toString();
   },
 
-  toWei(number: string | number, unit?: string): string {
-    const returnValue = new BigNumber(String(number)).times(this.getValueOfUnit(unit || 'ether'));
-    return returnValue.toString(10);
+  toNiku(number: string | number | bigint, unit?: string): string {
+    const inputValue = BigInt(String(number));
+    const multiplier = this.getValueOfUnit(unit || 'vbc');
+    const result = inputValue * multiplier;
+    return result.toString();
+  },
+
+  // Legacy compatibility methods
+  toEther(number: string | number | bigint, unit?: string): string {
+    return this.toVBC(number, unit);
+  },
+
+  toWei(number: string | number | bigint, unit?: string): string {
+    return this.toNiku(number, unit);
   }
 };
 
-export default etherUnits;
+export default virBiCoinUnits;

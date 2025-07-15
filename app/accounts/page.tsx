@@ -46,7 +46,7 @@ export default function AccountsPage() {
                     <td className='py-3 px-4 text-gray-200 font-medium'>#{acc.rank}</td>
                     <td className='py-3 px-4'>
                       <Link
-                        href={`/accounts/${acc.address}`}
+                        href={`/address/${acc.address}`}
                         className='font-mono text-blue-400 hover:text-blue-300 transition-colors'
                       >
                         {acc.address}

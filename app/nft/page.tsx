@@ -26,18 +26,29 @@ export default function NFTPage() {
     async function fetchNFTCollections() {
       try {
         setLoading(true);
+
+        // Fetch actual VRC-721 tokens from the tokens API
+        const response = await fetch('/api/tokens');
+        if (!response.ok) {
+          throw new Error('Failed to fetch tokens');
+        }
+
+        const tokensData = await response.json();
         
-        // Static list of known NFT addresses - would be fetched from database in production
-        const nftAddresses = ['0xD26488eA7e2b4e8Ba8eB9E6d7C8bF2a3C5d4E6F8'];
-        
+        // Filter for VRC-721 tokens only
+        const nftTokens = tokensData.tokens.filter((token: Record<string, unknown>) => 
+          token.type === 'VRC-721' || token.type === 'VRC-1155'
+        );
+
+        // Fetch detailed data for each NFT collection
         const collections = await Promise.all(
-          nftAddresses.map(async (address) => {
+          nftTokens.map(async (token: Record<string, unknown>) => {
             try {
-              const response = await fetch(`/api/nft/${address}`);
+              const response = await fetch(`/api/nft/${token.address}`);
               if (!response.ok) {
-                throw new Error(`Failed to fetch NFT data for ${address}`);
+                throw new Error(`Failed to fetch NFT data for ${token.address}`);
               }
-              
+
               const data = await response.json();
               return {
                 name: data.nft.name,
@@ -50,12 +61,12 @@ export default function NFTPage() {
                 creator: data.nft.creator || 'Unknown'
               };
             } catch (err) {
-              console.error(`Error fetching NFT ${address}:`, err);
+              console.error(`Error fetching NFT ${token.address}:`, err);
               return null;
             }
           })
         );
-        
+
         // Filter out failed requests
         const validCollections = collections.filter(Boolean) as NFTCollection[];
         setNftCollections(validCollections);
@@ -72,7 +83,7 @@ export default function NFTPage() {
 
   if (loading) {
     return (
-      <>
+      <div className='min-h-screen bg-gray-900 text-white'>
         <Header />
         <div className='container mx-auto px-4 py-8'>
           <div className='animate-pulse'>
@@ -80,28 +91,31 @@ export default function NFTPage() {
             <div className='h-64 bg-gray-700 rounded'></div>
           </div>
         </div>
-      </>
+      </div>
     );
   }
 
   if (error) {
     return (
-      <>
+      <div className='min-h-screen bg-gray-900 text-white'>
         <Header />
         <div className='container mx-auto px-4 py-8'>
           <div className='text-red-400'>Error: {error}</div>
         </div>
-      </>
+      </div>
     );
   }
   return (
-    <>
+    <div className='min-h-screen bg-gray-900 text-white'>
       <Header />
 
       {/* Page Header */}
-      <div className='page-header-container'>
+      <div className='bg-gray-800 border-b border-gray-700'>
         <div className='container mx-auto px-4 py-8'>
-          <h1 className='text-3xl font-bold mb-2 text-gray-100'>NFT Collections</h1>
+          <div className='flex items-center gap-3 mb-4'>
+            <PhotoIcon className='w-8 h-8 text-pink-400' />
+            <h1 className='text-3xl font-bold text-gray-100'>NFT Collections</h1>
+          </div>
           <p className='text-gray-400'>Explore NFT collections and digital assets on the VirBiCoin network</p>
         </div>
       </div>
@@ -163,7 +177,7 @@ export default function NFTPage() {
                           <div className='flex flex-col sm:flex-row sm:items-center gap-2'>
                             <span className='text-gray-400 font-medium min-w-[100px]'>Creator:</span>
                             <Link
-                              href={`/accounts/${collection.creator}`}
+                              href={`/address/${collection.creator}`}
                               className='font-mono text-blue-400 hover:text-blue-300 transition-colors break-all'
                             >
                               {collection.creator}
@@ -228,9 +242,9 @@ export default function NFTPage() {
             <div className='bg-gray-700/50 rounded-lg p-4 border border-gray-600/50'>
               <h3 className='text-sm font-medium text-gray-300 mb-2'>Avg Floor Price</h3>
               <p className='text-2xl font-bold text-yellow-400'>
-                {nftCollections.length > 0 
-                  ? (nftCollections.reduce((sum, col) => sum + parseFloat(col.floorPrice), 0) / nftCollections.length).toFixed(2)
-                  : '0.00'
+                {nftCollections.length > 0 ?
+                  (nftCollections.reduce((sum, col) => sum + parseFloat(col.floorPrice), 0) / nftCollections.length).toFixed(2) :
+                  '0.00'
                 } VBC
               </p>
               <p className='text-xs text-gray-400'>Across collections</p>
@@ -238,6 +252,6 @@ export default function NFTPage() {
           </div>
         </div>
       </main>
-    </>
+    </div>
   );
 }

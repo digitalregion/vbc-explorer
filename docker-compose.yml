@@ -2,7 +2,7 @@ version: '3'
 services:
   app:
     build: .
-    command: ./app.js
+    command: npm start
     restart: always
     environment:
       MONGO_URI: 'mongodb://db/explorerDB'
@@ -12,7 +12,7 @@ services:
       - db
   sync:
     build: .
-    command: ./tools/sync.js
+    command: npm run sync
     restart: always
     environment:
       MONGO_URI: 'mongodb://db/explorerDB'
@@ -20,7 +20,7 @@ services:
       - db
   stats:
     build: .
-    command: ./tools/stats.js
+    command: npm run stats
     restart: always
     environment:
       MONGO_URI: 'mongodb://db/explorerDB'
@@ -28,7 +28,7 @@ services:
       - db
   price:
     build: .
-    command: ./tools/price.js
+    command: npm run price
     restart: always
     environment:
       MONGO_URI: 'mongodb://db/explorerDB'
@@ -36,7 +36,7 @@ services:
       - db
   richlist:
     build: .
-    command: ./tools/richlist.js
+    command: npm run rich
     restart: "no"
     environment:
       MONGO_URI: 'mongodb://db/explorerDB'

@@ -19,7 +19,7 @@ interface Config {
 interface AccountData {
   address: string;
   type?: number;
-  balance?: number;
+  balance?: string; // Wei文字列
   blockNumber?: number;
 }
 
@@ -200,7 +200,7 @@ const makeRichList: MakeRichListFunction = function (
 
             // Get balance
             const balance = await web3.eth.getBalance(account);
-            data[account].balance = parseFloat(web3.utils.fromWei(balance, 'ether'));
+            data[account].balance = balance.toString(); // Weiのまま文字列で保存
 
           } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
@@ -351,13 +351,78 @@ async function startSync(): Promise<void> {
       console.log('Quiet mode enabled');
     }
 
-    makeRichList(latestBlock, 500, updateAccounts);
+    makeRichList(Number(latestBlock), 500, updateAccounts);
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     console.log(`Error starting sync: ${errorMessage}`);
     process.exit(1);
   }
+}
+
+// percentage計算・保存ロジック
+async function updatePercentages() {
+  const accounts = await Account.find({});
+  
+  // Ether小数値で合計（floatのまま扱う）
+  const total = accounts.reduce((sum, acc) => {
+    let balanceStr = acc.balance || '0';
+    
+    // balanceの型チェックと変換
+    if (typeof balanceStr === 'number') {
+      // number型の場合は文字列に変換
+      balanceStr = balanceStr.toString();
+    } else if (typeof balanceStr === 'string') {
+      // 文字列の場合、科学記数法や小数点を含む場合はBigIntで整数に変換
+      if (balanceStr.includes('.') || balanceStr.includes('e') || balanceStr.includes('E')) {
+        try {
+          balanceStr = BigInt(Math.floor(Number(balanceStr))).toString();
+        } catch (e) {
+          balanceStr = '0';
+        }
+      }
+    } else {
+      // その他の型の場合は'0'に設定
+      balanceStr = '0';
+    }
+    
+    // fromWeiでEtherに変換（小数値になる）
+    const etherValue = parseFloat(Web3.utils.fromWei(balanceStr, 'ether'));
+    return sum + etherValue;
+  }, 0);
+
+  for (const acc of accounts) {
+    let percent = 0;
+    let balanceStr = acc.balance || '0';
+    
+    // balanceの型チェックと変換
+    if (typeof balanceStr === 'number') {
+      balanceStr = balanceStr.toString();
+    } else if (typeof balanceStr === 'string') {
+      if (balanceStr.includes('.') || balanceStr.includes('e') || balanceStr.includes('E')) {
+        try {
+          balanceStr = BigInt(Math.floor(Number(balanceStr))).toString();
+        } catch (e) {
+          balanceStr = '0';
+        }
+      }
+    } else {
+      balanceStr = '0';
+    }
+    
+    const ether = parseFloat(Web3.utils.fromWei(balanceStr, 'ether'));
+    
+    if (total > 0) {
+      percent = Math.round((ether / total) * 1000000) / 10000; // 小数点4桁
+    }
+    
+    // percentageはfloatで保存（BigInt変換は絶対にしない）
+    await Account.updateOne(
+      { address: acc.address },
+      { $set: { percentage: percent } }
+    );
+  }
+  console.log('Account percentages updated');
 }
 
 /**
@@ -376,6 +441,7 @@ const main = async (): Promise<void> => {
     console.log('Starting richlist calculation...');
 
     await startSync();
+    await updatePercentages(); // percentage計算・保存を追加
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);

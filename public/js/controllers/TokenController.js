@@ -23,7 +23,14 @@ angular.module('BlocksApp').controller('TokenController', function($stateParams,
       console.log(resp.data)
       $scope.token = resp.data;
       $scope.token.address = address;
-      $scope.token.type = resp.data.type || 'ERC20';
+      // Normalize token type
+      let tokenType = resp.data.type || 'VRC-20';
+      if (tokenType === 'ERC20') tokenType = 'VRC-20';
+      else if (tokenType === 'ERC721') tokenType = 'VRC-721';
+      else if (tokenType === 'VRC721') tokenType = 'VRC-721';
+      else if (tokenType === 'ERC1155') tokenType = 'VRC-1155';
+      else if (tokenType === 'VRC1155') tokenType = 'VRC-1155';
+      $scope.token.type = tokenType;
       $scope.addr = {"bytecode": resp.data.bytecode};
       $scope.loading = false;
       if (resp.data.name)
@@ -60,27 +67,27 @@ angular.module('BlocksApp').controller('TokenController', function($stateParams,
       if (!type) return 'VRC-20';
       switch (type.toUpperCase()) {
         case 'ERC20': return 'VRC-20';
-        case 'ERC721': return 'VRC-721';
+        case 'VRC-721': return 'VRC-721';
         case 'ERC1155': return 'VRC-1155';
         default: return type;
       }
     };
 
-    $scope.erc721Tokens = [];
+    $scope.vrc721Tokens = [];
 
-    // ERC721 TokenIDリスト取得
-    $scope.loadERC721Tokens = function() {
-      $scope.erc721Tokens = [];
+    // VRC-721 TokenIDリスト取得
+    $scope.loadVRC721Tokens = function() {
+      $scope.vrc721Tokens = [];
       if (!address) return;
-      $http.get('/api/account/' + address + '/erc721').then(function(resp) {
-        $scope.erc721Tokens = resp.data || [];
+      $http.get('/api/account/' + address + '/vrc721').then(function(resp) {
+        $scope.vrc721Tokens = resp.data || [];
       });
     };
 
-    // タブ切り替え時にERC721取得
+    // タブ切り替え時にVRC-721取得
     $scope.$watch('activeTab', function(newVal) {
-      if (newVal === 'tab_token_erc721') {
-        $scope.loadERC721Tokens();
+      if (newVal === 'tab_token_vrc721') {
+        $scope.loadVRC721Tokens();
       }
     });
 

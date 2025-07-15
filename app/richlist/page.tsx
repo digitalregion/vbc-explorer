@@ -3,6 +3,7 @@
 import Header from '../components/Header';
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
+import { TrophyIcon } from '@heroicons/react/24/outline';
 
 interface RichlistAccount {
   rank: number;
@@ -75,16 +76,23 @@ export default function RichlistPage() {
       setCurrentPage(newPage);
     }
   };
+
   return (
-    <>
+    <div className='min-h-screen bg-gray-900 text-white'>
       <Header />
 
       {/* Page Header */}
-      <div className='page-header-container'>
+      <div className='bg-gray-800 border-b border-gray-700'>
         <div className='container mx-auto px-4 py-8'>
-          <h1 className='text-3xl font-bold mb-2 text-gray-100'>Rich List</h1>
+          <div className='flex items-center gap-3 mb-4'>
+            <TrophyIcon className='w-8 h-8 text-yellow-400' />
+            <h1 className='text-3xl font-bold text-gray-100'>Rich List</h1>
+          </div>
           <p className='text-gray-400'>
-            Top VBC holders by balance. Total supply: {richlistData.statistics.totalSupply.toLocaleString()} VBC
+            Top VBC holders by balance. Total supply: {
+              // Convert Wei to VBC for display
+              (richlistData.statistics.totalSupply / 1e18).toLocaleString()
+            } VBC
           </p>
         </div>
       </div>
@@ -132,7 +140,7 @@ export default function RichlistPage() {
                         </td>
                         <td className='py-3 px-4'>
                           <Link
-                            href={`/accounts/${acc.address}`}
+                            href={`/address/${acc.address}`}
                             className='font-mono text-blue-400 hover:text-blue-300 transition-colors break-all'
                           >
                             {acc.address}
@@ -233,6 +241,6 @@ export default function RichlistPage() {
           </div>
         </div>
       </main>
-    </>
+    </div>
   );
 }

@@ -3,6 +3,7 @@
 import Header from '../../components/Header';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { CheckCircleIcon, ClipboardDocumentIcon } from '@heroicons/react/24/outline';
 
 interface TokenData {
   token: {
@@ -14,6 +15,7 @@ interface TokenData {
     decimals: number;
     totalSupply: string;
     totalSupplyRaw: string;
+    verified?: boolean;
   };
   statistics: {
     holders: number;
@@ -44,6 +46,7 @@ export default function TokenDetailPage({ params }: { params: Promise<{ address:
   const [tokenData, setTokenData] = useState<TokenData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [copiedAddress, setCopiedAddress] = useState(false);
 
   useEffect(() => {
     const getParams = async () => {
@@ -61,11 +64,11 @@ export default function TokenDetailPage({ params }: { params: Promise<{ address:
         setLoading(true);
         setError(null);
         const response = await fetch(`/api/tokens/${address}`);
-        
+
         if (!response.ok) {
           throw new Error('Failed to fetch token data');
         }
-        
+
         const data = await response.json();
         setTokenData(data);
       } catch (err) {
@@ -77,6 +80,17 @@ export default function TokenDetailPage({ params }: { params: Promise<{ address:
 
     fetchTokenData();
   }, [address]);
+
+  // Copy address to clipboard handler
+  const copyAddressToClipboard = async () => {
+    try {
+      await navigator.clipboard.writeText(tokenData?.token.address || '');
+      setCopiedAddress(true);
+      setTimeout(() => setCopiedAddress(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy address:', err);
+    }
+  };
 
   if (loading) {
     return (
@@ -144,13 +158,38 @@ export default function TokenDetailPage({ params }: { params: Promise<{ address:
         <div className='bg-gray-800 rounded-lg border border-gray-700 p-6 mb-8'>
           <div className='flex items-center justify-between mb-6'>
             <h2 className='text-xl font-semibold text-gray-100'>Token Information</h2>
+            {(tokenData.token.type === 'VRC-721' || tokenData.token.type === 'VRC-1155') && (
+              <Link
+                href={`/nft/${tokenData.token.address}`}
+                className='px-4 py-2 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white text-base font-bold rounded-lg shadow flex items-center gap-2 transition-all duration-200 min-h-[40px]'
+                style={{ minWidth: 'auto' }}
+              >
+                <svg className='w-5 h-5' fill='none' stroke='currentColor' strokeWidth='2' viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' d='M9 17v-2a4 4 0 014-4h2m4 0V7a2 2 0 00-2-2h-7a2 2 0 00-2 2v10a2 2 0 002 2h7a2 2 0 002-2v-4a2 2 0 00-2-2h-2a4 4 0 00-4 4v2'></path></svg>
+                View NFTs
+              </Link>
+            )}
           </div>
-
-          <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6'>
+          <div className='grid grid-cols-1 md:grid-cols-3 gap-6'>
             <div>
               <div className='text-sm font-medium text-gray-300 mb-2'>Token Address</div>
-              <div className='font-mono text-blue-400 text-sm break-all'>
-                {tokenData.token.address}
+              <div className='flex items-center gap-2 font-mono text-blue-400 text-sm break-all'>
+                <Link
+                  href={`/tokens/${tokenData.token.address}`}
+                  className='hover:text-blue-300 transition-colors'
+                >
+                  {tokenData.token.address}
+                </Link>
+                {/* Copy icon */}
+                <button
+                  onClick={copyAddressToClipboard}
+                  className='p-1 text-gray-400 hover:text-blue-400 transition-colors'
+                  title='Copy address to clipboard'
+                >
+                  <ClipboardDocumentIcon className='w-4 h-4' />
+                </button>
+                {copiedAddress && (
+                  <span className='text-green-400 text-xs'>Copied!</span>
+                )}
               </div>
             </div>
             <div>
@@ -163,36 +202,30 @@ export default function TokenDetailPage({ params }: { params: Promise<{ address:
             </div>
             <div>
               <div className='text-sm font-medium text-gray-300 mb-2'>Type</div>
-              <div className='flex items-center gap-2'>
-                <span className={`px-2 py-1 rounded text-xs font-medium ${
+              <span className={`px-2 py-1 rounded text-xs font-medium ${
+                tokenData.token.type === 'Native' ? 'bg-green-500/20 text-green-400' :
                   tokenData.token.type === 'VRC-721' ? 'bg-purple-500/20 text-purple-400' :
-                  tokenData.token.type === 'VRC-1155' ? 'bg-orange-500/20 text-orange-400' :
-                  tokenData.token.type === 'VRC-20' ? 'bg-green-500/20 text-green-400' :
-                  tokenData.token.type === 'Native' ? 'bg-blue-500/20 text-blue-400' :
-                  'bg-gray-500/20 text-gray-400'
-                }`}>
-                  {tokenData.token.type}
-                </span>
-                {tokenData.token.isNFT && (
-                  <Link
-                    href={`/nft/${tokenData.token.address}`}
-                    className='px-2 py-1 bg-indigo-500/20 text-indigo-400 rounded text-xs font-medium hover:bg-indigo-500/30 transition-colors'
-                  >
-                    View NFT
-                  </Link>
-                )}
-              </div>
+                    tokenData.token.type === 'VRC-1155' ? 'bg-orange-500/20 text-orange-400' :
+                      tokenData.token.type === 'VRC-20' ? 'bg-blue-500/20 text-blue-400' :
+                        'bg-gray-500/20 text-gray-400'
+              }`}>
+                {tokenData.token.type}
+              </span>
             </div>
-          </div>
-          
-          <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6 mt-6'>
             <div>
               <div className='text-sm font-medium text-gray-300 mb-2'>Total Supply</div>
               <div className='text-gray-100 text-lg font-semibold'>{tokenData.token.totalSupply}</div>
             </div>
             <div>
-              <div className='text-sm font-medium text-gray-300 mb-2'>Decimals</div>
-              <div className='text-gray-100 text-lg font-semibold'>{tokenData.token.decimals}</div>
+              <div className='text-sm font-medium text-gray-300 mb-2'>Verify</div>
+              {tokenData.token.verified ? (
+                <div className='flex items-center gap-1 px-2 py-1 bg-green-500/20 text-green-400 rounded text-sm font-medium w-fit'>
+                  <CheckCircleIcon className='w-5 h-5' />
+                  <span>Verified</span>
+                </div>
+              ) : (
+                <span className='text-gray-400 text-xs'>-</span>
+              )}
             </div>
           </div>
         </div>
@@ -204,19 +237,19 @@ export default function TokenDetailPage({ params }: { params: Promise<{ address:
             <p className='text-2xl font-bold text-blue-400'>{tokenData.statistics.holders.toLocaleString()}</p>
             <p className='text-xs text-gray-400'>Unique addresses</p>
           </div>
-          
+
           <div className='bg-gray-700/50 rounded-lg p-4 border border-gray-600/50'>
             <h3 className='text-sm font-medium text-gray-300 mb-2'>Transfers</h3>
             <p className='text-2xl font-bold text-green-400'>{tokenData.statistics.transfers.toLocaleString()}</p>
             <p className='text-xs text-gray-400'>Total transactions</p>
           </div>
-          
+
           <div className='bg-gray-700/50 rounded-lg p-4 border border-gray-600/50'>
             <h3 className='text-sm font-medium text-gray-300 mb-2'>Market Cap</h3>
             <p className='text-2xl font-bold text-yellow-400'>{tokenData.statistics.marketCap}</p>
             <p className='text-xs text-gray-400'>Current valuation</p>
           </div>
-          
+
           <div className='bg-gray-700/50 rounded-lg p-4 border border-gray-600/50'>
             <h3 className='text-sm font-medium text-gray-300 mb-2'>Age</h3>
             <p className='text-2xl font-bold text-purple-400'>{tokenData.statistics.age} days</p>
@@ -249,7 +282,7 @@ export default function TokenDetailPage({ params }: { params: Promise<{ address:
                       <td className='py-3 px-4 text-gray-200 font-bold'>#{holder.rank}</td>
                       <td className='py-3 px-4'>
                         <Link
-                          href={`/accounts/${holder.address}`}
+                          href={`/address/${holder.address}`}
                           className='font-mono text-blue-400 hover:text-blue-300 transition-colors break-all'
                         >
                           {holder.address}
@@ -296,7 +329,7 @@ export default function TokenDetailPage({ params }: { params: Promise<{ address:
                     <tr key={`${transfer.hash}-${index}`} className='hover:bg-gray-700/50 transition-colors'>
                       <td className='py-3 px-4'>
                         <Link
-                          href={`/transactions/${transfer.hash}`}
+                          href={`/tx/${transfer.hash}`}
                           className='font-mono text-blue-400 hover:text-blue-300 transition-colors'
                         >
                           {transfer.hash?.substring(0, 10)}...{transfer.hash?.substring(transfer.hash.length - 6)}
@@ -304,7 +337,7 @@ export default function TokenDetailPage({ params }: { params: Promise<{ address:
                       </td>
                       <td className='py-3 px-4'>
                         <Link
-                          href={`/accounts/${transfer.from}`}
+                          href={`/address/${transfer.from}`}
                           className='font-mono text-gray-300 text-sm hover:text-blue-300 transition-colors'
                         >
                           {transfer.from?.substring(0, 6)}...{transfer.from?.substring(transfer.from.length - 4)}
@@ -312,7 +345,7 @@ export default function TokenDetailPage({ params }: { params: Promise<{ address:
                       </td>
                       <td className='py-3 px-4'>
                         <Link
-                          href={`/accounts/${transfer.to}`}
+                          href={`/address/${transfer.to}`}
                           className='font-mono text-gray-300 text-sm hover:text-blue-300 transition-colors'
                         >
                           {transfer.to?.substring(0, 6)}...{transfer.to?.substring(transfer.to.length - 4)}

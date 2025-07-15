@@ -4,11 +4,25 @@ Tool for calculating VirBiCoin block statistics
 */
 
 import Web3 from 'web3';
-import { Block as Web3Block } from 'web3-eth';
+import type { Block as Web3Block } from 'web3-types';
 import { connectDB, Block, BlockStat, IBlock, IBlockStat } from '../models/index';
 
 // Initialize database connection
 connectDB().catch(console.error);
+
+// Utility functions for web3 v4 type conversions
+const toNumber = (value: any): number => {
+  if (typeof value === 'bigint') return Number(value);
+  if (typeof value === 'string') return parseInt(value, 10);
+  return Number(value) || 0;
+};
+
+const toString = (value: any): string => {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'bigint') return value.toString();
+  if (value instanceof Uint8Array) return Web3.utils.bytesToHex(value);
+  return String(value);
+};
 
 // Interface definitions
 interface Config {
@@ -60,7 +74,8 @@ if (config.quiet) {
  * Update statistics for a range of blocks
  */
 const updateStats = async (range: number, interval: number, rescan: boolean): Promise<void> => {
-  let latestBlock = await web3.eth.getBlockNumber();
+  let latestBlockBigInt = await web3.eth.getBlockNumber();
+  let latestBlock = toNumber(latestBlockBigInt);
 
   interval = Math.abs(parseInt(interval.toString()));
   if (!range) {
@@ -78,7 +93,7 @@ const updateStats = async (range: number, interval: number, rescan: boolean): Pr
  */
 const getStats = async function (
   blockNumber: number,
-  nextBlock: Web3Block | null,
+  nextBlock: any | null,
   endNumber: number,
   interval: number,
   rescan: boolean
@@ -123,26 +138,26 @@ const getStats = async function (
  * Check if block statistics exist and write if not
  */
 const checkBlockDBExistsThenWrite = async function (
-  blockData: Web3Block,
-  nextBlock: Web3Block | null,
+  blockData: any,
+  nextBlock: any | null,
   endNumber: number,
   interval: number,
   rescan: boolean
 ): Promise<void> {
   try {
-    const existingStat = await BlockStat.findOne({ number: blockData.number });
+    const existingStat = await BlockStat.findOne({ number: toNumber(blockData.number) });
 
     if (!existingStat && nextBlock) {
       // Calculate hashrate, txCount, blocktime, uncleCount
       const stat: BlockStatData = {
-        number: blockData.number,
-        timestamp: blockData.timestamp as number,
-        difficulty: String(blockData.difficulty),
+        number: toNumber(blockData.number),
+        timestamp: toNumber(blockData.timestamp),
+        difficulty: toString(blockData.difficulty),
         txCount: blockData.transactions.length,
-        gasUsed: blockData.gasUsed,
-        gasLimit: blockData.gasLimit,
-        miner: blockData.miner,
-        blockTime: ((nextBlock.timestamp as number) - (blockData.timestamp as number)) / (nextBlock.number - blockData.number),
+        gasUsed: toNumber(blockData.gasUsed),
+        gasLimit: toNumber(blockData.gasLimit),
+        miner: toString(blockData.miner),
+        blockTime: (toNumber(nextBlock.timestamp) - toNumber(blockData.timestamp)) / (toNumber(nextBlock.number) - toNumber(blockData.number)),
         uncleCount: blockData.uncles.length,
       };
 
@@ -150,29 +165,29 @@ const checkBlockDBExistsThenWrite = async function (
       await blockStat.save();
 
       if (!config.quiet) {
-        console.log(`DB successfully written for block number ${blockData.number}`);
+        console.log(`DB successfully written for block number ${toNumber(blockData.number)}`);
       }
 
-      getStats(blockData.number - interval, blockData, endNumber, interval, rescan);
+      getStats(toNumber(blockData.number) - interval, blockData, endNumber, interval, rescan);
 
     } else {
       if (rescan || !nextBlock) {
-        getStats(blockData.number - interval, blockData, endNumber, interval, rescan);
+        getStats(toNumber(blockData.number) - interval, blockData, endNumber, interval, rescan);
         if (nextBlock) {
           if (!config.quiet) {
-            console.log(`WARN: block number: ${blockData.number} already exists in DB.`);
+            console.log(`WARN: block number: ${toNumber(blockData.number)} already exists in DB.`);
           }
         }
       } else {
         if (!config.quiet) {
-          console.error(`Aborting because block number: ${blockData.number} already exists in DB.`);
+          console.error(`Aborting because block number: ${toNumber(blockData.number)} already exists in DB.`);
         }
       }
     }
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    console.log(`Error: Aborted due to error on block number ${blockData.number}: ${errorMessage}`);
+    console.log(`Error: Aborted due to error on block number ${toNumber(blockData.number)}: ${errorMessage}`);
     process.exit(9);
   }
 };

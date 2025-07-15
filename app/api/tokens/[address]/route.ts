@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import mongoose from 'mongoose';
+import { getChainStats } from '../../../../lib/stats'; // Import the new stats library function
+import { Contract } from '../../../../models/index';
 
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/explorerDB';
 
@@ -8,7 +10,7 @@ async function connectDB() {
   if (mongoose.connection.readyState >= 1) {
     return;
   }
-  
+
   try {
     await mongoose.connect(MONGODB_URI, {
       bufferCommands: false,
@@ -46,7 +48,7 @@ const tokenTransferSchema = new mongoose.Schema({
   timestamp: Date
 }, { collection: 'tokentransfers' });
 
-// Token holder schema  
+// Token holder schema
 const tokenHolderSchema = new mongoose.Schema({
   tokenAddress: String,
   holderAddress: String,
@@ -59,6 +61,21 @@ const Token = mongoose.models.Token || mongoose.model('Token', tokenSchema);
 const TokenTransfer = mongoose.models.TokenTransfer || mongoose.model('TokenTransfer', tokenTransferSchema);
 const TokenHolder = mongoose.models.TokenHolder || mongoose.model('TokenHolder', tokenHolderSchema);
 
+// Define a strict type for our token data to be used in this API route
+interface ApiToken {
+  address: string;
+  name: string;
+  symbol: string;
+  type: string;
+  decimals: number;
+  supply: string;
+  totalSupply?: string;
+  holders: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ address: string }> }
@@ -67,86 +84,224 @@ export async function GET(
     await connectDB();
     const { address } = await params;
 
-    // Get token info - search without case sensitivity
-    let token = await Token.findOne({ 
+    let token: ApiToken | null = null;
+    let chainStats: { totalSupply?: string; activeAddresses?: number } | null = null; // Declare chainStats outside the if block
+
+    // Handle the native VBC token as a special case
+    if (address.toLowerCase() === '0x0000000000000000000000000000000000000000') {
+      // Directly call the library function instead of using fetch
+      chainStats = await getChainStats();
+
+      token = {
+        address: '0x0000000000000000000000000000000000000000',
+        name: 'VirBiCoin',
+        symbol: 'VBC',
+        type: 'Native',
+        decimals: 18,
+        supply: chainStats.totalSupply || 'N/A',
+        holders: chainStats.activeAddresses || 0,
+        createdAt: new Date('1970-01-01T00:00:00Z'), // Set a more realistic genesis date
+        updatedAt: new Date(),
+      };
+    } else {
+      // Get token info from DB for other tokens
+          const foundToken = await Token.findOne({
       address: { $regex: new RegExp(`^${address}$`, 'i') }
-    });
-    
-    // If token doesn't exist, create dummy data
+    }).lean() as Record<string, unknown> | null;
+      
+      if (foundToken) {
+        token = foundToken as unknown as ApiToken;
+      }
+    }
+
+    // If token still not found, create dummy data for the requested address
     if (!token) {
       token = {
         address: address,
         name: 'Unknown Token',
-        symbol: 'UNK',
+        symbol: 'UNKNOWN',
         decimals: 18,
         supply: '1000000000000000000000000', // 1M tokens with 18 decimals
         holders: 0,
         type: 'Unknown',
-        createdAt: new Date(),
+        createdAt: new Date('2023-01-01T00:00:00Z'), // Set a more realistic creation date
         updatedAt: new Date()
       };
     }
 
-    // Get token holders - use case-insensitive match
-    const holders = await TokenHolder.find({ 
+    // If token has current date as createdAt, try to find actual creation date from transfers
+    if (token.createdAt && Math.abs(Date.now() - new Date(token.createdAt).getTime()) < 24 * 60 * 60 * 1000) {
+      console.log(`Token ${address} has current date as createdAt, looking for actual creation date`);
+      const firstTransfer = await TokenTransfer.findOne({
+        tokenAddress: { $regex: new RegExp(`^${address}$`, 'i') }
+      }).sort({ timestamp: 1 });
+      
+      if (firstTransfer && firstTransfer.timestamp) {
+        token.createdAt = new Date(firstTransfer.timestamp);
+        console.log(`Token ${address} updated createdAt to:`, token.createdAt);
+      }
+    }
+
+    // Normalize token type for non-native tokens
+    if (token.type === 'ERC20') {
+      token.type = 'VRC-20';
+    } else if (token.type === 'ERC721') {
+      token.type = 'VRC-721';
+    } else if (token.type === 'VRC721') {
+      token.type = 'VRC-721';
+    } else if (token.type === 'ERC1155') {
+      token.type = 'VRC-1155';
+    } else if (token.type === 'VRC1155') {
+      token.type = 'VRC-1155';
+    }
+
+    // Get token holders - use case-insensitive match with direct database access
+    const db = mongoose.connection.db;
+    if (!db) {
+      throw new Error('Database connection not established');
+    }
+    const holders = await db.collection('tokenholders').find({
       tokenAddress: { $regex: new RegExp(`^${address}$`, 'i') }
     })
       .sort({ rank: 1 })
-      .limit(50);
+      .limit(50)
+      .toArray();
+    
+
 
     // Get recent transfers - use case-insensitive match
-    const transfers = await TokenTransfer.find({ 
+    const transfers = await TokenTransfer.find({
       tokenAddress: { $regex: new RegExp(`^${address}$`, 'i') }
     })
       .sort({ timestamp: -1 })
       .limit(50);
 
-    // Calculate statistics
-    const totalHolders = await TokenHolder.countDocuments({ 
-      tokenAddress: { $regex: new RegExp(`^${address}$`, 'i') }
-    });
-    const totalTransfers = await TokenTransfer.countDocuments({ 
-      tokenAddress: { $regex: new RegExp(`^${address}$`, 'i') }
-    });
+    // Calculate real statistics from database for non-native tokens
+    let realHolders = 0;
+    let realTransfers = 0;
+    let realSupply = token.supply || '0';
+    let mintCount = 0;
+    
+    if (token.type !== 'Native') {
+      // Get actual holder count
+      realHolders = await TokenHolder.countDocuments({
+        tokenAddress: { $regex: new RegExp(`^${address}$`, 'i') }
+      });
+      
+      // Get actual transfer count
+      realTransfers = await TokenTransfer.countDocuments({
+        tokenAddress: { $regex: new RegExp(`^${address}$`, 'i') }
+      });
+
+      // For VRC-721 tokens, update the supply with actual mint count
+      if (token.type === 'VRC-721') {
+        try {
+          mintCount = await TokenTransfer.countDocuments({
+            tokenAddress: { $regex: new RegExp(`^${address}$`, 'i') },
+            from: '0x0000000000000000000000000000000000000000'
+          });
+          
+          // Use database totalSupply if available and greater than 0, otherwise use mintCount
+          if (token.totalSupply && token.totalSupply !== '0') {
+            realSupply = token.totalSupply;
+          } else if (token.supply && token.supply !== '0') {
+            realSupply = token.supply;
+          } else {
+            realSupply = mintCount.toString();
+          }
+          
+          // Update token object
+          token.supply = realSupply;
+          token.totalSupply = realSupply;
+              } catch {
+        console.error('Error counting mints');
+      }
+      }
+      // Update token object with real values
+      token.holders = realHolders;
+    }
 
     // Calculate age in days
-    const ageInDays = token.createdAt ? Math.floor((Date.now() - new Date(token.createdAt).getTime()) / (1000 * 60 * 60 * 24)) : 0;
+    let ageInDays = 0;
+    if (token.type === 'Native') {
+      // For native VBC, we don't show age
+      ageInDays = -1; // Special value to indicate N/A
+    } else {
+      // Get the first transfer to calculate age
+      const firstTransfer = await TokenTransfer.findOne({
+        tokenAddress: { $regex: new RegExp(`^${address}$`, 'i') }
+      }).sort({ timestamp: 1 });
+      
+      console.log(`Token ${address} first transfer:`, firstTransfer);
+      
+      if (firstTransfer && firstTransfer.timestamp) {
+        const firstTransferTime = new Date(firstTransfer.timestamp).getTime();
+        const now = Date.now();
+        const diffMs = now - firstTransferTime;
+        ageInDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+        
+        console.log(`Token ${address} age calculation:`, {
+          firstTransferTime: new Date(firstTransferTime),
+          now: new Date(now),
+          diffMs,
+          ageInDays
+        });
+      } else {
+        // Fallback to token.createdAt if no transfers found
+        ageInDays = token.createdAt ? Math.floor((Date.now() - new Date(token.createdAt).getTime()) / (1000 * 60 * 60 * 24)) : 0;
+        console.log(`Token ${address} using fallback age calculation:`, {
+          createdAt: token.createdAt,
+          ageInDays
+        });
+      }
+    }
 
     // Format total supply
     const formatTokenAmount = (amount: string, decimals: number = 18) => {
-      if (!amount) return '0';
-      
+      if (!amount || amount === 'N/A') return amount;
+
       // Handle unlimited supply
       if (amount.toLowerCase() === 'unlimited') {
         return 'Unlimited';
       }
-      
+
       try {
         // Remove commas and parse
         const cleanAmount = amount.replace(/,/g, '');
-        
+
         // For NFTs, don't apply decimals formatting
         if (token.type === 'VRC-721' || token.type === 'VRC-1155') {
           return cleanAmount;
         }
-        
+
         // Try BigInt conversion for large numbers
         if (cleanAmount.length > 15) {
           const value = BigInt(cleanAmount);
           const divisor = BigInt(10 ** decimals);
           const formatted = Number(value) / Number(divisor);
           return formatted.toLocaleString();
-        } else {
-          // For smaller numbers, direct parsing
-          const numValue = parseFloat(cleanAmount);
-          return numValue.toLocaleString();
         }
-      } catch (error) {
+        // For smaller numbers, direct parsing
+        const numValue = parseFloat(cleanAmount);
+        return numValue.toLocaleString();
+
+      } catch {
         // Fallback to direct parsing
         const numValue = parseFloat(amount.replace(/,/g, ''));
         return numValue.toLocaleString();
       }
     };
+
+    // Get verification status for the contract
+    let verified = false;
+    if (token.type !== 'Native') {
+      try {
+        const contract = await Contract.findOne({ address: address.toLowerCase() }).lean();
+        verified = contract?.verified || false;
+      } catch {
+        console.error('Error fetching contract verification status');
+      }
+    }
 
     // Determine if this is an NFT
     const isNFT = token.type === 'VRC-721' || token.type === 'VRC-1155';
@@ -159,30 +314,31 @@ export async function GET(
         type: token.type,
         isNFT: isNFT,
         decimals: token.decimals || (isNFT ? 0 : 18),
-        totalSupply: token.supply ? formatTokenAmount(token.supply, token.decimals || (isNFT ? 0 : 18)) : '0',
-        totalSupplyRaw: token.supply || '0'
+        totalSupply: realSupply ? formatTokenAmount(realSupply, token.decimals || (isNFT ? 0 : 18)) : '0',
+        totalSupplyRaw: realSupply || '0',
+        verified: verified
       },
       statistics: {
-        holders: totalHolders || token.holders || 0,
-        transfers: totalTransfers || 0,
-        age: ageInDays,
+        holders: token.type === 'Native' ? token.holders : realHolders,
+        transfers: token.type === 'Native' ? (chainStats?.totalTransactions || 0) : realTransfers,
+        age: ageInDays === -1 ? 'N/A' : ageInDays,
         marketCap: 'N/A' // Will need external API for price data
       },
-      holders: holders.map((holder: any) => ({
-        rank: holder.rank,
-        address: holder.holderAddress,
-        balance: formatTokenAmount(holder.balance, token.decimals || (isNFT ? 0 : 18)),
-        balanceRaw: holder.balance,
-        percentage: holder.percentage?.toFixed(2) || '0.00'
+      holders: token.type === 'Native' ? [] : holders.map((holder: Record<string, unknown>) => ({
+        rank: holder.rank as number,
+        address: holder.holderAddress as string,
+        balance: formatTokenAmount(holder.balance as string, token.decimals || (isNFT ? 0 : 18)),
+        balanceRaw: holder.balance as string,
+        percentage: typeof holder.percentage === 'number' ? holder.percentage.toFixed(2) : '0.00'
       })),
-      transfers: transfers.map((transfer: any) => ({
-        hash: transfer.transactionHash,
-        from: transfer.from,
-        to: transfer.to,
-        value: formatTokenAmount(transfer.value, token.decimals || (isNFT ? 0 : 18)),
-        valueRaw: transfer.value,
-        timestamp: transfer.timestamp,
-        timeAgo: getTimeAgo(transfer.timestamp)
+      transfers: token.type === 'Native' ? [] : transfers.map((transfer: Record<string, unknown>) => ({
+        hash: transfer.transactionHash as string,
+        from: transfer.from as string,
+        to: transfer.to as string,
+        value: formatTokenAmount(transfer.value as string, token.decimals || (isNFT ? 0 : 18)),
+        valueRaw: transfer.value as string,
+        timestamp: transfer.timestamp as Date,
+        timeAgo: getTimeAgo(transfer.timestamp as Date)
       }))
     };
 
@@ -198,18 +354,18 @@ export async function GET(
 
 function getTimeAgo(timestamp: Date): string {
   if (!timestamp) return 'Unknown';
-  
+
   const now = new Date();
   const diff = now.getTime() - new Date(timestamp).getTime();
   const hours = Math.floor(diff / (1000 * 60 * 60));
   const days = Math.floor(hours / 24);
-  
+
   if (days > 0) {
     return `${days} day${days > 1 ? 's' : ''} ago`;
   } else if (hours > 0) {
     return `${hours} hour${hours > 1 ? 's' : ''} ago`;
-  } else {
-    const minutes = Math.floor(diff / (1000 * 60));
-    return `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
   }
+  const minutes = Math.floor(diff / (1000 * 60));
+  return `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
+
 }

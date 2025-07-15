@@ -79,6 +79,25 @@ start_richlist() {
     fi
 }
 
+# Function to start tokens scanning
+start_tokens() {
+    echo "Starting tokens scanning..."
+    if check_node; then
+        cd "$SCRIPT_DIR"
+        # Use TypeScript version if available, otherwise fallback to JavaScript
+        if command -v npx >/dev/null 2>&1 && [ -f "$TOOLS_DIR/tokens.ts" ]; then
+            nohup npx ts-node --project tsconfig.tools.json "$TOOLS_DIR/tokens.ts" > "$LOG_DIR/tokens.log" 2>&1 &
+        else
+            nohup node "$TOOLS_DIR/tokens.js" > "$LOG_DIR/tokens.log" 2>&1 &
+        fi
+        echo $! > "$LOG_DIR/tokens.pid"
+        echo "✓ Tokens scanning started (PID: $(cat $LOG_DIR/tokens.pid))"
+    else
+        echo "✗ Cannot start tokens scanning - VirBiCoin node not available"
+        exit 1
+    fi
+}
+
 # Function to stop a process
 stop_process() {
     local name=$1
@@ -107,7 +126,7 @@ status() {
     echo ""
     
     # Check each service
-    for service in sync stats richlist; do
+    for service in sync stats richlist tokens; do
         pidfile="$LOG_DIR/${service}.pid"
         if [ -f "$pidfile" ]; then
             pid=$(cat "$pidfile")
@@ -149,38 +168,44 @@ case "$1" in
             richlist)
                 start_richlist
                 ;;
+            tokens)
+                start_tokens
+                ;;
             all)
                 start_sync
                 sleep 2
                 start_stats
                 sleep 2
                 start_richlist
+                sleep 2
+                start_tokens
                 ;;
             *)
-                echo "Usage: $0 start {sync|stats|richlist|all}"
+                echo "Usage: $0 start {sync|stats|richlist|tokens|all}"
                 exit 1
                 ;;
         esac
         ;;
     stop)
         case "$2" in
-            sync|stats|richlist)
+            sync|stats|richlist|tokens)
                 stop_process "$2"
                 ;;
             all)
                 stop_process "sync"
                 stop_process "stats"
                 stop_process "richlist"
+                stop_process "tokens"
                 ;;
             *)
-                echo "Usage: $0 stop {sync|stats|richlist|all}"
+                echo "Usage: $0 stop {sync|stats|richlist|tokens|all}"
                 exit 1
                 ;;
         esac
         ;;
     restart)
         case "$2" in
-            sync|stats|richlist)
+            sync|stats|richlist|tokens)
                 stop_process "$2"
                 sleep 2
                 start_$2
@@ -189,15 +214,18 @@ case "$1" in
                 stop_process "sync"
                 stop_process "stats"
                 stop_process "richlist"
+                stop_process "tokens"
                 sleep 2
                 start_sync
                 sleep 2
                 start_stats
                 sleep 2
                 start_richlist
+                sleep 2
+                start_tokens
                 ;;
             *)
-                echo "Usage: $0 restart {sync|stats|richlist|all}"
+                echo "Usage: $0 restart {sync|stats|richlist|tokens|all}"
                 exit 1
                 ;;
         esac
@@ -207,7 +235,7 @@ case "$1" in
         ;;
     logs)
         if [ -z "$2" ]; then
-            echo "Usage: $0 logs {sync|stats|richlist}"
+            echo "Usage: $0 logs {sync|stats|richlist|tokens}"
             exit 1
         fi
         logs "$2"
@@ -248,11 +276,11 @@ case "$1" in
         echo "Usage: $0 {start|stop|restart|status|logs|initial-sync|rescan-stats}"
         echo ""
         echo "Commands:"
-        echo "  start {sync|stats|richlist|all}    - Start data services"
-        echo "  stop {sync|stats|richlist|all}     - Stop data services"
-        echo "  restart {sync|stats|richlist|all}  - Restart data services"
+        echo "  start {sync|stats|richlist|tokens|all}    - Start data services"
+        echo "  stop {sync|stats|richlist|tokens|all}     - Stop data services"
+        echo "  restart {sync|stats|richlist|tokens|all}  - Restart data services"
         echo "  status                              - Show service status"
-        echo "  logs {sync|stats|richlist}         - Show service logs"
+        echo "  logs {sync|stats|richlist|tokens}         - Show service logs"
         echo "  initial-sync                       - Run full blockchain sync"
         echo "  rescan-stats                       - Recalculate statistics"
         echo ""

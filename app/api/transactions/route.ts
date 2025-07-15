@@ -1,50 +1,15 @@
 import { NextResponse } from 'next/server';
-import mongoose from 'mongoose';
-
-// MongoDB connection
-const connectDB = async () => {
-  if (mongoose.connections[0].readyState) {
-    return;
-  }
-
-  try {
-    await mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost/explorerDB', {});
-    console.log('MongoDB connected');
-  } catch (error) {
-    console.error('MongoDB connection error:', error);
-  }
-};
-
-// Define schemas
-const TransactionSchema = new mongoose.Schema({
-  hash: { type: String, index: { unique: true }, lowercase: true },
-  nonce: Number,
-  blockHash: String,
-  blockNumber: Number,
-  transactionIndex: Number,
-  status: Number,
-  from: { type: String, lowercase: true },
-  to: { type: String, lowercase: true },
-  creates: { type: String, lowercase: true },
-  value: String,
-  gas: Number,
-  gasUsed: Number,
-  gasPrice: String,
-  timestamp: Number,
-  input: String,
-}, { collection: 'Transaction' });
-
-// Models
-const Transaction = mongoose.models.Transaction || mongoose.model('Transaction', TransactionSchema);
+import { connectDB, Transaction } from '../../../models/index';
+import { weiToVBC } from '../../../lib/bigint-utils';
 
 export async function GET() {
   try {
     await connectDB();
 
-    // Get latest 10 transactions
+    // Get latest 15 transactions
     const latestTransactions = await Transaction.find()
-      .sort({ blockNumber: -1 })
-      .limit(10)
+      .sort({ blockNumber: -1, transactionIndex: -1 })
+      .limit(15)
       .lean();
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -52,9 +17,11 @@ export async function GET() {
       hash: tx.hash,
       from: tx.from,
       to: tx.to,
-      value: tx.value,
+      value: tx.value ? weiToVBC(tx.value) : '0',
       timestamp: tx.timestamp,
-      blockNumber: tx.blockNumber
+      blockNumber: tx.blockNumber,
+      gasUsed: tx.gasUsed,
+      status: tx.status
     }));
 
     return NextResponse.json(transactions);
