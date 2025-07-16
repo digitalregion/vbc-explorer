@@ -33,7 +33,19 @@ export async function POST(request: NextRequest) {
           displayCompilerVersion = 'Latest (0.8.30)';
         }
       } else {
-        displayCompilerVersion = 'Unknown';
+        // Default to 0.8.28 if no compiler version is set
+        displayCompilerVersion = '0.8.28';
+        
+        // Update the contract in database with default compiler version
+        try {
+          await Contract.findOneAndUpdate(
+            { address: addr.toLowerCase() },
+            { compilerVersion: '0.8.28' },
+            { new: true }
+          );
+        } catch (updateError) {
+          console.error('Failed to update contract compiler version:', updateError);
+        }
       }
 
       return NextResponse.json({

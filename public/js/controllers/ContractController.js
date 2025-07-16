@@ -6,10 +6,10 @@ angular.module('BlocksApp').controller('ContractController', function($statePara
 
     // Fallback compiler versions if external API fails
     const fallbackVersions = [
+      { name: '0.8.28', value: '0.8.28' },
       { name: 'Latest (0.8.30)', value: 'latest' },
       { name: '0.8.30', value: '0.8.30' },
       { name: '0.8.29', value: '0.8.29' },
-      { name: '0.8.28', value: '0.8.28' },
       { name: '0.8.27', value: '0.8.27' },
       { name: '0.8.26', value: '0.8.26' },
       { name: '0.8.25', value: '0.8.25' },
@@ -46,7 +46,7 @@ angular.module('BlocksApp').controller('ContractController', function($statePara
     })
 
     $scope.form = {};
-    $scope.contract = {"address": $stateParams.addr, "optimization": true};
+    $scope.contract = {"address": $stateParams.addr, "optimization": true, "version": "0.8.28"};
     $scope.errors = {};
     $scope.settings = $rootScope.setup;
     
@@ -90,14 +90,14 @@ angular.module('BlocksApp').controller('ContractController', function($statePara
     $scope.resetCode = function() {
       $scope.form.contract.$setPristine();
       $scope.form.contract.$setUntouched();
-      $scope.contract = {"address": $stateParams.addr, "optimization": true};
+      $scope.contract = {"address": $stateParams.addr, "optimization": true, "version": "0.8.28"};
       $scope.errors = {};
     }
     $scope.startOver = function() {
       $scope.contract.compiled = false;
       $scope.form.contract.$setPristine();
       $scope.form.contract.$setUntouched();
-      $scope.contract = {"address": $stateParams.addr, "optimization": true};
+      $scope.contract = {"address": $stateParams.addr, "optimization": true, "version": "0.8.28"};
       $scope.errors = {};
     }
 

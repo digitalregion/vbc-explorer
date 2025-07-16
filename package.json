@@ -60,7 +60,6 @@
     "data:logs:stats": "./manage-data.sh logs stats",
     "data:logs:rich": "./manage-data.sh logs richlist",
     "data:logs:tokens": "./manage-data.sh logs tokens",
-    "migrate:contracts": "node tools/migrate-contracts.js",
     "production": "npm run build:production && npm start",
     "production:with-data": "npm run data:start && npm run production",
     "docker:build": "docker build -t vbc-explorer .",

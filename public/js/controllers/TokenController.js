@@ -106,12 +106,17 @@ angular.module('BlocksApp').controller('TokenController', function($stateParams,
         }).then(function(resp) {
           console.log('Contract data:', resp.data);
           scope.contract = resp.data;
+          
+          // Set default compiler version if not present
+          if (!scope.contract.compilerVersion || scope.contract.compilerVersion === 'Unknown') {
+            scope.contract.compilerVersion = '0.8.28';
+          }
         }).catch(function(error) {
           console.error('Failed to fetch contract data:', error);
           scope.contract = {
             valid: false,
             contractName: 'Unknown',
-            compilerVersion: 'Unknown',
+            compilerVersion: '0.8.28',
             optimization: false,
             sourceCode: '',
             abi: ''
