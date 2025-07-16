@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
       }
 
       // Format compiler version for display
-      let displayCompilerVersion = contract.compilerVersion;
+      let displayCompilerVersion = Array.isArray(contract) ? contract[0]?.compilerVersion : contract.compilerVersion;
       if (displayCompilerVersion) {
         // Remove 'v' prefix if present
         if (displayCompilerVersion.startsWith('v')) {
@@ -48,14 +48,15 @@ export async function POST(request: NextRequest) {
         }
       }
 
+      const contractData = Array.isArray(contract) ? contract[0] : contract;
       return NextResponse.json({
-        valid: contract.verified || false,
-        contractName: contract.contractName || 'Unknown',
+        valid: contractData.verified || false,
+        contractName: contractData.contractName || 'Unknown',
         compilerVersion: displayCompilerVersion,
-        optimization: contract.optimization || false,
-        sourceCode: contract.sourceCode || '',
-        abi: contract.abi || '',
-        address: contract.address
+        optimization: contractData.optimization || false,
+        sourceCode: contractData.sourceCode || '',
+        abi: contractData.abi || '',
+        address: contractData.address
       });
     }
 
