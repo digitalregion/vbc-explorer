@@ -15,15 +15,15 @@
       <div class="eth-stat">
         <div class="margin-top-20">
           <span class="eth-stat-text">Contract Name: </span>
-          <span ng-model="contract.contractName">{{contract.contractName}}</span>
+          <span ng-model="contract.contractName">{{contract.contractName || 'Unknown'}}</span>
         </div>
         <div class="margin-top-20">
           <span class="eth-stat-text">Compiler Version: </span>
-          <span ng-model="contract.compilerVersion">{{contract.compilerVersion}}</span>
+          <span ng-model="contract.compilerVersion">{{contract.compilerVersion || 'Unknown'}}</span>
         </div>
         <div class="margin-top-20">
           <span class="eth-stat-text">Optimization Enabled: </span>
-          <span ng-model="contract.optimization">{{contract.optimization}}</span>
+          <span ng-model="contract.optimization">{{contract.optimization ? 'Yes' : 'No'}}</span>
         </div>
       </div>
     </div>

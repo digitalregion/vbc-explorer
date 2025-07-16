@@ -104,7 +104,18 @@ angular.module('BlocksApp').controller('TokenController', function($stateParams,
           url: '/compile',
           data: {"addr": scope.addrHash, "action": "find"}
         }).then(function(resp) {
+          console.log('Contract data:', resp.data);
           scope.contract = resp.data;
+        }).catch(function(error) {
+          console.error('Failed to fetch contract data:', error);
+          scope.contract = {
+            valid: false,
+            contractName: 'Unknown',
+            compilerVersion: 'Unknown',
+            optimization: false,
+            sourceCode: '',
+            abi: ''
+          };
         });
       }
   }
