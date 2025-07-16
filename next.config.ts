@@ -35,6 +35,13 @@ const nextConfig: NextConfig = {
       'lightningcss': false,
     };
     
+    // lightningcssのネイティブモジュールを無視するプラグインを追加
+    config.plugins.push(
+      new (require('webpack').IgnorePlugin)({
+        resourceRegExp: /lightningcss\.linux-x64-gnu\.node$/,
+      })
+    );
+    
     return config;
   },
   images: {
