@@ -11,6 +11,24 @@ const nextConfig: NextConfig = {
     PORT: process.env.PORT,
     WEB3_PROVIDER_URL: process.env.WEB3_PROVIDER_URL,
   },
+  webpack: (config, { isServer }) => {
+    // lightningcssのネイティブモジュールエラーを回避
+    if (!isServer) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        path: false,
+      };
+    }
+    
+    // lightningcssのネイティブモジュールを無視
+    config.externals = config.externals || [];
+    config.externals.push({
+      'lightningcss': 'lightningcss',
+    });
+    
+    return config;
+  },
   images: {
     dangerouslyAllowSVG: true,
     contentDispositionType: 'attachment',

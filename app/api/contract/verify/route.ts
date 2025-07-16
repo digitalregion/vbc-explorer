@@ -175,7 +175,7 @@ export async function POST(request: NextRequest) {
     console.log('Available contracts:', Object.keys(compiledOutput.contracts || {}));
     
     let compiledContract = null;
-    let actualContractName = contractName; // ユーザー指定名を優先
+    const actualContractName = contractName; // ユーザー指定名を優先
     
     // Try exact match first
     if (compiledOutput.contracts[contractName] && compiledOutput.contracts[contractName][contractName]) {
