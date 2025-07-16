@@ -125,7 +125,7 @@ export async function GET(
 
     // Contract source information
     const contractSource = contractInfo ? {
-      verified: true,
+      verified: contractInfo.verified || false,
       compiler: contractInfo.compilerVersion || 'Unknown',
       language: 'Solidity',
       name: contractInfo.contractName || 'Contract',
