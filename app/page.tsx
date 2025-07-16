@@ -217,7 +217,7 @@ const BlockList = ({ blocks, newBlockNumbers, now }: { blocks: Block[], newBlock
 );
 
  
-const TransactionList = ({ transactions, now }: { transactions: Transaction[], now: number }) => (
+const TransactionList = ({ transactions, newTransactionHashes, now }: { transactions: Transaction[], newTransactionHashes: Set<string>, now: number }) => (
   <div className='bg-gray-800 rounded-lg border border-gray-700 p-6 h-full flex flex-col'>
     <div className='flex items-center justify-between mb-4'>
       <div className='flex items-center gap-2'>
@@ -230,7 +230,14 @@ const TransactionList = ({ transactions, now }: { transactions: Transaction[], n
     </div>
     <div className='space-y-2 flex-1'>
       {transactions.map((tx) => (
-        <div key={tx.hash} className='flex justify-between items-center p-2.5 bg-gray-700/50 rounded border border-gray-600/50 hover:bg-gray-700 transition-colors'>
+        <div
+          key={tx.hash}
+          className={`flex justify-between items-center p-2.5 bg-gray-700/50 rounded border border-gray-600/50 hover:bg-gray-700 transition-all duration-500 ${
+            newTransactionHashes.has(tx.hash) ?
+              'new-block-animation !bg-green-500/20 !border-green-400/50 !shadow-lg !shadow-green-400/25' :
+              ''
+          }`}
+        >
           <div className='flex items-center gap-3'>
             <Link
               href={`/transactions/${tx.hash}`}
@@ -312,7 +319,9 @@ export default function Page() {
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [newBlockNumbers, setNewBlockNumbers] = useState<Set<number>>(new Set());
+  const [newTransactionHashes, setNewTransactionHashes] = useState<Set<string>>(new Set());
   const [lastTopBlock, setLastTopBlock] = useState<number>(0);
+  const [lastTopTransactionHash, setLastTopTransactionHash] = useState<string>('');
   const [isInitialLoad, setIsInitialLoad] = useState<boolean>(true);
   // Add: now state for live ago updates
   const [now, setNow] = useState(Date.now());
@@ -380,6 +389,44 @@ export default function Page() {
         // Fetch transactions
         const transactionsResponse = await fetch('/api/transactions');
         const transactionsData = await transactionsResponse.json();
+
+        // Check for new transactions to animate (only after initial load)
+        const newTopTransactionHash = transactionsData[0]?.hash;
+
+        if (isInitialLoad) {
+          // On initial load, just set the lastTopTransactionHash without animation
+          if (newTopTransactionHash) {
+            setLastTopTransactionHash(newTopTransactionHash);
+          }
+        } else {
+          // Only animate transactions discovered after page load
+          if (newTopTransactionHash && lastTopTransactionHash && newTopTransactionHash !== lastTopTransactionHash) {
+            // Clear any existing animations first
+            setNewTransactionHashes(new Set());
+
+            // Find all new transactions discovered in this update
+            // Compare with the last known transaction hash to detect new ones
+            const newTransactions = transactionsData.filter((tx: Transaction) => 
+              tx.hash !== lastTopTransactionHash
+            );
+            const newTransactionHashesSet = new Set<string>(newTransactions.map((tx: Transaction) => tx.hash));
+
+            console.log('New transactions detected during live update:', Array.from(newTransactionHashesSet));
+
+            // Start animation for new transactions
+            setTimeout(() => {
+              setNewTransactionHashes(newTransactionHashesSet);
+            }, 100);
+
+            // Remove animation after 3 seconds
+            setTimeout(() => {
+              setNewTransactionHashes(new Set());
+            }, 3100);
+
+            setLastTopTransactionHash(newTopTransactionHash);
+          }
+        }
+
         setTransactions(transactionsData);
       } catch (error) {
         console.error('Error fetching data:', error);
@@ -392,7 +439,7 @@ export default function Page() {
     const interval = setInterval(fetchData, 5000); // Update every 5 seconds
 
     return () => clearInterval(interval);
-  }, [isInitialLoad, lastTopBlock]); // Add dependencies to ensure proper updates
+  }, [isInitialLoad, lastTopBlock, lastTopTransactionHash]); // Add dependencies to ensure proper updates
 
   useEffect(() => {
     const button = addVbcButtonRef.current;
@@ -550,7 +597,7 @@ export default function Page() {
         {/* Latest Blocks & Transactions */}
         <section className='grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch'>
           <BlockList blocks={blocks} newBlockNumbers={newBlockNumbers} now={now} />
-          <TransactionList transactions={transactions} now={now} />
+          <TransactionList transactions={transactions} newTransactionHashes={newTransactionHashes} now={now} />
         </section>
       </main>
     </>
