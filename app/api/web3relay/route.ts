@@ -20,15 +20,19 @@ if (process.env.NODE_ENV === 'development') {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const local = require('../../../config.json');
     Object.assign(config, local);
+    console.log('config.json found.');
   } catch {
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const local = require('../../../config.example.json');
       Object.assign(config, local);
+      console.log('No config file found. Using default configuration... (config.example.json)');
     } catch {
-      // Using hardcoded default configuration
+      console.log('Using hardcoded default configuration');
     }
   }
+} else {
+  console.log('Using hardcoded default configuration for production');
 }
 
 // Create Web3 connection
@@ -39,7 +43,6 @@ export async function POST(request: NextRequest) {
     await connectToDatabase();
     
     const body = await request.json();
-    console.log(body);
 
     if ('tx' in body) {
       const txHash = body.tx.toLowerCase();
@@ -49,8 +52,8 @@ export async function POST(request: NextRequest) {
       
       try {
         doc = await Transaction.findOne({ hash: txHash }).lean(true).exec();
-      } catch (err) {
-        console.error(err);
+      } catch {
+        // Database error, continue to blockchain lookup
       }
       
       if (!doc) {
@@ -90,8 +93,7 @@ export async function POST(request: NextRequest) {
           
           txResponse.isTrace = (txResponse.input !== '0x');
           
-        } catch (err) {
-          console.error(`TxWeb3 error: ${err}`);
+        } catch {
           return NextResponse.json({ error: true });
         }
       } else {
@@ -130,8 +132,7 @@ export async function POST(request: NextRequest) {
         try {
           const balance = await web3.eth.getBalance(addr);
           addrData.balance = toEther(balance, 'wei');
-        } catch (err) {
-          console.error(`AddrWeb3 error: ${err}`);
+        } catch {
           return NextResponse.json({ error: true });
         }
       }
@@ -139,8 +140,7 @@ export async function POST(request: NextRequest) {
       if (options.indexOf('count') > -1) {
         try {
           addrData.count = await web3.eth.getTransactionCount(addr);
-        } catch (err) {
-          console.error(`AddrWeb3 error: ${err}`);
+        } catch {
           return NextResponse.json({ error: true });
         }
       }
@@ -149,8 +149,7 @@ export async function POST(request: NextRequest) {
         try {
           const code = await web3.eth.getCode(addr);
           addrData.bytecode = code;
-        } catch (err) {
-          console.error(`AddrWeb3 error: ${err}`);
+        } catch {
           return NextResponse.json({ error: true });
         }
       }
@@ -167,16 +166,14 @@ export async function POST(request: NextRequest) {
         }
         
         return NextResponse.json(block);
-      } catch (err) {
-        console.error(`BlockWeb3 error: ${err}`);
+      } catch {
         return NextResponse.json({ error: true });
       }
     }
 
     return NextResponse.json({ error: true });
     
-  } catch (error) {
-    console.error('Web3relay error:', error);
+  } catch {
     return NextResponse.json({ error: true }, { status: 500 });
   }
 } 

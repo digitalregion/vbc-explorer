@@ -8,7 +8,15 @@ import type { Block as Web3Block } from 'web3-types';
 import { connectDB, Block, BlockStat, IBlock, IBlockStat } from '../models/index';
 
 // Initialize database connection
-connectDB().catch(console.error);
+const initDB = async () => {
+  try {
+    await connectDB();
+    console.log('Database connection initialized successfully');
+  } catch (error) {
+    console.error('Failed to connect to database:', error);
+    process.exit(1);
+  }
+};
 
 // Utility functions for web3 v4 type conversions
 const toNumber = (value: any): number => {
@@ -57,9 +65,18 @@ try {
   const local = require('../config.json');
   Object.assign(config, local);
   console.log('config.json found.');
+  
+  // Set MongoDB URI from config if available
+  if (local.database && local.database.uri) {
+    process.env.MONGODB_URI = local.database.uri;
+    console.log('MongoDB URI set from config.json');
+  }
 } catch (error) {
   console.log('No config file found. Using default configuration...');
 }
+
+// Initialize database connection after config is loaded
+initDB();
 
 console.log(`Connecting to VirBiCoin node ${config.nodeAddr}:${config.port}...`);
 
@@ -85,6 +102,8 @@ const updateStats = async (range: number, interval: number, rescan: boolean): Pr
   if (interval >= 10) {
     latestBlock -= latestBlock % interval;
   }
+  
+
   
   // Check which blocks already have statistics
   const existingStats = await BlockStat.find({ 
@@ -235,6 +254,8 @@ if (process.env.RESCAN) {
 
   rescan = true;
 }
+
+
 
 /**
  * Main execution

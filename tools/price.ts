@@ -7,7 +7,15 @@ import { Market } from '../lib/models';
 import { connectDB } from '../models/index';
 
 // Initialize database connection
-connectDB().catch(console.error);
+const initDB = async () => {
+  try {
+    await connectDB();
+    console.log('Database connection initialized successfully');
+  } catch (error) {
+    console.error('Failed to connect to database:', error);
+    process.exit(1);
+  }
+};
 
 // Interface definitions
 interface Config {
@@ -41,6 +49,9 @@ try {
 } catch (error) {
   console.log('No config file found. Using default configuration...');
 }
+
+// Initialize database connection after config is loaded
+initDB();
 
 if (config.quiet) {
   console.log('Quiet mode enabled');

@@ -7,7 +7,15 @@ import Web3 from 'web3';
 import { connectDB, Block, Transaction, Account, IBlock, ITransaction, IAccount } from '../models/index';
 
 // Initialize database connection
-connectDB().catch(console.error);
+const initDB = async () => {
+  try {
+    await connectDB();
+    console.log('Database connection initialized successfully');
+  } catch (error) {
+    console.error('Failed to connect to database:', error);
+    process.exit(1);
+  }
+};
 
 // Interface definitions
 interface Config {
@@ -58,6 +66,20 @@ console.log(`Connecting to VirBiCoin node ${config.nodeAddr}:${config.port}...`)
 const web3 = new Web3(new Web3.providers.HttpProvider(`http://${config.nodeAddr}:${config.port}`));
 
 const ADDRESS_CACHE_MAX = 10000; // address cache threshold
+
+// Set MongoDB URI from config if available
+try {
+  const local = require('../config.json');
+  if (local.database && local.database.uri) {
+    process.env.MONGODB_URI = local.database.uri;
+    console.log('MongoDB URI set from config.json');
+  }
+} catch (error) {
+  process.env.MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost/explorerDB';
+}
+
+// Initialize database connection after config is loaded
+initDB();
 
 /**
  * Make richlist for VirBiCoin
@@ -424,6 +446,8 @@ async function updatePercentages() {
   }
   console.log('Account percentages updated');
 }
+
+
 
 /**
  * Main execution

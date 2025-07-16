@@ -231,11 +231,37 @@ export const connectDB = async (): Promise<void> => {
     // Only connect if not connected and not connecting
     if (mongoose.connection.readyState === 0) {
       const uri = process.env.MONGODB_URI || 'mongodb://localhost/explorerDB';
-      await mongoose.connect(uri, {
+      console.log('Connecting to MongoDB with URI:', uri.replace(/\/\/[^:]+:[^@]+@/, '//***:***@'));
+      
+      // Parse connection options from config if available
+      let connectionOptions: any = {
         maxPoolSize: 10,
-        serverSelectionTimeoutMS: 5000,
+        serverSelectionTimeoutMS: 10000,
         socketTimeoutMS: 45000,
-      });
+        connectTimeoutMS: 10000,
+        retryWrites: true,
+        retryReads: true,
+      };
+
+      // Try to load config.json for additional connection options
+      try {
+        const config = require('../config.json');
+        if (config.database && config.database.options) {
+          connectionOptions = { ...connectionOptions, ...config.database.options };
+        }
+        
+        // Ensure proper authentication if credentials are in URI
+        if (uri.includes('@') && uri.includes('://')) {
+          // URI already contains authentication, use as is
+          console.log('Using authenticated MongoDB connection');
+        }
+      } catch (error) {
+        // Config file not found, use default options
+      }
+      
+      await mongoose.connect(uri, connectionOptions);
+      
+      console.log('MongoDB connected successfully');
     }
   } catch (error) {
     // If connection fails but there's an existing connection, use it

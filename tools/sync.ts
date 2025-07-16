@@ -10,7 +10,15 @@ import type { Transaction as Web3Transaction, Block as Web3Block, TransactionRec
 import { connectDB, Block, Transaction, IBlock, ITransaction } from '../models/index';
 
 // Initialize database connection
-connectDB().catch(console.error);
+const initDB = async () => {
+  try {
+    await connectDB();
+    console.log('Database connection initialized successfully');
+  } catch (error) {
+    console.error('Failed to connect to database:', error);
+    process.exit(1);
+  }
+};
 
 // Utility functions for web3 v4 type conversions
 const toNumber = (value: any): number => {
@@ -105,9 +113,18 @@ try {
   const local = require('../config.json');
   Object.assign(config, local);
   console.log('config.json found.');
+  
+  // Set MongoDB URI from config if available
+  if (local.database && local.database.uri) {
+    process.env.MONGODB_URI = local.database.uri;
+    console.log('MongoDB URI set from config.json');
+  }
 } catch (error) {
   console.log('No config file found. Using default configuration...');
 }
+
+// Initialize database connection after config is loaded
+initDB();
 
 // Parse command line arguments
 const args = process.argv.slice(2);
@@ -475,6 +492,8 @@ const prepareSync = async (): Promise<void> => {
     console.log(`Error in prepareSync: ${errorMessage}`);
   }
 };
+
+
 
 /**
  * Main execution

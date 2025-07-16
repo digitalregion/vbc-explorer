@@ -11,7 +11,7 @@ import Web3 from 'web3';
 import mongoose from 'mongoose';
 import Token from '../models/Token.js'; // Using .js extension for Node ESM
 import humanStandardTokenAbi from 'human-standard-token-abi';
-import SyncState from '../models/SyncState'; // Import the SyncState model
+
 
 // Import additional models for token transfers and holders
 import '../models/index'; // Ensure all models are loaded
@@ -54,7 +54,20 @@ async function connectDB() {
     if (mongoose.connection.readyState === 1) {
       return; // Already connected
     }
-    await mongoose.connect('mongodb://localhost:27017/explorerDB'); // Changed to explorerDB
+    
+    // Try to load config.json for MongoDB URI
+    let mongoUri = 'mongodb://localhost:27017/explorerDB';
+    try {
+      const config = require('../config.json');
+      if (config.database && config.database.uri) {
+        mongoUri = config.database.uri;
+        console.log('MongoDB URI set from config.json');
+      }
+    } catch (error) {
+      console.log('No config file found. Using default MongoDB URI...');
+    }
+    
+    await mongoose.connect(mongoUri);
     console.log('Connected to MongoDB');
     
     // Wait for connection to be established
@@ -70,6 +83,9 @@ async function connectDB() {
     throw error;
   }
 }
+
+// Initialize database connection
+connectDB().catch(console.error);
 
 // Database disconnection function
 async function disconnect() {
@@ -346,22 +362,13 @@ async function scanForTokens() {
       await connectDB();
     }
     
-    // Get the last scanned block from the database
-    let syncState = await SyncState.findOne({ scannerName: 'tokenScanner' });
-    if (!syncState) {
-      console.log('No sync state found, creating a new one.');
-      syncState = new SyncState({
-        scannerName: 'tokenScanner',
-        lastScannedBlock: START_BLOCK,
-      });
-    } else {
-      console.log(`Resuming scan from block ${syncState.lastScannedBlock + 1}`);
-    }
+    // Start scanning from the beginning
+    console.log(`Starting token scan from block ${START_BLOCK}`);
 
     const latestBlockNumber = await web3.eth.getBlockNumber();
     console.log(`Latest block number: ${latestBlockNumber}`);
 
-    let fromBlock = syncState.lastScannedBlock + 1;
+    let fromBlock = START_BLOCK;
 
     while (fromBlock <= latestBlockNumber) {
       const toBlock = Math.min(fromBlock + BLOCKS_PER_BATCH - 1, Number(latestBlockNumber));
@@ -548,6 +555,8 @@ if (require.main === module) {
   });
 }
 
+
+
 async function main() {
   try {
     // Check command line arguments
@@ -572,18 +581,18 @@ async function main() {
     setInterval(async () => {
       try {
         await scanForTokens();
-      } catch (error) {
-        console.error('Error in scanForTokens interval:', error);
-      }
+              } catch (error) {
+          console.error('Error in scanForTokens interval:', error);
+        }
     }, SCAN_INTERVAL_MS);
 
     // VRC-721トークンの自動更新（scanForTokensと同じ間隔で60秒ごと）
     setInterval(async () => {
       try {
         await updateAllVrc721Tokens();
-      } catch (error) {
-        console.error('Error in updateAllVrc721Tokens interval:', error);
-      }
+              } catch (error) {
+          console.error('Error in updateAllVrc721Tokens interval:', error);
+        }
     }, SCAN_INTERVAL_MS);
 
     // Graceful shutdown
