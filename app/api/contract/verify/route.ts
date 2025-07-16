@@ -3,12 +3,15 @@ import { connectDB, Contract } from '../../../../models/index';
 import Web3 from 'web3';
 import solc from 'solc';
 
-const WEB3_PROVIDER_URL = 'http://localhost:8329';
+const WEB3_PROVIDER_URL = process.env.WEB3_PROVIDER_URL || 'http://127.0.0.1:8329';
 const web3 = new Web3(new Web3.providers.HttpProvider(WEB3_PROVIDER_URL));
 
 export async function POST(request: NextRequest) {
   try {
     await connectDB();
+    
+    // Debug Web3 connection
+    console.log('Web3 Provider URL:', WEB3_PROVIDER_URL);
     
     const body = await request.json();
     const { address, sourceCode, compilerVersion, contractName, optimization } = body;
@@ -21,7 +24,21 @@ export async function POST(request: NextRequest) {
     }
 
     // Get bytecode from blockchain
-    const onchainBytecode = await web3.eth.getCode(address);
+    let onchainBytecode;
+    try {
+      onchainBytecode = await web3.eth.getCode(address);
+    } catch (web3Error) {
+      console.error('Web3 connection error:', web3Error);
+      return NextResponse.json(
+        { 
+          error: 'Failed to connect to blockchain node',
+          details: 'Please check the WEB3_PROVIDER_URL configuration',
+          web3Error: web3Error instanceof Error ? web3Error.message : 'Unknown error'
+        },
+        { status: 500 }
+      );
+    }
+    
     if (onchainBytecode === '0x' || onchainBytecode === '0x0') {
       return NextResponse.json(
         { error: 'No contract found at this address' },
@@ -305,7 +322,11 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Contract verification error:', error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { 
+        error: 'Internal server error',
+        details: error instanceof Error ? error.message : 'Unknown error',
+        stack: process.env.NODE_ENV === 'development' ? error instanceof Error ? error.stack : undefined : undefined
+      },
       { status: 500 }
     );
   }

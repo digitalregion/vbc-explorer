@@ -9,6 +9,7 @@ const nextConfig: NextConfig = {
   env: {
     MONGODB_URI: process.env.MONGODB_URI,
     PORT: process.env.PORT,
+    WEB3_PROVIDER_URL: process.env.WEB3_PROVIDER_URL,
   },
   images: {
     dangerouslyAllowSVG: true,
