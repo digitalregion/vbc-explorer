@@ -42,6 +42,13 @@ const nextConfig: NextConfig = {
       })
     );
     
+    // lightningcssのネイティブモジュールを無視するプラグインを追加
+    config.plugins.push(
+      new (require('webpack').IgnorePlugin)({
+        resourceRegExp: /lightningcss/,
+      })
+    );
+    
     return config;
   },
   images: {
