@@ -242,8 +242,6 @@ export const connectDB = async (): Promise<void> => {
         // Config file not found, use default URI
       }
       
-      console.log('Connecting to MongoDB with URI:', uri.replace(/\/\/[^:]+:[^@]+@/, '//***:***@'));
-      
       // Parse connection options from config if available
       let connectionOptions: any = {
         maxPoolSize: 10,
@@ -260,19 +258,11 @@ export const connectDB = async (): Promise<void> => {
         if (config.database && config.database.options) {
           connectionOptions = { ...connectionOptions, ...config.database.options };
         }
-        
-        // Ensure proper authentication if credentials are in URI
-        if (uri.includes('@') && uri.includes('://')) {
-          // URI already contains authentication, use as is
-          console.log('Using authenticated MongoDB connection');
-        }
       } catch (error) {
         // Config file not found, use default options
       }
       
       await mongoose.connect(uri, connectionOptions);
-      
-      console.log('MongoDB connected successfully');
     }
   } catch (error) {
     // If connection fails but there's an existing connection, use it

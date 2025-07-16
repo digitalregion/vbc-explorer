@@ -1,26 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import mongoose from 'mongoose';
 import Web3 from 'web3';
-
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/explorerDB';
-
-// Connect to MongoDB
-async function connectDB() {
-  if (mongoose.connection.readyState >= 1) {
-    return;
-  }
-  try {
-    await mongoose.connect(MONGODB_URI, {
-      bufferCommands: false,
-      maxPoolSize: 10,
-      serverSelectionTimeoutMS: 5000,
-      socketTimeoutMS: 45000,
-    });
-  } catch (error) {
-    console.error('MongoDB connection error:', error);
-    throw error;
-  }
-}
+import { connectDB } from '../../../../models/index';
 
 // Account schema
 const accountSchema = new mongoose.Schema({
@@ -77,7 +58,13 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ address: string }> }
 ) {
-  await connectDB();
+  try {
+    await connectDB();
+  } catch (dbError) {
+    console.error('Database connection error:', dbError);
+    return NextResponse.json({ error: 'Database connection failed' }, { status: 500 });
+  }
+  
   const { address } = await params;
 
   // DBからアカウント取得
