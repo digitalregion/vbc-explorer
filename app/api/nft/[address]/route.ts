@@ -123,6 +123,18 @@ export async function GET(
       address: { $regex: new RegExp(`^${address}$`, 'i') }
     });
 
+    // Debug contract verification status
+    console.log('Contract verification debug:', {
+      address: address,
+      contractInfo: contractInfo ? {
+        address: contractInfo.address,
+        verified: contractInfo.verified,
+        contractName: contractInfo.contractName,
+        compilerVersion: contractInfo.compilerVersion
+      } : null,
+      verified: contractInfo?.verified || false
+    });
+
     // Contract source information
     const contractSource = contractInfo ? {
       verified: contractInfo.verified || false,

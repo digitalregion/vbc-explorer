@@ -175,7 +175,7 @@ export async function POST(request: NextRequest) {
     console.log('Available contracts:', Object.keys(compiledOutput.contracts || {}));
     
     let compiledContract = null;
-    let actualContractName = contractName;
+    let actualContractName = contractName; // ユーザー指定名を優先
     
     // Try exact match first
     if (compiledOutput.contracts[contractName] && compiledOutput.contracts[contractName][contractName]) {
@@ -188,7 +188,7 @@ export async function POST(request: NextRequest) {
           console.log('Found contract:', contractNameInOutput, 'in source:', sourceName);
           if (!compiledContract) {
             compiledContract = contracts[contractNameInOutput];
-            actualContractName = contractNameInOutput;
+            // actualContractName = contractNameInOutput; // ← ここをコメントアウト
           }
         }
       }
