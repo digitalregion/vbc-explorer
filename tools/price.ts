@@ -3,7 +3,7 @@
 Tool for fetching and updating VirBiCoin price data
 */
 
-import { Market } from '../lib/models';
+import { Market } from '../models/index';
 import { connectDB } from '../models/index';
 
 // Initialize database connection

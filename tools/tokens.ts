@@ -48,41 +48,7 @@ const minimalErc721Abi = [
   }
 ];
 
-// Database connection function
-async function connectDB() {
-  try {
-    if (mongoose.connection.readyState === 1) {
-      return; // Already connected
-    }
-    
-    // Try to load config.json for MongoDB URI
-    let mongoUri = 'mongodb://localhost:27017/explorerDB';
-    try {
-      const config = require('../config.json');
-      if (config.database && config.database.uri) {
-        mongoUri = config.database.uri;
-        console.log('MongoDB URI set from config.json');
-      }
-    } catch (error) {
-      console.log('No config file found. Using default MongoDB URI...');
-    }
-    
-    await mongoose.connect(mongoUri);
-    console.log('Connected to MongoDB');
-    
-    // Wait for connection to be established
-    await new Promise(resolve => {
-      if (mongoose.connection.readyState === 1) {
-        resolve(true);
-      } else {
-        mongoose.connection.once('connected', resolve);
-      }
-    });
-  } catch (error) {
-    console.error('MongoDB connection error:', error);
-    throw error;
-  }
-}
+import { connectDB } from '../models/index';
 
 // Initialize database connection
 connectDB().catch(console.error);

@@ -230,7 +230,18 @@ export const connectDB = async (): Promise<void> => {
     
     // Only connect if not connected and not connecting
     if (mongoose.connection.readyState === 0) {
-      const uri = process.env.MONGODB_URI || 'mongodb://localhost/explorerDB';
+      let uri = process.env.MONGODB_URI || 'mongodb://localhost/explorerDB';
+      
+      // Try to load config.json for URI and connection options
+      try {
+        const config = require('../config.json');
+        if (config.database && config.database.uri) {
+          uri = config.database.uri;
+        }
+      } catch (error) {
+        // Config file not found, use default URI
+      }
+      
       console.log('Connecting to MongoDB with URI:', uri.replace(/\/\/[^:]+:[^@]+@/, '//***:***@'));
       
       // Parse connection options from config if available
