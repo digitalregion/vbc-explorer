@@ -18,14 +18,22 @@ const nextConfig: NextConfig = {
         ...config.resolve.fallback,
         fs: false,
         path: false,
+        os: false,
+        crypto: false,
       };
     }
     
-    // lightningcssのネイティブモジュールを無視
+    // lightningcssのネイティブモジュールを完全に無視
     config.externals = config.externals || [];
     config.externals.push({
       'lightningcss': 'lightningcss',
     });
+    
+    // lightningcssのネイティブモジュールを空のオブジェクトに置き換え
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      'lightningcss': false,
+    };
     
     return config;
   },
