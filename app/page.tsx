@@ -524,7 +524,7 @@ export default function Page() {
           <button
             id='add-vbc-button'
             ref={addVbcButtonRef}
-            className='w-full sm:w-auto mt-4 sm:mt-0 px-5 py-2 bg-gray-900 border border-gray-700 hover:bg-gray-700 text-white font-bold rounded-lg shadow transition-all duration-200 flex items-center justify-center gap-2 text-base h-[44px] sm:h-[48px] whitespace-nowrap'
+            className='w-full sm:w-auto mt-4 sm:mt-0 px-5 py-2 bg-gray-900 border border-blue-600 hover:bg-blue-600 text-white font-bold rounded-lg shadow transition-all duration-200 flex items-center justify-center gap-2 text-base h-[44px] sm:h-[48px] whitespace-nowrap'
           >
             <Image src='/img/MetaMask.svg' alt='MetaMask' width={24} height={24} className='w-6 h-6' />
             Add VirBiCoin

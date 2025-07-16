@@ -66,3 +66,5 @@ config.json
 next-env.d.ts
 dist/
 tsconfig.tsbuildinfo
+
+logs/
