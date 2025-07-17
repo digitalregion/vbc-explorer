@@ -378,24 +378,47 @@ const writeTransactionsToDB: WriteTransactionsToDB = async function (
 const listenBlocks = function (): void {
   console.log('Starting real-time block listener...');
 
-  const pollInterval = 5000; // Poll every 5 seconds
+  const pollInterval = 3000; // Poll every 3 seconds (5秒→3秒に短縮)
   let lastProcessedBlock = 0;
+  let isProcessing = false; // 重複処理を防ぐフラグ
 
   const poll = async (): Promise<void> => {
+    if (isProcessing) {
+      return; // 既に処理中の場合はスキップ
+    }
+
     try {
+      isProcessing = true;
       const currentBlockBigInt = await web3.eth.getBlockNumber();
       const currentBlock = toNumber(currentBlockBigInt);
 
       if (currentBlock > lastProcessedBlock) {
-        console.log(`New block detected: ${currentBlock}`);
+        console.log(`New block detected: ${currentBlock} (last: ${lastProcessedBlock})`);
 
-        // Process new blocks
-        for (let blockNum = lastProcessedBlock + 1; blockNum <= currentBlock; blockNum++) {
-          const blockData = await web3.eth.getBlock(blockNum, true);
+        // Process new blocks in batches
+        const blocksToProcess = Math.min(currentBlock - lastProcessedBlock, 10); // 最大10ブロックずつ処理
+        
+        for (let i = 0; i < blocksToProcess; i++) {
+          const blockNum = lastProcessedBlock + 1 + i;
+          
+          try {
+            const blockData = await web3.eth.getBlock(blockNum, true);
 
-          if (blockData) {
-            await writeBlockToDB(blockData, true);
-            await writeTransactionsToDB(blockData, true);
+            if (blockData) {
+              // Check if block already exists to avoid duplicates
+              const existingBlock = await Block.findOne({ number: blockNum }).lean();
+              
+              if (!existingBlock) {
+                await writeBlockToDB(blockData, true);
+                await writeTransactionsToDB(blockData, true);
+                console.log(`Processed new block: ${blockNum}`);
+              } else {
+                console.log(`Block ${blockNum} already exists, skipping`);
+              }
+            }
+          } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            console.log(`Error processing block ${blockNum}: ${errorMessage}`);
           }
         }
 
@@ -404,6 +427,8 @@ const listenBlocks = function (): void {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       console.log(`Error polling for blocks: ${errorMessage}`);
+    } finally {
+      isProcessing = false;
     }
   };
 
@@ -411,7 +436,7 @@ const listenBlocks = function (): void {
   web3.eth.getBlockNumber()
     .then(blockNumberBigInt => {
       lastProcessedBlock = toNumber(blockNumberBigInt);
-      console.log(`Starting from block: ${lastProcessedBlock}`);
+      console.log(`Real-time listener starting from block: ${lastProcessedBlock}`);
 
       // Start polling
       setInterval(poll, pollInterval);
@@ -537,6 +562,25 @@ const prepareSync = async (): Promise<void> => {
 
 
 /**
+ * Hybrid sync: Catch latest blocks while syncing past blocks
+ */
+const hybridSync = async (): Promise<void> => {
+  try {
+    // Start real-time listener for latest blocks
+    console.log('Starting real-time block listener for latest blocks...');
+    listenBlocks();
+
+    // Start background sync for past blocks
+    console.log('Starting background sync for past blocks...');
+    await prepareSync();
+
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.log(`Error in hybrid sync: ${errorMessage}`);
+  }
+};
+
+/**
  * Main execution
  */
 const main = async (): Promise<void> => {
@@ -554,12 +598,12 @@ const main = async (): Promise<void> => {
     if (config.syncAll) {
       console.log('Starting full sync as requested...');
       await syncChain(config.startBlock, config.endBlock || undefined);
+      // After full sync, start hybrid mode
+      await hybridSync();
     } else {
-      await prepareSync();
+      // Use hybrid sync by default
+      await hybridSync();
     }
-
-    // Start real-time listener
-    listenBlocks();
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);

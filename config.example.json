@@ -57,9 +57,11 @@
   "database": {
     "uri": "mongodb://explorer:your_secure_password@localhost:27017/explorerDB?authSource=explorerDB",
     "options": {
-      "maxPoolSize": 8,
-      "serverSelectionTimeoutMS": 5000,
-      "socketTimeoutMS": 30000,
+      "maxPoolSize": 20,
+      "serverSelectionTimeoutMS": 15000,
+      "socketTimeoutMS": 60000,
+      "connectTimeoutMS": 15000,
+      "bufferCommands": false,
       "autoIndex": false,
       "autoCreate": false
     }

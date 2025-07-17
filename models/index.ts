@@ -244,12 +244,14 @@ export const connectDB = async (): Promise<void> => {
       
       // Parse connection options from config if available
       let connectionOptions: any = {
-        maxPoolSize: 10,
-        serverSelectionTimeoutMS: 10000,
-        socketTimeoutMS: 45000,
-        connectTimeoutMS: 10000,
+        maxPoolSize: 20, // 10→20に増加
+        serverSelectionTimeoutMS: 15000, // 10秒→15秒に延長
+        socketTimeoutMS: 60000, // 45秒→60秒に延長
+        connectTimeoutMS: 15000, // 10秒→15秒に延長
         retryWrites: true,
         retryReads: true,
+        bufferCommands: false, // バッファリングを無効化
+        autoIndex: false, // インデックス自動作成を無効化
       };
 
       // Try to load config.json for additional connection options
