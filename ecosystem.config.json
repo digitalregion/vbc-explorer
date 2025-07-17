@@ -7,7 +7,9 @@
       "cwd": ".",
       "env": {
         "NODE_ENV": "production",
-        "NODE_OPTIONS": "--max-old-space-size=512"
+        "NODE_OPTIONS": "--max-old-space-size=512",
+        "MONGODB_URI": "mongodb://explorer:your_secure_password@localhost:27017/explorerDB?authSource=explorerDB",
+        "MEMORY_LIMIT_MB": "512"
       },
       "max_memory_restart": "1024M",
       "instances": 1,
@@ -29,7 +31,9 @@
       "cwd": ".",
       "env": {
         "NODE_ENV": "production",
-        "NODE_OPTIONS": "--max-old-space-size=512"
+        "NODE_OPTIONS": "--max-old-space-size=512",
+        "MONGODB_URI": "mongodb://explorer:your_secure_password@localhost:27017/explorerDB?authSource=explorerDB",
+        "MEMORY_LIMIT_MB": "512"
       },
       "max_memory_restart": "1024M",
       "instances": 1,
@@ -51,7 +55,9 @@
       "cwd": ".",
       "env": {
         "NODE_ENV": "production",
-        "NODE_OPTIONS": "--max-old-space-size=512"
+        "NODE_OPTIONS": "--max-old-space-size=512",
+        "MONGODB_URI": "mongodb://explorer:your_secure_password@localhost:27017/explorerDB?authSource=explorerDB",
+        "MEMORY_LIMIT_MB": "512"
       },
       "max_memory_restart": "1024M",
       "instances": 1,
@@ -73,7 +79,9 @@
       "cwd": ".",
       "env": {
         "NODE_ENV": "production",
-        "NODE_OPTIONS": "--max-old-space-size=512"
+        "NODE_OPTIONS": "--max-old-space-size=512",
+        "MONGODB_URI": "mongodb://explorer:your_secure_password@localhost:27017/explorerDB?authSource=explorerDB",
+        "MEMORY_LIMIT_MB": "512"
       },  
       "max_memory_restart": "1024M",
       "instances": 1,
@@ -95,7 +103,9 @@
       "cwd": ".",
       "env": {
         "NODE_ENV": "production",
-        "NODE_OPTIONS": "--max-old-space-size=512"
+        "NODE_OPTIONS": "--max-old-space-size=512",
+        "MONGODB_URI": "mongodb://explorer:your_secure_password@localhost:27017/explorerDB?authSource=explorerDB",
+        "MEMORY_LIMIT_MB": "512"
       },
       "max_memory_restart": "1024M",
       "instances": 1,
@@ -117,7 +127,9 @@
       "cwd": ".",
       "env": {
         "NODE_ENV": "production",
-        "NODE_OPTIONS": "--max-old-space-size=512"
+        "NODE_OPTIONS": "--max-old-space-size=512",
+        "MONGODB_URI": "mongodb://explorer:your_secure_password@localhost:27017/explorerDB?authSource=explorerDB",
+        "MEMORY_LIMIT_MB": "512"
       },
       "max_memory_restart": "1024M",
       "instances": 1,
@@ -133,4 +145,4 @@
       "log_date_format": "YYYY-MM-DD HH:mm:ss Z"
     }
   ]
-}
+} 

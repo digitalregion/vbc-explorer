@@ -55,7 +55,7 @@
     }
   },
   "database": {
-    "uri": "mongodb://localhost:27017/explorerDB",
+    "uri": "mongodb://explorer:your_secure_password@localhost:27017/explorerDB?authSource=explorerDB",
     "options": {
       "maxPoolSize": 8,
       "serverSelectionTimeoutMS": 5000,
@@ -79,7 +79,7 @@
   "explorer": {
     "name": "VirBiCoin Explorer",
     "description": "Real-time blockchain explorer for VirBiCoin network",
-    "version": "0.4.2",
+    "version": "0.5.0",
     "url": "https://explorer.digitalregion.jp",
     "apiUrl": "https://explorer.digitalregion.jp/api"
   }

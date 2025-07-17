@@ -31,7 +31,7 @@ const initDB = async () => {
 const checkMemory = () => {
   const usage = process.memoryUsage();
   const usedMB = Math.round(usage.heapUsed / 1024 / 1024);
-  const limitMB = 256; // 256MB制限
+  const limitMB = parseInt(process.env.MEMORY_LIMIT_MB || '1024'); // 環境変数から取得、デフォルト1024MB
   
   if (usedMB > limitMB) {
     console.log(`⚠️  Memory usage: ${usedMB}MB (limit: ${limitMB}MB)`);
