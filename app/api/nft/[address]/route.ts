@@ -98,10 +98,82 @@ export async function GET(
       timestamp: { $gte: yesterday }
     });
 
-    // Calculate age in days
-    const ageInDays = token.createdAt && typeof token.createdAt === 'string' || token.createdAt instanceof Date 
-      ? Math.floor((Date.now() - new Date(token.createdAt as string | Date).getTime()) / (1000 * 60 * 60 * 24)) 
-      : 0;
+    // Calculate age in days with improved accuracy using transfer data
+    let ageInDays = 0;
+    
+    // Get all transfers to find the earliest activity
+    const allTransfers = await db.collection('tokentransfers').find({ 
+      tokenAddress: { $regex: new RegExp(`^${address}$`, 'i') }
+    })
+      .sort({ timestamp: 1 })
+      .limit(500)
+      .toArray();
+    
+    console.log(`NFT ${address} found ${allTransfers.length} transfers for age calculation`);
+    
+    if (allTransfers.length > 0) {
+      // Find the earliest transfer timestamp
+      const earliestTransfer = allTransfers[0];
+      const latestTransfer = allTransfers[allTransfers.length - 1];
+      
+      console.log(`NFT ${address} earliest transfer:`, earliestTransfer);
+      console.log(`NFT ${address} latest transfer:`, latestTransfer);
+      
+      if (earliestTransfer && earliestTransfer.timestamp) {
+        const earliestTime = new Date(earliestTransfer.timestamp).getTime();
+        const now = Date.now();
+        const diffMs = now - earliestTime;
+        ageInDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+        
+        // Additional validation: if the calculated age seems too low but we have recent transfers,
+        // use the latest transfer as a reference point
+        if (ageInDays < 30 && allTransfers.length > 1) {
+          const latestTime = new Date(latestTransfer.timestamp).getTime();
+          const latestDiffMs = now - latestTime;
+          const latestAgeInDays = Math.floor(latestDiffMs / (1000 * 60 * 60 * 24));
+          
+          console.log(`NFT ${address} age validation:`, {
+            calculatedAge: ageInDays,
+            latestTransferAge: latestAgeInDays,
+            totalTransfers: allTransfers.length
+          });
+          
+          // If latest transfer shows older age, use that as minimum
+          if (latestAgeInDays > ageInDays) {
+            ageInDays = Math.max(ageInDays, latestAgeInDays);
+            console.log(`NFT ${address} adjusted age to:`, ageInDays);
+          }
+        }
+        
+        console.log(`NFT ${address} final age calculation:`, {
+          earliestTime: new Date(earliestTime),
+          now: new Date(now),
+          diffMs,
+          ageInDays,
+          totalTransfersAnalyzed: allTransfers.length,
+          earliestTransferHash: earliestTransfer.transactionHash,
+          latestTransferHash: latestTransfer.transactionHash
+        });
+      } else {
+        // Fallback to token.createdAt if no valid transfers found
+        ageInDays = token.createdAt && typeof token.createdAt === 'string' || token.createdAt instanceof Date 
+          ? Math.floor((Date.now() - new Date(token.createdAt as string | Date).getTime()) / (1000 * 60 * 60 * 24)) 
+          : 0;
+        console.log(`NFT ${address} using fallback age calculation:`, {
+          createdAt: token.createdAt,
+          ageInDays
+        });
+      }
+    } else {
+      // Fallback to token.createdAt if no transfers found
+      ageInDays = token.createdAt && typeof token.createdAt === 'string' || token.createdAt instanceof Date 
+        ? Math.floor((Date.now() - new Date(token.createdAt as string | Date).getTime()) / (1000 * 60 * 60 * 24)) 
+        : 0;
+      console.log(`NFT ${address} using fallback age calculation:`, {
+        createdAt: token.createdAt,
+        ageInDays
+      });
+    }
 
     // Format NFT data
     const formatNFTAmount = (amount: string) => {

@@ -132,12 +132,32 @@ export async function GET(
     // If token has current date as createdAt, try to find actual creation date from transfers
     if (token.createdAt && Math.abs(Date.now() - new Date(token.createdAt).getTime()) < 24 * 60 * 60 * 1000) {
       console.log(`Token ${address} has current date as createdAt, looking for actual creation date`);
+      
+      // Try to find the earliest transfer or mint transaction
       const firstTransfer = await TokenTransfer.findOne({
         tokenAddress: { $regex: new RegExp(`^${address}$`, 'i') }
       }).sort({ timestamp: 1 });
       
+      // Also try to find mint transactions (from zero address)
+      const firstMint = await TokenTransfer.findOne({
+        tokenAddress: { $regex: new RegExp(`^${address}$`, 'i') },
+        from: '0x0000000000000000000000000000000000000000'
+      }).sort({ timestamp: 1 });
+      
+      // Use the earliest of the two
+      let earliestTimestamp = null;
       if (firstTransfer && firstTransfer.timestamp) {
-        token.createdAt = new Date(firstTransfer.timestamp);
+        earliestTimestamp = new Date(firstTransfer.timestamp);
+      }
+      if (firstMint && firstMint.timestamp) {
+        const mintTimestamp = new Date(firstMint.timestamp);
+        if (!earliestTimestamp || mintTimestamp < earliestTimestamp) {
+          earliestTimestamp = mintTimestamp;
+        }
+      }
+      
+      if (earliestTimestamp) {
+        token.createdAt = earliestTimestamp;
         console.log(`Token ${address} updated createdAt to:`, token.createdAt);
       }
     }
@@ -221,31 +241,70 @@ export async function GET(
       token.holders = realHolders;
     }
 
-    // Calculate age in days
+    // Calculate age in days with improved accuracy
     let ageInDays = 0;
     if (token.type === 'Native') {
       // For native VBC, we don't show age
       ageInDays = -1; // Special value to indicate N/A
     } else {
-      // Get the first transfer to calculate age
-      const firstTransfer = await TokenTransfer.findOne({
+      // Get all transfers to find the earliest activity
+      const allTransfers = await TokenTransfer.find({
         tokenAddress: { $regex: new RegExp(`^${address}$`, 'i') }
-      }).sort({ timestamp: 1 });
+      }).sort({ timestamp: 1 }).limit(500); // Get first 500 transfers for better accuracy
       
-      console.log(`Token ${address} first transfer:`, firstTransfer);
+      console.log(`Token ${address} found ${allTransfers.length} transfers for age calculation`);
       
-      if (firstTransfer && firstTransfer.timestamp) {
-        const firstTransferTime = new Date(firstTransfer.timestamp).getTime();
-        const now = Date.now();
-        const diffMs = now - firstTransferTime;
-        ageInDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+      if (allTransfers.length > 0) {
+        // Find the earliest transfer timestamp
+        const earliestTransfer = allTransfers[0];
+        const latestTransfer = allTransfers[allTransfers.length - 1];
         
-        console.log(`Token ${address} age calculation:`, {
-          firstTransferTime: new Date(firstTransferTime),
-          now: new Date(now),
-          diffMs,
-          ageInDays
-        });
+        console.log(`Token ${address} earliest transfer:`, earliestTransfer);
+        console.log(`Token ${address} latest transfer:`, latestTransfer);
+        
+        if (earliestTransfer && earliestTransfer.timestamp) {
+          const earliestTime = new Date(earliestTransfer.timestamp).getTime();
+          const now = Date.now();
+          const diffMs = now - earliestTime;
+          ageInDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+          
+          // Additional validation: if the calculated age seems too low but we have recent transfers,
+          // use the latest transfer as a reference point
+          if (ageInDays < 30 && allTransfers.length > 1) {
+            const latestTime = new Date(latestTransfer.timestamp).getTime();
+            const latestDiffMs = now - latestTime;
+            const latestAgeInDays = Math.floor(latestDiffMs / (1000 * 60 * 60 * 24));
+            
+            console.log(`Token ${address} age validation:`, {
+              calculatedAge: ageInDays,
+              latestTransferAge: latestAgeInDays,
+              totalTransfers: allTransfers.length
+            });
+            
+            // If latest transfer shows older age, use that as minimum
+            if (latestAgeInDays > ageInDays) {
+              ageInDays = Math.max(ageInDays, latestAgeInDays);
+              console.log(`Token ${address} adjusted age to:`, ageInDays);
+            }
+          }
+          
+          console.log(`Token ${address} final age calculation:`, {
+            earliestTime: new Date(earliestTime),
+            now: new Date(now),
+            diffMs,
+            ageInDays,
+            totalTransfersAnalyzed: allTransfers.length,
+            earliestTransferHash: earliestTransfer.transactionHash,
+            latestTransferHash: latestTransfer.transactionHash
+          });
+        } else {
+          // Fallback to token.createdAt if no valid transfers found
+          ageInDays = token.createdAt ? Math.floor((Date.now() - new Date(token.createdAt).getTime()) / (1000 * 60 * 60 * 24)) : 0;
+          console.log(`Token ${address} using fallback age calculation:`, {
+            createdAt: token.createdAt,
+            ageInDays
+          });
+        }
       } else {
         // Fallback to token.createdAt if no transfers found
         ageInDays = token.createdAt ? Math.floor((Date.now() - new Date(token.createdAt).getTime()) / (1000 * 60 * 60 * 24)) : 0;

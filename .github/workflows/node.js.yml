@@ -13,15 +13,26 @@ on:
       - dev
 jobs:
   build:
-    runs-on: ubuntu-latest-arm64
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [18, 20, 22]
+    env:
+      NEXT_TELEMETRY_DISABLED: 1
+      TAILWIND_DISABLE_TOUCH: true
     steps:
       - uses: actions/checkout@v4
-      - name: Use Node.js
+      - name: Use Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
       - name: Install dependencies
-        run: npm install
+        run: npm ci
+      - name: Run linter
+        run: npm run lint
+      - name: Run type check
+        run: npm run type-check
       - name: Run build
         run: npm run build
 

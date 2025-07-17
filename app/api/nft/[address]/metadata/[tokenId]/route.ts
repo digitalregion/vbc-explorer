@@ -56,7 +56,6 @@ async function fetchNFTMetadata(tokenAddress: string, tokenId: number) {
       clearTimeout(timeoutId);
 
       if (!response.ok) {
-        console.warn(`Failed to fetch metadata from ${metadataUrl}: ${response.status}`);
         return null;
       }
 
@@ -74,14 +73,14 @@ async function fetchNFTMetadata(tokenAddress: string, tokenId: number) {
         description: metadata.description || '',
         image: metadata.image || '',
         attributes: metadata.attributes || [],
-        tokenURI: tokenURI
+        tokenURI: tokenURI,
+        createdAt: metadata.createdAt || new Date().toISOString() // Use createdAt from metadata or fallback to current time
       };
     } catch (fetchError) {
       clearTimeout(timeoutId);
       throw fetchError;
     }
   } catch (error) {
-    console.error(`Error fetching metadata for token ${tokenId}:`, error);
     return null;
   }
 }
@@ -131,7 +130,8 @@ export async function GET(
           { trait_type: "Generation", value: "Gen 1" },
           { trait_type: "Token ID", value: tokenIdNum.toString() }
         ],
-        tokenURI: `https://metadata.digitalregion.jp/sugar/${tokenIdNum}`
+        tokenURI: `https://metadata.digitalregion.jp/sugar/${tokenIdNum}`,
+        createdAt: new Date(Date.now() - (tokenIdNum * 24 * 60 * 60 * 1000)).toISOString() // Simulate different creation dates for each token
       };
     }
 
@@ -148,7 +148,6 @@ export async function GET(
       metadata: metadata
     });
   } catch (error) {
-    console.error('NFT metadata API error:', error);
     return NextResponse.json(
       { error: 'Failed to fetch token metadata' },
       { status: 500 }

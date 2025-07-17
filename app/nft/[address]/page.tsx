@@ -74,6 +74,7 @@ interface TokenMetadata {
     value: string | number;
   }>;
   tokenURI: string;
+  createdAt?: string; // NFT creation timestamp from metadata
 }
 
 interface ImageLoadState {
@@ -225,13 +226,7 @@ export default function NFTDetailPage({ params }: { params: Promise<{ address: s
     }
   }, [activeTab, nftData, address, fetchTokenMetadata, metadataLoading, tokenMetadata]);
 
-  // Debug log for contract verification status
-  useEffect(() => {
-    if (nftData?.contract) {
-      console.log('Contract verification status:', nftData.contract.verified);
-      console.log('Contract data:', nftData.contract);
-    }
-  }, [nftData?.contract]);
+
 
   // スクロール用useEffect
   useEffect(() => {
@@ -536,11 +531,6 @@ export default function NFTDetailPage({ params }: { params: Promise<{ address: s
                           <div>
                             {metadata.image ? (
                               <div className='relative h-48 w-full overflow-hidden'>
-                                {/* Debugging info overlay */}
-                                <div className='absolute top-2 left-2 z-20 bg-black/70 text-white text-xs p-1 rounded'>
-                                  ID: {tokenId} | State: {imageLoadState[tokenId] || 'unknown'}
-                                </div>
-                                
                                 {/* Loading state */}
                                 {imageLoadState[tokenId] === 'loading' && (
                                   <div className='absolute inset-0 flex items-center justify-center bg-gray-800 z-15'>
@@ -564,35 +554,33 @@ export default function NFTDetailPage({ params }: { params: Promise<{ address: s
                                   </div>
                                 )}
                                 
-                                {/* Success state */}
-                                {imageLoadState[tokenId] === 'loaded' && (
-                                  <div className='absolute top-2 right-2 z-20 bg-green-600 text-white text-xs px-2 py-1 rounded'>
-                                    ✓ Success
-                                  </div>
-                                )}
-                                
-                                {/* Main image */}
-                                <Image
-                                  src={metadata.image}
-                                  alt={metadata.name || `Token #${tokenId}`}
-                                  layout='fill'
-                                  objectFit='cover'
-                                  className={`w-full h-full object-cover z-10 ${
-                                    imageLoadState[tokenId] === 'loaded' ? 'opacity-100' : 'opacity-0'
-                                  }`}
-                                  onLoadStart={() => {
-                                    console.log(`🔄 Image load started - Token ${tokenId}: ${metadata.image}`);
+                                {/* Main image with link */}
+                                <a 
+                                  href={metadata.image} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer"
+                                  className='block w-full h-full hover:opacity-90 transition-opacity cursor-pointer'
+                                  title='Click to view original image'
+                                >
+                                  <Image
+                                    src={metadata.image}
+                                    alt={metadata.name || `Token #${tokenId}`}
+                                    layout='fill'
+                                    objectFit='cover'
+                                    className={`w-full h-full object-cover z-10 ${
+                                      imageLoadState[tokenId] === 'loaded' ? 'opacity-100' : 'opacity-0'
+                                    }`}
+                                                                      onLoadStart={() => {
                                     setImageLoadState(prev => ({ ...prev, [tokenId]: 'loading' }));
                                   }}
                                   onLoad={() => {
-                                    console.log(`✅ Image load success - Token ${tokenId}: ${metadata.image}`);
                                     setImageLoadState(prev => ({ ...prev, [tokenId]: 'loaded' }));
                                   }}
                                   onError={() => {
-                                    console.error(`❌ Image load failed - Token ${tokenId}: ${metadata.image}`);
                                     setImageLoadState(prev => ({ ...prev, [tokenId]: 'error' }));
                                   }}
-                                />
+                                  />
+                                </a>
                                 
                                 {/* Default fallback when no specific state */}
                                 {(!imageLoadState[tokenId] || imageLoadState[tokenId] === 'initial') && (
@@ -625,17 +613,22 @@ export default function NFTDetailPage({ params }: { params: Promise<{ address: s
                                 </p>
                               )}
                               
-                              {/* Debug info for image URL */}
+                              {/* Metadata info */}
                               <div className='text-xs text-gray-500 mb-2 space-y-1'>
-                                <div>Image state: {imageLoadState[tokenId] || 'unknown'}</div>
+                                {metadata.createdAt && (
+                                  <div className='flex items-center gap-1'>
+                                    <ClockIcon className='w-3 h-3' />
+                                    <span>Created: {new Date(metadata.createdAt).toLocaleString()}</span>
+                                  </div>
+                                )}
                                 <div className='break-all'>
-                                  URL: <a 
-                                    href={metadata.image} 
+                                  Metadata: <a 
+                                    href={metadata.tokenURI} 
                                     target="_blank" 
                                     rel="noopener noreferrer" 
                                     className='text-blue-400 hover:text-blue-300'
                                   >
-                                    {metadata.image}
+                                    {metadata.tokenURI}
                                   </a>
                                 </div>
                               </div>
