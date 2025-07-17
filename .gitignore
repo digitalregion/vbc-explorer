@@ -71,7 +71,10 @@ next-env.d.ts
 dist/
 tsconfig.tsbuildinfo
 
+# Core
+core
+core.*
 
-
+# Logs
 logs/
-core*
+*.log
