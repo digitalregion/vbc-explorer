@@ -80,7 +80,7 @@ async function fetchNFTMetadata(tokenAddress: string, tokenId: number) {
       clearTimeout(timeoutId);
       throw fetchError;
     }
-  } catch (error) {
+  } catch {
     return null;
   }
 }
@@ -148,6 +148,7 @@ export async function GET(
       metadata: metadata
     });
   } catch (error) {
+    console.error('NFT metadata API error:', error);
     return NextResponse.json(
       { error: 'Failed to fetch token metadata' },
       { status: 500 }

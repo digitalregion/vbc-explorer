@@ -342,7 +342,6 @@ export default function Page() {
         // Fetch enhanced stats
         const statsResponse = await fetch('/api/stats-enhanced');
         const statsData = await statsResponse.json();
-        console.log('Stats data:', statsData); // Debug log
         setStats(statsData);
 
         // Fetch blocks
@@ -367,8 +366,6 @@ export default function Page() {
             // Find all new blocks discovered in this update
             const newBlocks = blocksData.filter((block: Block) => block.number > lastTopBlock);
             const newBlockNums = new Set<number>(newBlocks.map((block: Block) => block.number));
-
-            console.log('New blocks detected during live update:', Array.from(newBlockNums));
 
             // Start animation for new blocks
             setTimeout(() => {
@@ -410,8 +407,6 @@ export default function Page() {
               tx.hash !== lastTopTransactionHash
             );
             const newTransactionHashesSet = new Set<string>(newTransactions.map((tx: Transaction) => tx.hash));
-
-            console.log('New transactions detected during live update:', Array.from(newTransactionHashesSet));
 
             // Start animation for new transactions
             setTimeout(() => {

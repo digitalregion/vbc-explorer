@@ -109,15 +109,10 @@ export async function GET(
       .limit(500)
       .toArray();
     
-    console.log(`NFT ${address} found ${allTransfers.length} transfers for age calculation`);
-    
     if (allTransfers.length > 0) {
       // Find the earliest transfer timestamp
       const earliestTransfer = allTransfers[0];
       const latestTransfer = allTransfers[allTransfers.length - 1];
-      
-      console.log(`NFT ${address} earliest transfer:`, earliestTransfer);
-      console.log(`NFT ${address} latest transfer:`, latestTransfer);
       
       if (earliestTransfer && earliestTransfer.timestamp) {
         const earliestTime = new Date(earliestTransfer.timestamp).getTime();
@@ -132,47 +127,22 @@ export async function GET(
           const latestDiffMs = now - latestTime;
           const latestAgeInDays = Math.floor(latestDiffMs / (1000 * 60 * 60 * 24));
           
-          console.log(`NFT ${address} age validation:`, {
-            calculatedAge: ageInDays,
-            latestTransferAge: latestAgeInDays,
-            totalTransfers: allTransfers.length
-          });
-          
           // If latest transfer shows older age, use that as minimum
           if (latestAgeInDays > ageInDays) {
             ageInDays = Math.max(ageInDays, latestAgeInDays);
-            console.log(`NFT ${address} adjusted age to:`, ageInDays);
           }
         }
-        
-        console.log(`NFT ${address} final age calculation:`, {
-          earliestTime: new Date(earliestTime),
-          now: new Date(now),
-          diffMs,
-          ageInDays,
-          totalTransfersAnalyzed: allTransfers.length,
-          earliestTransferHash: earliestTransfer.transactionHash,
-          latestTransferHash: latestTransfer.transactionHash
-        });
       } else {
         // Fallback to token.createdAt if no valid transfers found
         ageInDays = token.createdAt && typeof token.createdAt === 'string' || token.createdAt instanceof Date 
           ? Math.floor((Date.now() - new Date(token.createdAt as string | Date).getTime()) / (1000 * 60 * 60 * 24)) 
           : 0;
-        console.log(`NFT ${address} using fallback age calculation:`, {
-          createdAt: token.createdAt,
-          ageInDays
-        });
       }
     } else {
       // Fallback to token.createdAt if no transfers found
       ageInDays = token.createdAt && typeof token.createdAt === 'string' || token.createdAt instanceof Date 
         ? Math.floor((Date.now() - new Date(token.createdAt as string | Date).getTime()) / (1000 * 60 * 60 * 24)) 
         : 0;
-      console.log(`NFT ${address} using fallback age calculation:`, {
-        createdAt: token.createdAt,
-        ageInDays
-      });
     }
 
     // Format NFT data
@@ -193,18 +163,6 @@ export async function GET(
     // Get contract source information from database
     const contractInfo = await db.collection('Contract').findOne({ 
       address: { $regex: new RegExp(`^${address}$`, 'i') }
-    });
-
-    // Debug contract verification status
-    console.log('Contract verification debug:', {
-      address: address,
-      contractInfo: contractInfo ? {
-        address: contractInfo.address,
-        verified: contractInfo.verified,
-        contractName: contractInfo.contractName,
-        compilerVersion: contractInfo.compilerVersion
-      } : null,
-      verified: contractInfo?.verified || false
     });
 
     // Contract source information
@@ -281,7 +239,8 @@ export async function GET(
       }),
       transfers: transfers.map((transfer: Record<string, unknown>) => ({
         hash: transfer.transactionHash as string,
-        from: transfer.from as string,
+        // If from is zero address, show as 'System' for frontend display
+        from: (transfer.from as string) === '0x0000000000000000000000000000000000000000' ? 'System' : transfer.from as string,
         to: transfer.to as string,
         tokenId: transfer.value as string, // For NFTs, value often represents tokenId
         timestamp: transfer.timestamp as Date,

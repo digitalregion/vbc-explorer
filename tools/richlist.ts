@@ -474,5 +474,8 @@ const main = async (): Promise<void> => {
   }
 };
 
-// Start the richlist calculator
-main();
+export { main };
+
+if (require.main === module) {
+  main();
+}

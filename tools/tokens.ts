@@ -513,16 +513,6 @@ async function updateAllVrc721Tokens() {
 // Export for use by other scripts
 export { updateTokenWithRealData, updateOsatoTokenData };
 
-// If this script is run directly, update OSATO token data
-if (require.main === module) {
-  updateOsatoTokenData().catch(error => {
-    console.error('Error updating OSATO token data:', error);
-    process.exit(1);
-  });
-}
-
-
-
 async function main() {
   try {
     // Check command line arguments
@@ -574,7 +564,8 @@ async function main() {
   }
 }
 
-main().catch(error => {
-  console.error("Unhandled error in main function:", error);
-  process.exit(1);
-});
+export { main };
+
+if (require.main === module) {
+  main();
+}

@@ -1,41 +1,19 @@
 {
+  "extends": "./tsconfig.json",
   "compilerOptions": {
-    "target": "ES2020",
     "module": "commonjs",
-    "lib": ["ES2020"],
+    "moduleResolution": "node",
+    "target": "ES2020",
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
     "strict": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    "declaration": false,
-    "outDir": "./dist",
-    "rootDir": "./",
-    "moduleResolution": "node",
-    "allowJs": true,
-    "types": ["node"]
+    "isolatedModules": true,
+    "noEmit": false,
+    "outDir": "./dist"
   },
-  "include": [
-    "tools/**/*.ts",
-    "types/**/*.d.ts"
-  ],
-  "exclude": [
-    "node_modules",
-    "dist",
-    ".next"
-  ],
-  "ts-node": {
-    "esm": false,
-    "experimentalSpecifierResolution": "node"
-  },
-  "devDependencies": {
-    "@tailwindcss/postcss": "^4.1.11",
-    "@types/express": "^5.0.3",
-    "@types/mongoose": "^5.11.97",
-    "@types/node": "^20.16.5",
-    "autoprefixer": "^10.4.20",
-    "eslint": "^8.57.0",
-    "human-standard-token-abi": "^1.0.0"
-  }
-}
+  "include": ["tools/**/*.ts"],
+  "exclude": ["node_modules"]
+} 

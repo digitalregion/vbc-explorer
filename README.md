@@ -1,3 +1,5 @@
+
+
 # VirBiCoin Explorer
 
 <img src="public/img/explorer-logo.png" alt="VBC Explorer logo" height="200" />
@@ -9,6 +11,7 @@
 [![Node.js](https://img.shields.io/badge/Node.js-22.x-339933?style=flat&logo=node.js&logoColor=white)](https://nodejs.org/)
 [![Next.js](https://img.shields.io/badge/Next.js-15+-000000?style=flat&logo=next.js&logoColor=white)](https://nextjs.org/)
 [![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=white)](https://www.docker.com/)
+[![EIP-3091](https://img.shields.io/badge/EIP--3091-Supported-brightgreen)](https://eips.ethereum.org/EIPS/eip-3091)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 <b>Live Version: [explorer.digitalregion.jp](https://explorer.digitalregion.jp)</b>
@@ -17,6 +20,7 @@ A modern, real-time blockchain explorer for the VirBiCoin network built with Nex
 
 ## Features
 
+- **EIP-3091 URI Support** - Direct URI redirection for addresses, transactions, and blocks (ethereum:...)
 - **Real-time Blockchain Sync** - Live synchronization of blocks and transactions from VirBiCoin network
 - **Advanced Statistics** - Network hashrate, difficulty, mining analytics, and performance metrics
 - **NFT Support** - Complete VRC-721 and VRC-1155 token tracking with metadata and image loading
@@ -38,7 +42,274 @@ A modern, real-time blockchain explorer for the VirBiCoin network built with Nex
 - **Development**: ts-node, ESLint, Prettier
 - **Deployment**: Docker, PM2, production builds
 
-## Local Installation
+## System Architecture
+
+```mermaid
+graph TB
+    subgraph "Frontend Layer"
+        A[Next.js App Router]
+        B[React Components]
+        C[TypeScript]
+        D[Tailwind CSS]
+    end
+    
+    subgraph "API Layer"
+        E[Next.js API Routes]
+        F[Data Fetching]
+        G[Real-time Updates]
+    end
+    
+    subgraph "Data Processing Layer"
+        H[Sync Service]
+        I[Stats Service]
+        J[Price Service]
+        K[Tokens Service]
+        L[Richlist Service]
+    end
+    
+    subgraph "Database Layer"
+        M[MongoDB]
+        N[Mongoose ODM]
+        O[Data Models]
+    end
+    
+    subgraph "Blockchain Layer"
+        P[VirBiCoin Node]
+        Q[Web3.js]
+        R[RPC Connection]
+    end
+    
+    subgraph "External Services"
+        S[Price APIs]
+        T[NFT Metadata]
+        U[Contract Verification]
+    end
+    
+    A --> E
+    B --> E
+    C --> E
+    D --> A
+    
+    E --> F
+    F --> G
+    
+    F --> H
+    F --> I
+    F --> J
+    F --> K
+    F --> L
+    
+    H --> N
+    I --> N
+    J --> N
+    K --> N
+    L --> N
+    
+    N --> M
+    O --> N
+    
+    H --> Q
+    I --> Q
+    J --> Q
+    K --> Q
+    L --> Q
+    
+    Q --> R
+    R --> P
+    
+    J --> S
+    K --> T
+    L --> U
+    
+    style A fill:#61dafb
+    style B fill:#61dafb
+    style C fill:#007acc
+    style D fill:#38bdf8
+    style M fill:#47a248
+    style P fill:#f7931e
+```
+
+## Project Structure
+
+```
+/
+|-- app
+|    |-- api
+|    |-- components
+|    |-- contract
+|    |-- address
+|    |-- tx
+|    |-- tokens
+|    |-- search
+|    |-- block
+|    |-- transactions
+|    |-- blocks
+|    |-- nft
+|    |-- richlist
+|    |-- accounts
+|    |-- page.tsx
+|    |-- layout.tsx
+|    |-- globals.css
+|-- components
+|    |-- TransactionDetails.tsx
+|    |-- AccountDetails.tsx
+|-- lib
+|    |-- db.ts
+|    |-- stats.ts
+|    |-- filters.ts
+|    |-- etherUnits.ts
+|    |-- models.ts
+|    |-- bigint-utils.ts
+|-- models
+|    |-- index.ts
+|    |-- Token.js
+|-- tools
+|    |-- sync.ts
+|    |-- stats.ts
+|    |-- price.ts
+|    |-- tokens.ts
+|    |-- richlist.ts
+|-- types
+|-- logs
+|-- public
+|-- .github
+|-- package.json
+|-- ecosystem.config.json
+|-- config.json
+|-- config.example.json
+|-- .env
+|-- .gitignore
+|-- next.config.ts
+|-- tsconfig.json
+|-- eslint.config.ts
+|-- Dockerfile
+|-- docker-compose.yml
+|-- README.md
+|-- LICENSE
+```
+
+## Data Flow Architecture
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Frontend
+    participant API
+    participant Sync
+    participant Database
+    participant Blockchain
+    
+    User->>Frontend: Access Explorer
+    Frontend->>API: Request Data
+    API->>Database: Query Stored Data
+    Database-->>API: Return Data
+    API-->>Frontend: Send Response
+    Frontend-->>User: Display Information
+    
+    loop Real-time Sync
+        Sync->>Blockchain: Poll New Blocks
+        Blockchain-->>Sync: Block Data
+        Sync->>Database: Store Block Data
+        Sync->>Database: Update Statistics
+        Sync->>Database: Process Transactions
+        Sync->>Database: Update Token Balances
+        Sync->>Database: Update Rich List
+    end
+    
+    loop Price Updates
+        Sync->>External APIs: Fetch Price Data
+        External APIs-->>Sync: Price Information
+        Sync->>Database: Update Price Data
+    end
+```
+
+## Quick Start with PM2 (Recommended)
+
+### Prerequisites
+
+- **Node.js 18+** and npm
+- **MongoDB 6.0+** running on localhost:27017
+- **VirBiCoin node** running on localhost:8329 with RPC enabled
+- **PM2** installed globally: `npm install -g pm2`
+
+### Installation
+
+1. **Clone and setup**
+```bash
+git clone https://github.com/virbicoin/vbc-explorer
+cd vbc-explorer
+npm install
+```
+
+2. **Configure environment** (optional)
+```bash
+# Edit .env file if needed
+vi .env
+```
+
+3. **Start all services with PM2**
+```bash
+# Start all services (Web + Data sync)
+pm2 start ecosystem.config.json
+
+# Check status
+pm2 status
+
+# View logs
+pm2 logs
+```
+
+4. **Access the explorer**
+```
+http://localhost:3000
+```
+
+### PM2 Management Commands
+
+```bash
+# Start all services
+pm2 start ecosystem.config.json
+
+# Stop all services
+pm2 stop ecosystem.config.json
+
+# Restart all services
+pm2 restart ecosystem.config.json
+
+# View status
+pm2 status
+
+# View logs
+pm2 logs                    # All logs
+pm2 logs vbc-explorer-web   # Web service only
+pm2 logs vbc-sync          # Sync service only
+
+# Monitor resources
+pm2 monit
+
+# Delete all services
+pm2 delete ecosystem.config.json
+
+# Setup auto-restart (production)
+pm2 startup
+pm2 save
+```
+
+### Individual Service Management
+
+```bash
+# Start specific services only
+pm2 start ecosystem.config.json --only vbc-explorer-web
+pm2 start ecosystem.config.json --only vbc-sync
+pm2 start ecosystem.config.json --only vbc-stats
+
+# Restart specific service
+pm2 restart vbc-explorer-web
+pm2 restart vbc-sync
+pm2 restart vbc-stats
+```
+
+## Local Installation (Development)
 
 ### Prerequisites
 
@@ -106,13 +377,14 @@ npm run dev
 8. **Initialize blockchain data** (in a separate terminal)
 ```bash
 # Start all data synchronization services
-npm run data:start
+npm run data:all
 
 # Or start services individually
-npm run data:start:sync    # Blockchain synchronization
-npm run data:start:stats   # Network statistics
-npm run data:start:rich    # Account richlist
-npm run data:start:tokens  # Token tracking
+npm run data:sync    # Blockchain synchronization
+npm run data:stats   # Network statistics
+npm run data:richlist # Account richlist
+npm run data:tokens  # Token tracking
+npm run data:price   # Price tracking
 ```
 
 The explorer will be available at `http://localhost:3000`
@@ -126,27 +398,73 @@ docker-compose up -d
 # The explorer will be available at http://localhost:3000
 # MongoDB will be accessible on localhost:27017
 ```
+
+## Configuration
+
+### Environment Variables (.env)
+
+```bash
+# Database Configuration
+MONGODB_URI=mongodb://localhost:27017/explorerDB
+
+# Web3 Provider Configuration  
+WEB3_PROVIDER_URL=http://localhost:8329
+
+# Server Configuration
+NODE_ENV=production
+NODE_OPTIONS=--max-old-space-size=512
+
+# 1GB RAM Optimization
+BATCH_SIZE=50
+MAX_BLOCKS_PER_RUN=100
+SYNC_BATCH_SIZE=20
+MAX_SYNC_BLOCKS=50
+
+# Features
+ENABLE_NFT=true
+ENABLE_CONTRACT_VERIFICATION=true
+ENABLE_TOKEN_TRACKING=true
+ENABLE_STATS=true
+ENABLE_RICHLIST=true
+ENABLE_PRICE_TRACKING=true
+
+# Performance Optimization
+USE_SWAP=true
+MEMORY_LIMIT=512
+LOG_LEVEL=info
+
+# Caching
+ENABLE_CACHE=true
+CACHE_DURATION=300
+```
+
+### Application Configuration (config.json)
+
+```json
+{
+  "nodeAddr": "localhost",
+  "port": 8329,
+  "wsPort": 8330,
+  "bulkSize": 50,
+  "syncAll": false,
+  "quiet": false,
+  "useRichList": true,
+  "startBlock": 0,
+  "endBlock": null,
+  "maxRetries": 3,
+  "retryDelay": 1000,
+  "logLevel": "info",
+  "enableNFT": true,
+  "enableContractVerification": true,
+  "enableTokenTracking": true,
+  "apiRateLimit": 100,
+  "webSocketEnabled": true,
+  "miners": {
+    "0x950302976387b43E042aeA242AE8DAB8e5C204D1": "digitalregion.jp",
     "0x6C0DB3Ea9EEd7ED145f36da461D84A8d02596B08": "coolpool.top"
   }
 }
 ```
-
-### Configuration Options
-
-| Name | Description |
-|------|-------------|
-| `nodeAddr` | VirBiCoin node RPC address |
-| `port` | RPC port (default: 8329) |
-| `wsPort` | WebSocket port (default: 8330) |
-| `bulkSize` | Number of blocks to process in bulk |
-| `syncAll` | Sync all blocks from start |
-| `quiet` | Suppress console output |
-| `useRichList` | Enable rich list functionality |
-| `enableNFT` | Enable NFT tracking |
-| `enableContractVerification` | Enable contract verification |
-| `settings.useFiat` | Enable USD price display |
-| `settings.symbol` | Currency symbol |
-| `miners` | Known miner addresses and names |
 
 ## Database Setup
 
@@ -188,317 +506,135 @@ export MONGODB_URI="mongodb://explorer:<password>@localhost:27017/vbc-explorer"
 npm run dev
 
 # Start data services (in separate terminals or background)
-npm run data:start          # Start all services
-npm run data:start:sync     # Blockchain synchronization
-npm run data:start:stats    # Network statistics calculation  
-npm run data:start:rich     # Rich list calculation
-npm run data:start:tokens   # Token and NFT tracking
-npm run data:start:price    # Price monitoring
-
-# Check service status
-npm run data:status
-
-# View service logs
-npm run data:logs:sync
-npm run data:logs:stats
-npm run data:logs:rich
-npm run data:logs:tokens
+npm run data:all          # Start all services
+npm run data:sync         # Blockchain synchronization
+npm run data:stats        # Network statistics calculation  
+npm run data:richlist     # Rich list calculation
+npm run data:tokens       # Token and NFT tracking
+npm run data:price        # Price monitoring
 ```
 
-### Production Mode
+### Production Mode with PM2
 
 ```bash
-# Build and start production server
-npm run production
-
-# Or with data services
-npm run production:with-data
-
-# Manual production deployment
-npm run build               # Build optimized application
-npm start                   # Start production server
-```
-
-### Available NPM Scripts
-
-| Script | Description |
-|--------|-------------|
-| `npm run dev` | Start development server |
-| `npm run build` | Build production application |
-| `npm start` | Start production server |
-| `npm run lint` | Run ESLint checks |
-| `npm run lint:fix` | Fix ESLint issues automatically |
-| `npm test` | Run test suite |
-| **Data Management** |
-| `npm run data:start` | Start all data services |
-| `npm run data:stop` | Stop all data services |
-| `npm run data:restart` | Restart all data services |
-| `npm run data:status` | Check service status |
-| `npm run data:sync` | Initial blockchain sync |
-| `npm run data:rescan` | Rescan statistics |
-| **Individual Services** |
-| `npm run sync` | Manual blockchain sync |
-| `npm run stats` | Manual statistics calculation |
-| `npm run rich` | Manual rich list update |
-| `npm run tokens` | Manual token tracking |
-| `npm run price` | Manual price update |
-```
-
-### Production Mode
-
-```bash
-# Build the application
+# Build and start with PM2
 npm run build
+pm2 start ecosystem.config.json
 
-# Start production server
-npm start
+# Check status
+pm2 status
 
-# Or use PM2 for process management
-npm install -g pm2
-pm2 start ecosystem.config.js
+# View logs
+pm2 logs
+
+# Monitor resources
+pm2 monit
 ```
 
-### Data Management
+### Docker Deployment
 
 ```bash
-# Start all data services
-npm run data:start
+# Build and run with Docker
+docker-compose up -d
 
-# Stop all data services
-npm run data:stop
+# View logs
+docker-compose logs -f
 
-# Check service status
-npm run data:status
-
-# Initial sync
-npm run data:sync
+# Stop services
+docker-compose down
 ```
 
 ## API Endpoints
 
-### Core APIs
-- `GET /api/stats-enhanced` - Enhanced network statistics
-- `GET /api/blocks` - Latest blocks
-- `GET /api/transactions` - Latest transactions
-- `POST /api/richlist` - Account rich list (DataTables format)
+### Core Endpoints
 
-### Token APIs
-- `GET /api/tokens` - List all tokens
+- `GET /api/stats` - Network statistics
+- `GET /api/blocks` - Block list with pagination
+- `GET /api/block/[number]` - Block details
+- `GET /api/tx/[hash]` - Transaction details
+- `GET /api/address/[address]` - Address details
+- `GET /api/contract/[address]` - Contract details
+- `GET /api/tokens` - Token list
 - `GET /api/tokens/[address]` - Token details
-- `GET /api/nft/[address]` - NFT collection details
-- `GET /api/nft/[address]/metadata/[tokenId]` - NFT metadata
+- `GET /api/richlist` - Account rich list
 
-### Contract APIs
-- `GET /api/contract/[address]` - Contract verification status
-- `POST /api/contract/[address]` - Add/update contract data
-- `POST /api/contract/interact` - Interact with smart contracts
+### WebSocket Endpoints
 
-### Web3 Relay APIs
-- `POST /api/web3relay` - Blockchain data relay (transactions, addresses, blocks)
-
-### Search APIs
-- `GET /api/search/blocks-by-miner` - Search blocks by miner
-
-## Project Structure
-
-```
-├── app/                    # Next.js App Router
-│   ├── api/               # API routes (TypeScript)
-│   │   ├── blocks/        # Block APIs
-│   │   ├── transactions/  # Transaction APIs
-│   │   ├── richlist/      # Rich list API
-│   │   ├── contract/      # Contract APIs
-│   │   ├── web3relay/     # Web3 relay API
-│   │   └── ...
-│   ├── components/        # Page-specific components
-│   ├── globals.css        # Global styles
-│   └── layout.tsx         # Root layout
-├── components/            # Shared components
-├── lib/                   # Core utilities
-│   ├── models.ts          # MongoDB models (TypeScript)
-│   ├── db.ts             # Database connection
-│   ├── filters.ts        # Data filtering utilities
-│   └── etherUnits.ts     # Unit conversion
-├── tools/                 # Data sync tools (TypeScript)
-│   ├── sync.ts           # Blockchain sync
-│   ├── stats.ts          # Statistics calculation
-│   ├── richlist.ts       # Rich list generation
-│   ├── tokens.ts         # Token tracking
-│   └── price.ts          # Price monitoring
-├── public/                # Static assets
-└── types/                 # TypeScript definitions
-```
-
-## Features
-
-### NFT Support
-- **VRC-721 & VRC-1155** token tracking
-- **Metadata retrieval** from IPFS and HTTP
-- **Image caching** with fallback handling
-- **Token holder tracking** and transfer history
-- **Collection statistics** and floor prices
-
-### Contract Verification
-- **Source code compilation** with multiple Solidity versions
-- **Bytecode comparison** for verification
-- **ABI generation** and storage
-- **Contract interaction** interface
-- **Verification status** tracking
-
-### Rich List
-- **Account balance** tracking
-- **Percentage of supply** calculations
-- **Ranking system** by balance
-- **Real-time updates** from blockchain
-- **DataTables integration** for pagination
-
-### Advanced Statistics
-- **Network hashrate** and difficulty
-- **Block time** calculations
-- **Transaction statistics**
-- **Mining pool** information
-- **Active miners** tracking
-- **Average gas price** monitoring
-
-### Price Tracking
-- **Real-time VBC price** from multiple APIs
-- **USD and BTC** price pairs
-- **Automatic updates** every 5 minutes
-- **Fallback data** when APIs are unavailable
-- **Transaction fee** calculations in USD
-
-## Development
-
-### Adding New Features
-
-1. **Create new API route**
-```typescript
-// app/api/new-feature/route.ts
-import { NextRequest, NextResponse } from 'next/server';
-import { connectToDatabase } from '@/lib/db';
-
-export async function GET(request: NextRequest) {
-  await connectToDatabase();
-  // Implementation
-  return NextResponse.json({ data: 'example' });
-}
-```
-
-2. **Add database model**
-```typescript
-// lib/models.ts
-import mongoose, { Document, Schema } from 'mongoose';
-
-export interface INewFeature extends Document {
-  // Interface definition
-}
-
-const NewFeatureSchema = new Schema<INewFeature>({
-  // Schema definition
-});
-
-export const NewFeature = mongoose.model<INewFeature>('NewFeature', NewFeatureSchema);
-```
-
-3. **Create frontend page**
-```typescript
-// app/new-feature/page.tsx
-export default function NewFeaturePage() {
-  // Component implementation
-}
-```
-
-### TypeScript Configuration
-
-The project uses strict TypeScript configuration with:
-- **Strict mode** enabled
-- **Path mapping** for clean imports
-- **ESLint integration** for code quality
-- **Next.js App Router** type safety
-
-## Docker Installation
-
-1. **Set node address in config.json**
-```json
-{
-  "nodeAddr": "host.docker.internal"
-}
-```
-
-2. **Run with Docker Compose**
-```bash
-docker-compose up -d
-```
-
-3. **Access the application**
-```
-http://localhost:3000
-```
-
-## Environment Variables
-
-```bash
-# Database
-MONGODB_URI=mongodb://localhost:27017/vbc-explorer
-
-# Blockchain
-VBC_NODE_URL=http://localhost:8329
-VBC_WS_URL=ws://localhost:8330
-
-# API
-NEXT_PUBLIC_API_URL=http://localhost:3000
-NEXT_PUBLIC_EXPLORER_URL=https://explorer.digitalregion.jp
-
-# Features
-ENABLE_NFT=true
-ENABLE_CONTRACT_VERIFICATION=true
-ENABLE_RICHLIST=true
-```
+- `ws://localhost:3000/api/ws` - Real-time updates
 
 ## Troubleshooting
 
 ### Common Issues
 
-1. **Cannot connect to VirBiCoin node**
+1. **MongoDB Connection Error**
 ```bash
-# Check node status
+# Check MongoDB status
+sudo systemctl status mongod
+
+# Restart MongoDB
+sudo systemctl restart mongod
+```
+
+2. **VirBiCoin Node Connection Error**
+```bash
+# Test RPC connection
 curl -X POST -H "Content-Type: application/json" \
      --data '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' \
      http://localhost:8329
 ```
 
-2. **MongoDB connection issues**
+3. **PM2 Service Issues**
 ```bash
-# Verify MongoDB is running
-mongosh --eval "db.runCommand('ping')"
+# Check PM2 status
+pm2 status
+
+# View detailed logs
+pm2 logs --lines 100
+
+# Restart specific service
+pm2 restart vbc-explorer-web
 ```
 
-3. **Build errors**
+4. **Memory Issues (1GB RAM)**
 ```bash
-# Clear Next.js cache
-rm -rf .next
-npm run build
+# Check memory usage
+pm2 monit
+
+# Restart with memory optimization
+pm2 restart ecosystem.config.json
 ```
 
-4. **TypeScript errors**
+### Performance Optimization
+
+For low-resource environments (1GB RAM):
+
+1. **Reduce batch sizes in .env**
 ```bash
-# Check TypeScript compilation
-npx tsc --noEmit
+BATCH_SIZE=25
+MAX_BLOCKS_PER_RUN=50
 ```
 
-5. **Price data not updating**
+2. **Enable swap**
 ```bash
-# Check price tool logs
-npm run price -- --once
+# Create swap file
+sudo fallocate -l 2G /swapfile
+sudo chmod 600 /swapfile
+sudo mkswap /swapfile
+sudo swapon /swapfile
+```
+
+3. **Monitor resources**
+```bash
+pm2 monit
 ```
 
 ## Contributing
 
 1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
 ## License
 
@@ -506,12 +642,14 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Support
 
-- **Documentation**: [DATA_MANAGEMENT.md](DATA_MANAGEMENT.md)
+- **Documentation**: [GitHub Wiki](https://github.com/virbicoin/vbc-explorer/wiki)
 - **Issues**: [GitHub Issues](https://github.com/virbicoin/vbc-explorer/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/virbicoin/vbc-explorer/discussions)
+- **Live Demo**: [explorer.digitalregion.jp](https://explorer.digitalregion.jp)
 
 ## Acknowledgments
 
-- Built on the foundation of Ethereum Classic Explorer
-- VirBiCoin community for testing and feedback
-- Open source contributors and maintainers
+- **VirBiCoin Community** - For blockchain network support
+- **Next.js Team** - For the amazing React framework
+- **MongoDB Team** - For the robust database solution
+- **Web3.js Team** - For blockchain interaction libraries

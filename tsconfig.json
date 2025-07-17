@@ -23,5 +23,5 @@
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts", "postcss.config.mjs"],
-  "exclude": ["node_modules", "lib/etherUnits.ts", "tools/stats.ts", "tools/richlist.ts", "tools/sync.ts"]
+  "exclude": ["node_modules", "lib/etherUnits.ts", "tools/stats.ts", "tools/richlist.ts"]
 }

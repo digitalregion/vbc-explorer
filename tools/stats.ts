@@ -10,12 +10,38 @@ import { connectDB, Block, BlockStat, IBlock, IBlockStat } from '../models/index
 // Initialize database connection
 const initDB = async () => {
   try {
+    // 軽量化されたDB接続設定
+    const connectionOptions = {
+      maxPoolSize: 5, // 10→5に削減
+      serverSelectionTimeoutMS: 5000,
+      socketTimeoutMS: 30000,
+      bufferCommands: false,
+      autoIndex: false, // インデックス自動作成を無効化
+    };
+    
     await connectDB();
     console.log('Database connection initialized successfully');
   } catch (error) {
     console.error('Failed to connect to database:', error);
     process.exit(1);
   }
+};
+
+// メモリ監視機能を追加
+const checkMemory = () => {
+  const usage = process.memoryUsage();
+  const usedMB = Math.round(usage.heapUsed / 1024 / 1024);
+  const limitMB = 256; // 256MB制限
+  
+  if (usedMB > limitMB) {
+    console.log(`⚠️  Memory usage: ${usedMB}MB (limit: ${limitMB}MB)`);
+    if (global.gc) {
+      global.gc();
+      console.log('🧹 Garbage collection executed');
+    }
+    return false;
+  }
+  return true;
 };
 
 // Utility functions for web3 v4 type conversions
@@ -56,7 +82,7 @@ interface BlockStatData {
 const config: Config = {
   nodeAddr: 'localhost',
   port: 8329,
-  bulkSize: 100,
+  bulkSize: 50, // 100→50に削減
   quiet: false
 };
 
@@ -96,7 +122,7 @@ const updateStats = async (range: number, interval: number, rescan: boolean): Pr
 
   interval = Math.abs(parseInt(interval.toString()));
   if (!range) {
-    range = 1000;
+    range = 500; // 1000→500に削減
   }
   range *= interval;
   if (interval >= 10) {
@@ -134,6 +160,12 @@ const getStats = async function (
       process.exit(9);
     }
     return;
+  }
+
+  // メモリ監視を追加
+  if (!checkMemory()) {
+    console.log('💾 Memory limit reached, pausing stats processing for 3 seconds');
+    await new Promise(resolve => setTimeout(resolve, 3000));
   }
 
   try {
@@ -224,11 +256,11 @@ const checkBlockDBExistsThenWrite = async function (
 };
 
 // Configuration for statistics calculation
-const minutes = 1;
+const minutes = 2; // 1→2分に延長
 const statInterval = minutes * 60 * 1000;
 
 let rescan = false; /* rescan: true - rescan range */
-let range = 1000;
+let range = 500; // 1000→500に削減
 let interval = 100;
 
 /**
@@ -294,5 +326,8 @@ const main = async (): Promise<void> => {
   }
 };
 
-// Start the stats calculator
-main();
+export { main };
+
+if (require.main === module) {
+  main();
+}

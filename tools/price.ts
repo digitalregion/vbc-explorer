@@ -255,6 +255,12 @@ Options:
   }
 };
 
+export { main };
+
+if (require.main === module) {
+  main();
+}
+
 // Handle process termination
 process.on('SIGINT', () => {
   console.log('\nPrice monitoring stopped');
@@ -264,10 +270,4 @@ process.on('SIGINT', () => {
 process.on('SIGTERM', () => {
   console.log('\nPrice monitoring stopped');
   process.exit(0);
-});
-
-// Run the main function
-main().catch((error) => {
-  console.error('Fatal error:', error);
-  process.exit(1);
 }); 

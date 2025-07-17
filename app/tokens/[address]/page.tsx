@@ -41,6 +41,13 @@ interface TokenData {
   }>;
 }
 
+// アドレス省略表示関数（SystemやMining Rewardはそのまま表示）
+const formatAddress = (address: string) => {
+  if (!address) return 'N/A';
+  if (address === 'System' || address === 'Mining Reward') return address;
+  return `${address.slice(0, 8)}...${address.slice(-6)}`;
+};
+
 export default function TokenDetailPage({ params }: { params: Promise<{ address: string }> }) {
   const [address, setAddress] = useState<string>('');
   const [tokenData, setTokenData] = useState<TokenData | null>(null);
@@ -285,7 +292,7 @@ export default function TokenDetailPage({ params }: { params: Promise<{ address:
                           href={`/address/${holder.address}`}
                           className='font-mono text-blue-400 hover:text-blue-300 transition-colors break-all'
                         >
-                          {holder.address}
+                          {formatAddress(holder.address)}
                         </Link>
                       </td>
                       <td className='py-3 px-4 text-green-400 font-bold'>{holder.balance}</td>
@@ -336,20 +343,28 @@ export default function TokenDetailPage({ params }: { params: Promise<{ address:
                         </Link>
                       </td>
                       <td className='py-3 px-4'>
-                        <Link
-                          href={`/address/${transfer.from}`}
-                          className='font-mono text-gray-300 text-sm hover:text-blue-300 transition-colors'
-                        >
-                          {transfer.from?.substring(0, 6)}...{transfer.from?.substring(transfer.from.length - 4)}
-                        </Link>
+                        {transfer.from === 'System' ? (
+                          <span className="text-gray-400 font-mono text-sm">System</span>
+                        ) : (
+                          <Link
+                            href={`/address/${transfer.from}`}
+                            className="text-blue-400 hover:text-blue-300 font-mono text-sm"
+                          >
+                            {formatAddress(transfer.from)}
+                          </Link>
+                        )}
                       </td>
                       <td className='py-3 px-4'>
-                        <Link
-                          href={`/address/${transfer.to}`}
-                          className='font-mono text-gray-300 text-sm hover:text-blue-300 transition-colors'
-                        >
-                          {transfer.to?.substring(0, 6)}...{transfer.to?.substring(transfer.to.length - 4)}
-                        </Link>
+                        {transfer.to === 'System' ? (
+                          <span className="text-gray-400 font-mono text-sm">System</span>
+                        ) : (
+                          <Link
+                            href={`/address/${transfer.to}`}
+                            className="text-blue-400 hover:text-blue-300 font-mono text-sm"
+                          >
+                            {formatAddress(transfer.to)}
+                          </Link>
+                        )}
                       </td>
                       <td className='py-3 px-4 text-green-400 font-bold'>{transfer.value}</td>
                       <td className='py-3 px-4 text-gray-400 text-sm'>{transfer.timeAgo}</td>

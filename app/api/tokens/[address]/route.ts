@@ -48,18 +48,8 @@ const tokenTransferSchema = new mongoose.Schema({
   timestamp: Date
 }, { collection: 'tokentransfers' });
 
-// Token holder schema
-const tokenHolderSchema = new mongoose.Schema({
-  tokenAddress: String,
-  holderAddress: String,
-  balance: String,
-  percentage: Number,
-  rank: Number
-}, { collection: 'tokenholders' });
-
 const Token = mongoose.models.Token || mongoose.model('Token', tokenSchema);
 const TokenTransfer = mongoose.models.TokenTransfer || mongoose.model('TokenTransfer', tokenTransferSchema);
-const TokenHolder = mongoose.models.TokenHolder || mongoose.model('TokenHolder', tokenHolderSchema);
 
 // Define a strict type for our token data to be used in this API route
 interface ApiToken {
@@ -186,15 +176,14 @@ export async function GET(
       .sort({ rank: 1 })
       .limit(50)
       .toArray();
-    
 
-
-    // Get recent transfers - use case-insensitive match
-    const transfers = await TokenTransfer.find({
+    // Get recent transfers - use case-insensitive match (use direct db access for consistency)
+    const transfers = await db.collection('tokentransfers').find({
       tokenAddress: { $regex: new RegExp(`^${address}$`, 'i') }
     })
       .sort({ timestamp: -1 })
-      .limit(50);
+      .limit(50)
+      .toArray();
 
     // Calculate real statistics from database for non-native tokens
     let realHolders = 0;
@@ -204,24 +193,20 @@ export async function GET(
     
     if (token.type !== 'Native') {
       // Get actual holder count
-      realHolders = await TokenHolder.countDocuments({
+      realHolders = await db.collection('tokenholders').countDocuments({
         tokenAddress: { $regex: new RegExp(`^${address}$`, 'i') }
       });
-      
       // Get actual transfer count
-      realTransfers = await TokenTransfer.countDocuments({
+      realTransfers = await db.collection('tokentransfers').countDocuments({
         tokenAddress: { $regex: new RegExp(`^${address}$`, 'i') }
       });
-
       // For VRC-721 tokens, update the supply with actual mint count
       if (token.type === 'VRC-721') {
         try {
-          mintCount = await TokenTransfer.countDocuments({
+          mintCount = await db.collection('tokentransfers').countDocuments({
             tokenAddress: { $regex: new RegExp(`^${address}$`, 'i') },
             from: '0x0000000000000000000000000000000000000000'
           });
-          
-          // Use database totalSupply if available and greater than 0, otherwise use mintCount
           if (token.totalSupply && token.totalSupply !== '0') {
             realSupply = token.totalSupply;
           } else if (token.supply && token.supply !== '0') {
@@ -229,92 +214,31 @@ export async function GET(
           } else {
             realSupply = mintCount.toString();
           }
-          
-          // Update token object
           token.supply = realSupply;
           token.totalSupply = realSupply;
-              } catch {
-        console.error('Error counting mints');
+        } catch {
+          console.error('Error counting mints');
+        }
       }
-      }
-      // Update token object with real values
       token.holders = realHolders;
     }
 
-    // Calculate age in days with improved accuracy
-    let ageInDays = 0;
-    if (token.type === 'Native') {
-      // For native VBC, we don't show age
-      ageInDays = -1; // Special value to indicate N/A
-    } else {
-      // Get all transfers to find the earliest activity
-      const allTransfers = await TokenTransfer.find({
+    // Calculate age in days using the timestamp of the first TokenTransfer only
+    let ageInDays: string | number = 'N/A';
+    if (token.type !== 'Native') {
+      // Always use the earliest TokenTransfer timestamp for age calculation
+      const earliestTransfer = await TokenTransfer.findOne({
         tokenAddress: { $regex: new RegExp(`^${address}$`, 'i') }
-      }).sort({ timestamp: 1 }).limit(500); // Get first 500 transfers for better accuracy
-      
-      console.log(`Token ${address} found ${allTransfers.length} transfers for age calculation`);
-      
-      if (allTransfers.length > 0) {
-        // Find the earliest transfer timestamp
-        const earliestTransfer = allTransfers[0];
-        const latestTransfer = allTransfers[allTransfers.length - 1];
-        
-        console.log(`Token ${address} earliest transfer:`, earliestTransfer);
-        console.log(`Token ${address} latest transfer:`, latestTransfer);
-        
-        if (earliestTransfer && earliestTransfer.timestamp) {
-          const earliestTime = new Date(earliestTransfer.timestamp).getTime();
-          const now = Date.now();
-          const diffMs = now - earliestTime;
-          ageInDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-          
-          // Additional validation: if the calculated age seems too low but we have recent transfers,
-          // use the latest transfer as a reference point
-          if (ageInDays < 30 && allTransfers.length > 1) {
-            const latestTime = new Date(latestTransfer.timestamp).getTime();
-            const latestDiffMs = now - latestTime;
-            const latestAgeInDays = Math.floor(latestDiffMs / (1000 * 60 * 60 * 24));
-            
-            console.log(`Token ${address} age validation:`, {
-              calculatedAge: ageInDays,
-              latestTransferAge: latestAgeInDays,
-              totalTransfers: allTransfers.length
-            });
-            
-            // If latest transfer shows older age, use that as minimum
-            if (latestAgeInDays > ageInDays) {
-              ageInDays = Math.max(ageInDays, latestAgeInDays);
-              console.log(`Token ${address} adjusted age to:`, ageInDays);
-            }
-          }
-          
-          console.log(`Token ${address} final age calculation:`, {
-            earliestTime: new Date(earliestTime),
-            now: new Date(now),
-            diffMs,
-            ageInDays,
-            totalTransfersAnalyzed: allTransfers.length,
-            earliestTransferHash: earliestTransfer.transactionHash,
-            latestTransferHash: latestTransfer.transactionHash
-          });
-        } else {
-          // Fallback to token.createdAt if no valid transfers found
-          ageInDays = token.createdAt ? Math.floor((Date.now() - new Date(token.createdAt).getTime()) / (1000 * 60 * 60 * 24)) : 0;
-          console.log(`Token ${address} using fallback age calculation:`, {
-            createdAt: token.createdAt,
-            ageInDays
-          });
-        }
-      } else {
-        // Fallback to token.createdAt if no transfers found
-        ageInDays = token.createdAt ? Math.floor((Date.now() - new Date(token.createdAt).getTime()) / (1000 * 60 * 60 * 24)) : 0;
-        console.log(`Token ${address} using fallback age calculation:`, {
-          createdAt: token.createdAt,
-          ageInDays
-        });
+      }).sort({ timestamp: 1 });
+
+      if (earliestTransfer && earliestTransfer.timestamp) {
+        // Use the timestamp of the first transfer
+        const earliestTime = new Date(earliestTransfer.timestamp).getTime();
+        const now = Date.now();
+        ageInDays = Math.floor((now - earliestTime) / (1000 * 60 * 60 * 24));
       }
     }
-
+    
     // Format total supply
     const formatTokenAmount = (amount: string, decimals: number = 18) => {
       if (!amount || amount === 'N/A') return amount;
@@ -385,7 +309,7 @@ export async function GET(
               ? (chainStats as { totalTransactions: number }).totalTransactions
               : 0)
           : realTransfers,
-        age: ageInDays === -1 ? 'N/A' : ageInDays,
+        age: ageInDays,
         marketCap: 'N/A' // Will need external API for price data
       },
       holders: token.type === 'Native' ? [] : holders.map((holder: Record<string, unknown>) => ({
@@ -397,7 +321,8 @@ export async function GET(
       })),
       transfers: token.type === 'Native' ? [] : transfers.map((transfer: Record<string, unknown>) => ({
         hash: transfer.transactionHash as string,
-        from: transfer.from as string,
+        // If from is zero address, show as 'System' for frontend display
+        from: (transfer.from as string) === '0x0000000000000000000000000000000000000000' ? 'System' : transfer.from as string,
         to: transfer.to as string,
         value: formatTokenAmount(transfer.value as string, token.decimals || (isNFT ? 0 : 18)),
         valueRaw: transfer.value as string,

@@ -1,0 +1,136 @@
+{
+  "apps": [
+    {
+      "name": "vbc-explorer-web",
+      "script": "npm",
+      "args": "start",
+      "cwd": ".",
+      "env": {
+        "NODE_ENV": "production",
+        "NODE_OPTIONS": "--max-old-space-size=512"
+      },
+      "max_memory_restart": "1024M",
+      "instances": 1,
+      "exec_mode": "fork",
+      "autorestart": true,
+      "watch": false,
+      "max_restarts": 5,
+      "min_uptime": "30s",
+      "restart_delay": 10000,
+      "log_file": "./logs/web.log",
+      "out_file": "./logs/web-out.log",
+      "error_file": "./logs/web-error.log",
+      "log_date_format": "YYYY-MM-DD HH:mm:ss Z"
+    },
+    {
+      "name": "vbc-sync",
+      "script": "npx",
+      "args": "ts-node --project tsconfig.tools.json tools/sync.ts sync",
+      "cwd": ".",
+      "env": {
+        "NODE_ENV": "production",
+        "NODE_OPTIONS": "--max-old-space-size=512"
+      },
+      "max_memory_restart": "1024M",
+      "instances": 1,
+      "exec_mode": "fork",
+      "autorestart": true,
+      "watch": false,
+      "max_restarts": 3,
+      "min_uptime": "60s",
+      "restart_delay": 30000,
+      "log_file": "./logs/sync.log",
+      "out_file": "./logs/sync-out.log",
+      "error_file": "./logs/sync-error.log",
+      "log_date_format": "YYYY-MM-DD HH:mm:ss Z"
+    },
+    {
+      "name": "vbc-stats",
+      "script": "npx",
+      "args": "ts-node --project tsconfig.tools.json tools/sync.ts stats",
+      "cwd": ".",
+      "env": {
+        "NODE_ENV": "production",
+        "NODE_OPTIONS": "--max-old-space-size=512"
+      },
+      "max_memory_restart": "1024M",
+      "instances": 1,
+      "exec_mode": "fork",
+      "autorestart": true,
+      "watch": false,
+      "max_restarts": 3,
+      "min_uptime": "60s",
+      "restart_delay": 20000,
+      "log_file": "./logs/stats.log",
+      "out_file": "./logs/stats-out.log",
+      "error_file": "./logs/stats-error.log",
+      "log_date_format": "YYYY-MM-DD HH:mm:ss Z"
+    },
+    {
+      "name": "vbc-richlist",
+      "script": "npx",
+      "args": "ts-node --project tsconfig.tools.json tools/sync.ts richlist",
+      "cwd": ".",
+      "env": {
+        "NODE_ENV": "production",
+        "NODE_OPTIONS": "--max-old-space-size=512"
+      },  
+      "max_memory_restart": "1024M",
+      "instances": 1,
+      "exec_mode": "fork",
+      "autorestart": true,
+      "watch": false,
+      "max_restarts": 2,
+      "min_uptime": "120s",
+      "restart_delay": 60000,
+      "log_file": "./logs/richlist.log",
+      "out_file": "./logs/richlist-out.log",
+      "error_file": "./logs/richlist-error.log",
+      "log_date_format": "YYYY-MM-DD HH:mm:ss Z"
+    },
+    {
+      "name": "vbc-tokens",
+      "script": "npx",
+      "args": "ts-node --project tsconfig.tools.json tools/sync.ts tokens",
+      "cwd": ".",
+      "env": {
+        "NODE_ENV": "production",
+        "NODE_OPTIONS": "--max-old-space-size=512"
+      },
+      "max_memory_restart": "1024M",
+      "instances": 1,
+      "exec_mode": "fork",
+      "autorestart": true,
+      "watch": false,
+      "max_restarts": 2,
+      "min_uptime": "120s",
+      "restart_delay": 45000,
+      "log_file": "./logs/tokens.log",
+      "out_file": "./logs/tokens-out.log",
+      "error_file": "./logs/tokens-error.log",
+      "log_date_format": "YYYY-MM-DD HH:mm:ss Z"
+    },
+    {
+      "name": "vbc-price",
+      "script": "npx",
+      "args": "ts-node --project tsconfig.tools.json tools/sync.ts price",
+      "cwd": ".",
+      "env": {
+        "NODE_ENV": "production",
+        "NODE_OPTIONS": "--max-old-space-size=512"
+      },
+      "max_memory_restart": "1024M",
+      "instances": 1,
+      "exec_mode": "fork",
+      "autorestart": true,
+      "watch": false,
+      "max_restarts": 2,
+      "min_uptime": "180s",
+      "restart_delay": 90000,
+      "log_file": "./logs/price.log",
+      "out_file": "./logs/price-out.log",
+      "error_file": "./logs/price-error.log",
+      "log_date_format": "YYYY-MM-DD HH:mm:ss Z"
+    }
+  ]
+}

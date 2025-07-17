@@ -81,6 +81,13 @@ interface ImageLoadState {
   [tokenId: number]: 'loading' | 'loaded' | 'error' | 'initial';
 }
 
+// アドレス省略表示関数（SystemやMining Rewardはそのまま表示）
+const formatAddress = (address: string) => {
+  if (!address) return 'N/A';
+  if (address === 'System' || address === 'Mining Reward') return address;
+  return `${address.slice(0, 8)}...${address.slice(-6)}`;
+};
+
 export default function NFTDetailPage({ params }: { params: Promise<{ address: string }> }) {
   const [nftData, setNftData] = useState<NFTData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -314,14 +321,28 @@ export default function NFTDetailPage({ params }: { params: Promise<{ address: s
                           </Link>
                         </td>
                         <td className='py-2'>
-                          <Link href={`/address/${transfer.from}`} className='text-blue-400 hover:text-blue-300 font-mono text-sm'>
-                            {transfer.from.slice(0, 8)}...{transfer.from.slice(-8)}
-                          </Link>
+                          {transfer.from === 'System' ? (
+                            <span className="text-gray-400 font-mono text-sm">System</span>
+                          ) : (
+                            <Link
+                              href={`/address/${transfer.from}`}
+                              className="text-blue-400 hover:text-blue-300 font-mono text-sm"
+                            >
+                              {formatAddress(transfer.from)}
+                            </Link>
+                          )}
                         </td>
                         <td className='py-2'>
-                          <Link href={`/address/${transfer.to}`} className='text-blue-400 hover:text-blue-300 font-mono text-sm'>
-                            {transfer.to.slice(0, 8)}...{transfer.to.slice(-8)}
-                          </Link>
+                          {transfer.to === 'System' ? (
+                            <span className="text-gray-400 font-mono text-sm">System</span>
+                          ) : (
+                            <Link
+                              href={`/address/${transfer.to}`}
+                              className="text-blue-400 hover:text-blue-300 font-mono text-sm"
+                            >
+                              {formatAddress(transfer.to)}
+                            </Link>
+                          )}
                         </td>
                         <td className='py-2 text-gray-300'>{transfer.tokenId}</td>
                         <td className='py-2 text-gray-400 text-sm'>
@@ -513,7 +534,7 @@ export default function NFTDetailPage({ params }: { params: Promise<{ address: s
                       <div className='flex items-center justify-between mb-3'>
                         <span className='text-gray-400'>Owner:</span>
                         <Link href={`/address/${holder.address}`} className='text-blue-400 hover:text-blue-300 font-mono text-sm break-all'>
-                          {holder.address}
+                          {formatAddress(holder.address)}
                         </Link>
                       </div>
                       <div className='flex items-center justify-between mb-3'>

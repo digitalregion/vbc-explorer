@@ -16,6 +16,23 @@ if (!cached) {
   cached = (global as Record<string, unknown>).mongoose = { conn: null, promise: null };
 }
 
+// 軽量化されたMongoDB接続オプション
+const getOptimizedOptions = () => {
+  const isLowMemory = process.env.NODE_OPTIONS?.includes('256') || process.env.LOW_MEMORY === 'true';
+  
+  return {
+    bufferCommands: false,
+    maxPoolSize: isLowMemory ? 5 : 8, // 10→8、軽量時は5
+    serverSelectionTimeoutMS: isLowMemory ? 3000 : 5000,
+    socketTimeoutMS: isLowMemory ? 30000 : 45000,
+    family: 4, // Use IPv4
+    connectTimeoutMS: isLowMemory ? 5000 : 10000,
+    // 軽量化: 不要な機能を無効化
+    autoIndex: false,
+    autoCreate: false,
+  };
+};
+
 async function dbConnect() {
   // Ensure cached is defined
   if (!cached) {
@@ -29,11 +46,11 @@ async function dbConnect() {
 
   // If there's a connection attempt in progress, wait for it
   if (cached.promise) {
-    cached.conn = await cached.promise;
-    return cached.conn;
+    const conn = await cached.promise;
+    return conn;
   }
 
-  // Check if there's a cached connection
+  // If we have a cached connection, use it
   if (cached.conn) {
     return cached.conn;
   }
@@ -41,12 +58,8 @@ async function dbConnect() {
   try {
     // Only create new connection if absolutely necessary
     if (mongoose.connection.readyState === mongoose.ConnectionStates.disconnected) {
-      cached.promise = (mongoose.connect(MONGODB_URI, {
-        bufferCommands: false,
-        maxPoolSize: 10,
-        serverSelectionTimeoutMS: 5000,
-        socketTimeoutMS: 45000,
-      }) as unknown) as Promise<mongoose.Connection>;
+      const opts = getOptimizedOptions();
+      cached.promise = (mongoose.connect(MONGODB_URI, opts) as unknown) as Promise<mongoose.Connection>;
       cached.conn = await cached.promise;
     } else {
       // Use existing connection
@@ -62,6 +75,14 @@ async function dbConnect() {
 
     cached.promise = null;
     throw error;
+  }
+}
+
+// 軽量化: 接続プールのクリーンアップ
+export async function dbDisconnect() {
+  if (mongoose.connection.readyState !== mongoose.ConnectionStates.disconnected) {
+    await mongoose.disconnect();
+    console.log('✅ MongoDB disconnected');
   }
 }
 

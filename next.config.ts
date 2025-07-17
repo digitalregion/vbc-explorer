@@ -6,6 +6,25 @@ const nextConfig: NextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
+  
+  // 本番環境でのメモリ最適化
+  experimental: {
+    // メモリ使用量を削減
+    optimizePackageImports: ['react', 'react-dom'],
+  },
+  
+  // 外部パッケージ設定（experimental から移動）
+  serverExternalPackages: ['mongoose', 'web3'],
+  
+  // 軽量化設定
+  compiler: {
+    // 未使用コードの削除
+    removeConsole: process.env.NODE_ENV === 'production',
+  },
+  
+  // バンドルサイズ最適化
+  bundlePagesRouterDependencies: true,
+  
   env: {
     MONGODB_URI: process.env.MONGODB_URI,
     PORT: process.env.PORT,

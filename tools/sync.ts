@@ -8,16 +8,46 @@ This file will start syncing the blockchain from the VirBiCoin node
 import Web3 from 'web3';
 import type { Transaction as Web3Transaction, Block as Web3Block, TransactionReceipt } from 'web3-types';
 import { connectDB, Block, Transaction, IBlock, ITransaction } from '../models/index';
+import { main as statsMain } from './stats';
+import { main as richlistMain } from './richlist';
+import { main as tokensMain } from './tokens';
+import { main as priceMain } from './price';
 
 // Initialize database connection
 const initDB = async () => {
   try {
+    // 軽量化されたDB接続設定
+    const connectionOptions = {
+      maxPoolSize: 5, // 10→5に削減
+      serverSelectionTimeoutMS: 5000,
+      socketTimeoutMS: 30000,
+      bufferCommands: false,
+      autoIndex: false, // インデックス自動作成を無効化
+    };
+    
     await connectDB();
     console.log('Database connection initialized successfully');
   } catch (error) {
     console.error('Failed to connect to database:', error);
     process.exit(1);
   }
+};
+
+// メモリ監視機能を追加
+const checkMemory = () => {
+  const usage = process.memoryUsage();
+  const usedMB = Math.round(usage.heapUsed / 1024 / 1024);
+  const limitMB = 256; // 256MB制限
+  
+  if (usedMB > limitMB) {
+    console.log(`⚠️  Memory usage: ${usedMB}MB (limit: ${limitMB}MB)`);
+    if (global.gc) {
+      global.gc();
+      console.log('🧹 Garbage collection executed');
+    }
+    return false;
+  }
+  return true;
 };
 
 // Utility functions for web3 v4 type conversions
@@ -99,7 +129,7 @@ const config: Config = {
   nodeAddr: 'localhost',
   port: 8329,
   wsPort: 8330,
-  bulkSize: 100,
+  bulkSize: 50, // 100→50に削減
   syncAll: false,
   patch: false,
   quiet: false,
@@ -419,6 +449,12 @@ const syncChain = async function (startBlock?: number, endBlock?: number): Promi
   let skippedCount = 0;
 
   for (let blockNum = startBlock; blockNum <= endBlock; blockNum++) {
+    // メモリ監視を追加
+    if (!checkMemory()) {
+      console.log('💾 Memory limit reached, pausing sync for 5 seconds');
+      await new Promise(resolve => setTimeout(resolve, 5000));
+    }
+
     try {
       // Check if block already exists in DB
       const existingBlock = await Block.findOne({ number: blockNum }).lean();
@@ -444,6 +480,11 @@ const syncChain = async function (startBlock?: number, endBlock?: number): Promi
       if ((blockNum - startBlock) % config.bulkSize === 0) {
         await writeBlockToDB(null, true);
         await writeTransactionsToDB(null, true);
+        
+        // バッチ処理後にGC実行
+        if (global.gc) {
+          global.gc();
+        }
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -536,5 +577,42 @@ process.on('SIGINT', async () => {
   process.exit(0);
 });
 
-// Start the syncer
-main();
+const runAll = async () => {
+  // 各mainを並列で実行
+  await Promise.all([
+    main(),         // sync
+    statsMain(),    // stats
+    richlistMain(), // richlist
+    tokensMain(),   // tokens
+    priceMain()     // price
+  ]);
+};
+
+if (require.main === module) {
+  const mode = process.argv[2] || 'sync';
+  (async () => {
+    switch (mode) {
+      case 'sync':
+        await main();
+        break;
+      case 'stats':
+        await statsMain();
+        break;
+      case 'richlist':
+        await richlistMain();
+        break;
+      case 'tokens':
+        await tokensMain();
+        break;
+      case 'price':
+        await priceMain();
+        break;
+      case 'all':
+        await runAll();
+        break;
+      default:
+        console.log('Usage: node tools/sync.js [sync|stats|richlist|tokens|price|all]');
+        process.exit(1);
+    }
+  })();
+}
