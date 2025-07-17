@@ -37,7 +37,7 @@ const config: Config = {
   nodeAddr: 'localhost',
   port: 8329,
   quiet: false,
-  priceUpdateInterval: 5 * 60 * 1000 // 5 minutes
+  priceUpdateInterval: 15 * 60 * 1000 // 15 minutes (5分→15分に延長)
 };
 
 // Try to load config.json

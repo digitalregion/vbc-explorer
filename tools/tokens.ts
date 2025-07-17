@@ -67,7 +67,7 @@ async function disconnect() {
 const WEB3_PROVIDER_URL = 'http://localhost:8329'; // Gvbc/Geth RPC endpoint
 const START_BLOCK = 0; // Default start block if no sync state is found
 const BLOCKS_PER_BATCH = 100; // Process blocks in batches
-const SCAN_INTERVAL_MS = 60000; // 1 minute
+const SCAN_INTERVAL_MS = 300000; // 5 minutes (1分→5分に延長)
 
 const web3 = new Web3(new Web3.providers.HttpProvider(WEB3_PROVIDER_URL));
 

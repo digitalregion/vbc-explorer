@@ -464,8 +464,25 @@ const main = async (): Promise<void> => {
     console.log('Connected to VirBiCoin node successfully');
     console.log('Starting richlist calculation...');
 
+    // Initial calculation
     await startSync();
     await updatePercentages(); // percentage計算・保存を追加
+
+    // Set up periodic updates (every 30 minutes)
+    const RICHLIST_UPDATE_INTERVAL = 30 * 60 * 1000; // 30 minutes
+    console.log(`Richlist will update every ${RICHLIST_UPDATE_INTERVAL / 1000 / 60} minutes`);
+
+    setInterval(async () => {
+      try {
+        console.log('Starting periodic richlist update...');
+        await startSync();
+        await updatePercentages();
+        console.log('Periodic richlist update completed');
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.log(`Error in periodic richlist update: ${errorMessage}`);
+      }
+    }, RICHLIST_UPDATE_INTERVAL);
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
