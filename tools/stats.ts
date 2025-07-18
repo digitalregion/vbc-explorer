@@ -84,7 +84,7 @@ const config: Config = {
   quiet: false
 };
 
-// Try to load config.json
+// Try to load config.json, fallback to config.example.json
 try {
   const local = require('../config.json');
   Object.assign(config, local);
@@ -96,7 +96,19 @@ try {
     console.log('📄 MongoDB URI set from config.json');
   }
 } catch (error) {
-  console.log('📄 No config file found. Using default configuration...');
+  try {
+    const local = require('../config.example.json');
+    Object.assign(config, local);
+    console.log('📄 config.example.json found (fallback).');
+    
+    // Set MongoDB URI from config if available
+    if (local.database && local.database.uri) {
+      process.env.MONGODB_URI = local.database.uri;
+      console.log('📄 MongoDB URI set from config.example.json');
+    }
+  } catch (fallbackError) {
+    console.log('📄 No config files found. Using default configuration...');
+  }
 }
 
 // Initialize database connection after config is loaded

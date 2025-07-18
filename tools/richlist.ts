@@ -58,13 +58,19 @@ const config: Config = {
   quiet: false
 };
 
-// Try to load config.json
+// Try to load config.json, fallback to config.example.json
 try {
   const local = require('../config.json');
   Object.assign(config, local);
   console.log('📄 config.json found.');
 } catch (error) {
-  console.log('📄 No config file found. Using default configuration...');
+  try {
+    const local = require('../config.example.json');
+    Object.assign(config, local);
+    console.log('📄 config.example.json found (fallback).');
+  } catch (fallbackError) {
+    console.log('📄 No config files found. Using default configuration...');
+  }
 }
 
 console.log(`🔌 Connecting to VirBiCoin node ${config.nodeAddr}:${config.port}...`);
@@ -82,7 +88,15 @@ try {
     console.log('📄 MongoDB URI set from config.json');
   }
 } catch (error) {
-  process.env.MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost/explorerDB';
+  try {
+    const local = require('../config.example.json');
+    if (local.database && local.database.uri) {
+      process.env.MONGODB_URI = local.database.uri;
+      console.log('📄 MongoDB URI set from config.example.json');
+    }
+  } catch (fallbackError) {
+    process.env.MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost/explorerDB';
+  }
 }
 
 // Initialize database connection after config is loaded

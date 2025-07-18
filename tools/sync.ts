@@ -12,6 +12,8 @@ import { main as statsMain } from './stats';
 import { main as richlistMain } from './richlist';
 import { main as tokensMain } from './tokens';
 import { main as priceMain } from './price';
+import fs from 'fs';
+import path from 'path';
 
 // Initialize database connection
 const initDB = async () => {
@@ -566,17 +568,34 @@ const hybridSync = async (): Promise<void> => {
  */
 const main = async (): Promise<void> => {
   try {
-    // Load config.json & set MONGODB_URI
+    // Load config.json, fallback to config.example.json & set MONGODB_URI
     try {
-      const local = await import('../config.json');
-      Object.assign(config, local.default);
+      const configPath = path.join(__dirname, '..', 'config.json');
+      if (fs.existsSync(configPath)) {
+        const configData = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+        Object.assign(config, configData);
         console.log('📄 config.json found.');
-  if (local.default.database && local.default.database.uri) {
-    process.env.MONGODB_URI = local.default.database.uri;
-    console.log('📄 MongoDB URI set from config.json');
-  }
-} catch {
-  console.log('📄 No config file found. Using default configuration...');
+        if (configData.database && configData.database.uri) {
+          process.env.MONGODB_URI = configData.database.uri;
+          console.log('📄 MongoDB URI set from config.json');
+        }
+      } else {
+        // Fallback to config.example.json
+        const exampleConfigPath = path.join(__dirname, '..', 'config.example.json');
+        if (fs.existsSync(exampleConfigPath)) {
+          const configData = JSON.parse(fs.readFileSync(exampleConfigPath, 'utf8'));
+          Object.assign(config, configData);
+          console.log('📄 config.example.json found (fallback).');
+          if (configData.database && configData.database.uri) {
+            process.env.MONGODB_URI = configData.database.uri;
+            console.log('📄 MongoDB URI set from config.example.json');
+          }
+        } else {
+          console.log('📄 No config files found. Using default configuration...');
+        }
+      }
+    } catch (error) {
+      console.log('📄 Error reading config files. Using default configuration...');
     }
 
     // Initialize database connection ONCE

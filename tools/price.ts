@@ -47,14 +47,21 @@ const config: Config = {
   priceUpdateInterval: 15 * 60 * 1000 // 15 minutes (5分→15分に延長)
 };
 
-// Try to load config.json
+// Try to load config.json, fallback to config.example.json
 try {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const local = require('../config.json');
   Object.assign(config, local);
   console.log('📄 config.json found.');
 } catch (error) {
-  console.log('📄 No config file found. Using default configuration...');
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const local = require('../config.example.json');
+    Object.assign(config, local);
+    console.log('📄 config.example.json found (fallback).');
+  } catch (fallbackError) {
+    console.log('📄 No config files found. Using default configuration...');
+  }
 }
 
 // Initialize database connection after config is loaded

@@ -26,7 +26,7 @@ if (process.env.NODE_ENV === 'development') {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const local = require('../../../config.example.json');
       Object.assign(config, local);
-      console.log('No config file found. Using default configuration... (config.example.json)');
+      console.log('config.example.json found (fallback).');
     } catch {
       console.log('Using hardcoded default configuration');
     }
