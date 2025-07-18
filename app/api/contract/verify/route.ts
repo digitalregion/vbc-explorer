@@ -6,6 +6,27 @@ import solc from 'solc';
 const WEB3_PROVIDER_URL = process.env.WEB3_PROVIDER_URL || 'http://127.0.0.1:8329';
 const web3 = new Web3(new Web3.providers.HttpProvider(WEB3_PROVIDER_URL));
 
+
+
+// Helper function to modernize old Solidity syntax
+function modernizeSyntax(sourceCode: string): string {
+  let modernized = sourceCode;
+  
+  // Replace := with = (assignment operator)
+  modernized = modernized.replace(/:=/g, '=');
+  
+  // Replace var with appropriate types where possible
+  modernized = modernized.replace(/var\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*=/g, 'uint256 $1 =');
+  
+  // Replace suicide with selfdestruct
+  modernized = modernized.replace(/suicide\(/g, 'selfdestruct(');
+  
+  // Replace throw with revert
+  modernized = modernized.replace(/\bthrow\b/g, 'revert()');
+  
+  return modernized;
+}
+
 export async function POST(request: NextRequest) {
   try {
     await connectDB();
@@ -16,11 +37,52 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { address, sourceCode, compilerVersion, contractName, optimization } = body;
 
-    if (!address || !sourceCode || !compilerVersion || !contractName) {
+    if (!address || !sourceCode || !compilerVersion) {
       return NextResponse.json(
-        { error: 'Missing required fields: address, sourceCode, compilerVersion, contractName' },
+        { error: 'Missing required fields: address, sourceCode, compilerVersion' },
         { status: 400 }
       );
+    }
+
+    // Auto-detect contract name if not provided
+    let detectedContractName = contractName;
+    if (!detectedContractName) {
+      const contractMatches = sourceCode.match(/contract\s+([A-Za-z0-9_]+)/g);
+      if (contractMatches && contractMatches.length > 0) {
+        // Extract the last contract name (usually the main contract in flattened code)
+        const lastContractMatch = contractMatches[contractMatches.length - 1];
+        detectedContractName = lastContractMatch.replace(/contract\s+/, '');
+        console.log('🔍 Auto-detected contract name:', detectedContractName);
+      } else {
+        return NextResponse.json(
+          { error: 'No contract found in source code. Please provide a contract name.' },
+          { status: 400 }
+        );
+      }
+    }
+
+    // Auto-detect compiler version if needed
+    let detectedCompilerVersion = compilerVersion;
+    if (compilerVersion === 'latest' || !compilerVersion) {
+      // Check for pragma statements to determine appropriate compiler version
+      const pragmaMatches = sourceCode.match(/pragma\s+solidity\s+([^;]+);/g);
+      if (pragmaMatches && pragmaMatches.length > 0) {
+        const pragmaMatch = pragmaMatches[0];
+        const versionMatch = pragmaMatch.match(/pragma\s+solidity\s+([^;]+);/);
+        if (versionMatch && versionMatch[1]) {
+          detectedCompilerVersion = versionMatch[1].trim();
+          console.log('🔍 Auto-detected compiler version:', detectedCompilerVersion);
+        }
+      }
+    }
+
+    // Check for old syntax that requires older compiler versions
+    const hasOldSyntax = sourceCode.includes(':=') || sourceCode.includes('var ') || sourceCode.includes('suicide(') || 
+                         sourceCode.includes('throw') || sourceCode.includes('constant ') || sourceCode.includes('public constant');
+    if (hasOldSyntax && detectedCompilerVersion === 'latest') {
+      // Use an older compiler version for old syntax
+      detectedCompilerVersion = '0.8.19';
+      console.log('⚠️ Detected old syntax, using compiler version:', detectedCompilerVersion);
     }
 
     // Get bytecode from blockchain
@@ -49,70 +111,183 @@ export async function POST(request: NextRequest) {
     // Clean up source code - remove any trailing garbage
     let cleanedSourceCode = sourceCode.trim();
     
-    // Remove any trailing lines that don't belong to the contract
-    const lines = cleanedSourceCode.split('\n');
-    const cleanedLines = [];
-    let inContract = false;
-    let braceCount = 0;
-    let inCommentBlock = false;
+    // Check if this is a flattened contract (contains multiple contracts)
+    const isFlattened = (cleanedSourceCode.match(/contract\s+[A-Za-z0-9_]+/g) || []).length > 1;
+    console.log('🔍 Detected flattened contract:', isFlattened);
+    console.log('🔍 Contract name to find:', detectedContractName);
     
-    for (const line of lines) {
-      const trimmedLine = line.trim();
+    if (isFlattened) {
+      // For flattened contracts, we need to extract the main contract and its dependencies
+      console.log('🔍 Processing flattened contract for:', detectedContractName);
       
-      // Handle comment blocks
-      if (trimmedLine.startsWith('/**') || trimmedLine.startsWith('/*')) {
-        inCommentBlock = true;
-      }
-      if (inCommentBlock && trimmedLine.includes('*/')) {
-        inCommentBlock = false;
-        continue; // Skip the comment block entirely
-      }
-      if (inCommentBlock) {
-        continue; // Skip lines within comment blocks
-      }
+      // First, find all contracts in the source code
+      const allContracts = [];
+      const contractRegex = /(?:abstract\s+)?contract\s+([A-Za-z0-9_]+)\s*\{[\s\S]*?\n\}/g;
+      let match;
       
-      // Start of contract
-      if (trimmedLine.startsWith('contract ') || 
-          trimmedLine.startsWith('interface ') || 
-          trimmedLine.startsWith('library ') ||
-          trimmedLine.startsWith('abstract contract ')) {
-        inContract = true;
+      while ((match = contractRegex.exec(cleanedSourceCode)) !== null) {
+        const contractName = match[1];
+        const contractCode = match[0];
+        allContracts.push({ name: contractName, code: contractCode });
       }
       
-      if (inContract) {
-        // Count braces to track contract structure
-        braceCount += (trimmedLine.match(/{/g) || []).length;
-        braceCount -= (trimmedLine.match(/}/g) || []).length;
+      console.log('🔍 Found contracts:', allContracts.map(c => c.name));
+      
+      // Find the main contract
+      const mainContract = allContracts.find(c => c.name === detectedContractName);
+      
+      if (mainContract) {
+        // Extract all dependencies (pragma, imports, using statements)
+        const dependencies = [];
         
-        cleanedLines.push(line);
+        // Extract pragma statements
+        const pragmaMatches = cleanedSourceCode.match(/pragma\s+solidity[^;]+;/g) || [];
+        dependencies.push(...pragmaMatches);
         
-        // End of contract when brace count reaches 0
-        if (braceCount === 0 && inContract) {
-          inContract = false;
-          break;
+        // Extract import statements
+        const importMatches = cleanedSourceCode.match(/import\s+[^;]+;/g) || [];
+        dependencies.push(...importMatches);
+        
+        // Extract using statements
+        const usingMatches = cleanedSourceCode.match(/using\s+[^;]+;/g) || [];
+        dependencies.push(...usingMatches);
+        
+        // Extract library declarations
+        const libraryMatches = cleanedSourceCode.match(/library\s+[A-Za-z0-9_]+\s*\{[\s\S]*?\n\}/g) || [];
+        dependencies.push(...libraryMatches);
+        
+        // Extract interface declarations
+        const interfaceMatches = cleanedSourceCode.match(/interface\s+[A-Za-z0-9_]+\s*\{[\s\S]*?\n\}/g) || [];
+        dependencies.push(...interfaceMatches);
+        
+        // Add all other contracts as dependencies
+        const otherContracts = allContracts.filter(c => c.name !== detectedContractName);
+        otherContracts.forEach(c => dependencies.push(c.code));
+        
+        // Combine dependencies and the main contract
+        cleanedSourceCode = [
+          ...dependencies,
+          mainContract.code
+        ].join('\n\n');
+        
+        console.log('✅ Extracted main contract with dependencies');
+      } else {
+        console.log('⚠️ Could not find main contract, using last contract');
+        // Use the last contract if main contract not found
+        if (allContracts.length > 0) {
+          const lastContract = allContracts[allContracts.length - 1];
+          
+          // Extract dependencies
+          const dependencies = [];
+          
+          // Extract pragma statements
+          const pragmaMatches = cleanedSourceCode.match(/pragma\s+solidity[^;]+;/g) || [];
+          dependencies.push(...pragmaMatches);
+          
+          // Extract import statements
+          const importMatches = cleanedSourceCode.match(/import\s+[^;]+;/g) || [];
+          dependencies.push(...importMatches);
+          
+          // Extract using statements
+          const usingMatches = cleanedSourceCode.match(/using\s+[^;]+;/g) || [];
+          dependencies.push(...usingMatches);
+          
+          // Extract library declarations
+          const libraryMatches = cleanedSourceCode.match(/library\s+[A-Za-z0-9_]+\s*\{[\s\S]*?\n\}/g) || [];
+          dependencies.push(...libraryMatches);
+          
+          // Extract interface declarations
+          const interfaceMatches = cleanedSourceCode.match(/interface\s+[A-Za-z0-9_]+\s*\{[\s\S]*?\n\}/g) || [];
+          dependencies.push(...interfaceMatches);
+          
+          // Add all other contracts as dependencies
+          const otherContracts = allContracts.filter(c => c.name !== lastContract.name);
+          otherContracts.forEach(c => dependencies.push(c.code));
+          
+          // Combine dependencies and the last contract
+          cleanedSourceCode = [
+            ...dependencies,
+            lastContract.code
+          ].join('\n\n');
+          
+          console.log('✅ Extracted last contract with dependencies');
         }
-      } else if (trimmedLine.startsWith('pragma ') || 
-                 trimmedLine.startsWith('import ') || 
-                 trimmedLine.startsWith('//') || 
-                 trimmedLine === '') {
-        cleanedLines.push(line);
       }
+      
+      // If still no contract found, use the original source code
+      if (!cleanedSourceCode || cleanedSourceCode.trim().length === 0) {
+        console.log('⚠️ No contract extracted, using original source code');
+        cleanedSourceCode = sourceCode;
+      }
+    } else {
+      // Original logic for single contracts
+      const lines = cleanedSourceCode.split('\n');
+      const cleanedLines = [];
+      let inContract = false;
+      let braceCount = 0;
+      let inCommentBlock = false;
+      
+      for (const line of lines) {
+        const trimmedLine = line.trim();
+        
+        // Handle comment blocks
+        if (trimmedLine.startsWith('/**') || trimmedLine.startsWith('/*')) {
+          inCommentBlock = true;
+        }
+        if (inCommentBlock && trimmedLine.includes('*/')) {
+          inCommentBlock = false;
+          continue; // Skip the comment block entirely
+        }
+        if (inCommentBlock) {
+          continue; // Skip lines within comment blocks
+        }
+        
+        // Start of contract
+        if (trimmedLine.startsWith('contract ') || 
+            trimmedLine.startsWith('interface ') || 
+            trimmedLine.startsWith('library ') ||
+            trimmedLine.startsWith('abstract contract ')) {
+          inContract = true;
+        }
+        
+        if (inContract) {
+          // Count braces to track contract structure
+          braceCount += (trimmedLine.match(/{/g) || []).length;
+          braceCount -= (trimmedLine.match(/}/g) || []).length;
+          
+          cleanedLines.push(line);
+          
+          // End of contract when brace count reaches 0
+          if (braceCount === 0 && inContract) {
+            inContract = false;
+            break;
+          }
+        } else if (trimmedLine.startsWith('pragma ') || 
+                   trimmedLine.startsWith('import ') || 
+                   trimmedLine.startsWith('//') || 
+                   trimmedLine === '') {
+          cleanedLines.push(line);
+        }
+      }
+      
+      cleanedSourceCode = cleanedLines.join('\n');
     }
-    
-    cleanedSourceCode = cleanedLines.join('\n');
     
     // Additional cleanup: remove any remaining problematic content
     cleanedSourceCode = cleanedSourceCode.replace(/\n\s*\n\s*\n/g, '\n\n'); // Remove excessive newlines
     cleanedSourceCode = cleanedSourceCode.replace(/[^\x00-\x7F]/g, ''); // Remove non-ASCII characters
     
-    console.log('Original source code length:', sourceCode.length);
-    console.log('Cleaned source code length:', cleanedSourceCode.length);
+    // Modernize old Solidity syntax
+    cleanedSourceCode = modernizeSyntax(cleanedSourceCode);
+    
+    console.log('📏 Original source code length:', sourceCode.length);
+    console.log('📏 Cleaned source code length:', cleanedSourceCode.length);
 
     // Compile source code
     const input = {
       language: 'Solidity',
       sources: {
-        [contractName]: {
+        [detectedContractName]: {
           content: cleanedSourceCode
         }
       },
@@ -131,27 +306,50 @@ export async function POST(request: NextRequest) {
 
     let compiledOutput;
     try {
-      if (compilerVersion === 'latest') {
+      if (detectedCompilerVersion === 'latest') {
         compiledOutput = JSON.parse(solc.compile(JSON.stringify(input)));
       } else {
-        // Load specific compiler version
-        const solcVersion = await new Promise<unknown>((resolve, reject) => {
-          solc.loadRemoteVersion(compilerVersion, (err: Error | null, solcV: unknown) => {
-            if (err) reject(err);
-            else resolve(solcV);
+        // Try to load specific compiler version, fallback to latest if failed
+        try {
+          const solcVersion = await new Promise<unknown>((resolve, reject) => {
+            solc.loadRemoteVersion(detectedCompilerVersion, (err: Error | null, solcV: unknown) => {
+              if (err) reject(err);
+              else resolve(solcV);
+            });
           });
-        });
-        
-        // 型ガードでsolcVersionがcompileメソッドを持つかチェック
-        if (typeof solcVersion === 'object' && solcVersion !== null && 'compile' in solcVersion && typeof (solcVersion as { compile: unknown }).compile === 'function') {
-          compiledOutput = JSON.parse((solcVersion as { compile: (input: string) => string }).compile(JSON.stringify(input)));
-        } else {
-          throw new Error('Invalid solc version loaded');
+          
+          // 型ガードでsolcVersionがcompileメソッドを持つかチェック
+          if (typeof solcVersion === 'object' && solcVersion !== null && 'compile' in solcVersion && typeof (solcVersion as { compile: unknown }).compile === 'function') {
+            compiledOutput = JSON.parse((solcVersion as { compile: (input: string) => string }).compile(JSON.stringify(input)));
+          } else {
+            throw new Error('Invalid solc version loaded');
+          }
+        } catch (versionError) {
+          console.log('⚠️ Failed to load specific compiler version, falling back to latest:', versionError);
+          // Fallback to latest version
+          compiledOutput = JSON.parse(solc.compile(JSON.stringify(input)));
         }
       }
     } catch (compileError) {
+      console.error('❌ Compilation error:', compileError);
+      
+      // Format compilation errors for better display
+      let errorDetails = compileError;
+      if (typeof compileError === 'string') {
+        errorDetails = { message: compileError };
+      } else if (compileError instanceof Error) {
+        errorDetails = { 
+          message: compileError.message,
+          stack: compileError.stack 
+        };
+      }
+      
       return NextResponse.json(
-        { error: 'Compilation failed', details: compileError },
+        { 
+          error: 'Compilation failed', 
+          details: errorDetails,
+          message: 'The source code could not be compiled. Please check the syntax and try again.'
+        },
         { status: 400 }
       );
     }
@@ -161,11 +359,25 @@ export async function POST(request: NextRequest) {
       const errors = compiledOutput.errors.filter((error: { severity: string }) => error.severity === 'error');
       const warnings = compiledOutput.errors.filter((error: { severity: string }) => error.severity === 'warning');
       
-      console.log('Compilation warnings:', warnings);
+      console.log('⚠️ Compilation warnings:', warnings.length);
+      console.log('❌ Compilation errors:', errors.length);
       
       if (errors.length > 0) {
+        // Format errors for better display
+        const formattedErrors = errors.map((error: { type?: string; message?: string; sourceLocation?: unknown; formattedMessage?: string; severity?: string }) => ({
+          type: error.type || 'CompilationError',
+          message: error.message || 'Unknown compilation error',
+          sourceLocation: error.sourceLocation,
+          formattedMessage: error.formattedMessage,
+          severity: error.severity
+        }));
+        
         return NextResponse.json(
-          { error: 'Compilation errors', details: errors },
+          { 
+            error: 'Compilation errors', 
+            details: formattedErrors,
+            message: `Found ${errors.length} compilation error(s). Please fix the issues and try again.`
+          },
           { status: 400 }
         );
       }
@@ -175,11 +387,26 @@ export async function POST(request: NextRequest) {
     console.log('Available contracts:', Object.keys(compiledOutput.contracts || {}));
     
     let compiledContract = null;
-    const actualContractName = contractName; // ユーザー指定名を優先
+    const actualContractName = detectedContractName; // 検出されたコントラクト名を優先
+    
+    // Check if compiledOutput.contracts exists and has content
+    if (!compiledOutput.contracts || Object.keys(compiledOutput.contracts).length === 0) {
+      return NextResponse.json(
+        { 
+          error: 'No contracts found in compilation output',
+          message: 'The source code could not be compiled successfully. Please check the syntax and try again.',
+          debug: {
+            detectedContractName,
+            compilationOutput: compiledOutput
+          }
+        },
+        { status: 400 }
+      );
+    }
     
     // Try exact match first
-    if (compiledOutput.contracts[contractName] && compiledOutput.contracts[contractName][contractName]) {
-      compiledContract = compiledOutput.contracts[contractName][contractName];
+    if (compiledOutput.contracts[detectedContractName] && compiledOutput.contracts[detectedContractName][detectedContractName]) {
+      compiledContract = compiledOutput.contracts[detectedContractName][detectedContractName];
     } else {
       // Try to find any contract in the output
       for (const sourceName in compiledOutput.contracts) {
@@ -198,8 +425,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { 
           error: 'Contract not found in compilation output',
+          message: `The contract '${detectedContractName}' was not found in the compilation output. Please check the contract name and try again.`,
           debug: {
-            requestedContractName: contractName,
+            requestedContractName: detectedContractName,
             availableContracts: Object.keys(compiledOutput.contracts || {}),
             compilationOutput: compiledOutput
           }
@@ -310,8 +538,8 @@ export async function POST(request: NextRequest) {
           originalCompiledBytecodeLength: compiledBytecode.length,
           cleanOnchainBytecodeLength: cleanOnchainBytecode.length,
           cleanCompiledBytecodeLength: cleanCompiledBytecode.length,
-          onchainBytecodeStart: cleanOnchainBytecode.substring(0, 100),
-          compiledBytecodeStart: cleanCompiledBytecode.substring(0, 100),
+          onchainBytecodeStart: cleanOnchainBytecode.substring(0, 100) + '...',
+          compiledBytecodeStart: cleanCompiledBytecode.substring(0, 100) + '...',
           comparisonResults: { isVerified1, isVerified2, isVerified3, isVerified4 }
         },
         onchainBytecode: cleanOnchainBytecode.substring(0, 100) + '...',

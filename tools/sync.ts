@@ -6,8 +6,8 @@ This file will start syncing the blockchain from the VirBiCoin node
 */
 
 import Web3 from 'web3';
-import type { Transaction as Web3Transaction, Block as Web3Block, TransactionReceipt } from 'web3-types';
-import { connectDB, Block, Transaction, IBlock, ITransaction } from '../models/index';
+import mongoose from 'mongoose';
+import { connectDB, Block, Transaction } from '../models/index';
 import { main as statsMain } from './stats';
 import { main as richlistMain } from './richlist';
 import { main as tokensMain } from './tokens';
@@ -16,19 +16,16 @@ import { main as priceMain } from './price';
 // Initialize database connection
 const initDB = async () => {
   try {
-    // 軽量化されたDB接続設定
-    const connectionOptions = {
-      maxPoolSize: 5, // 10→5に削減
-      serverSelectionTimeoutMS: 5000,
-      socketTimeoutMS: 30000,
-      bufferCommands: false,
-      autoIndex: false, // インデックス自動作成を無効化
-    };
+    // Check if already connected
+    if (mongoose.connection.readyState === 1) {
+      console.log('🔗 Database already connected');
+      return;
+    }
     
     await connectDB();
-    console.log('Database connection initialized successfully');
+    console.log('🔗 Database connection initialized successfully');
   } catch (error) {
-    console.error('Failed to connect to database:', error);
+    console.error('❌ Failed to connect to database:', error);
     process.exit(1);
   }
 };
@@ -138,24 +135,6 @@ const config: Config = {
   endBlock: null
 };
 
-// Try to load config.json
-try {
-  const local = require('../config.json');
-  Object.assign(config, local);
-  console.log('config.json found.');
-  
-  // Set MongoDB URI from config if available
-  if (local.database && local.database.uri) {
-    process.env.MONGODB_URI = local.database.uri;
-    console.log('MongoDB URI set from config.json');
-  }
-} catch (error) {
-  console.log('No config file found. Using default configuration...');
-}
-
-// Initialize database connection after config is loaded
-initDB();
-
 // Parse command line arguments
 const args = process.argv.slice(2);
 for (let i = 0; i < args.length; i++) {
@@ -204,7 +183,7 @@ if (args.length >= 2 && !isNaN(parseInt(args[0])) && !isNaN(parseInt(args[1]))) 
   console.log(`Command line override: syncing blocks ${config.startBlock} to ${config.endBlock}`);
 }
 
-console.log(`Connecting to VirBiCoin node ${config.nodeAddr}:${config.port}...`);
+console.log(`🔌 Connecting to VirBiCoin node ${config.nodeAddr}:${config.port}...`);
 
 // Web3 connection
 const web3 = new Web3(new Web3.providers.HttpProvider(`http://${config.nodeAddr}:${config.port}`));
@@ -282,7 +261,7 @@ const writeBlockToDB: WriteBlockToDB = async function (blockData: any | null, fl
     self.bulkOps.push(blockDoc);
 
     if (!config.quiet) {
-      console.log(`\t- block #${blockData.number} prepared for insertion.`);
+      console.log(`🔄 block #${blockData.number} prepared for insertion.`);
     }
   }
 
@@ -301,7 +280,7 @@ const writeBlockToDB: WriteBlockToDB = async function (blockData: any | null, fl
       }
     }
     if (!config.quiet) {
-      console.log(`* ${bulk.length} blocks upserted.`);
+      console.log(`✅ ${bulk.length} blocks upserted.`);
     }
   }
 };
@@ -335,12 +314,12 @@ const writeTransactionsToDB: WriteTransactionsToDB = async function (
         self.bulkOps.push(tx);
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
-        console.log(`Warning: Failed to get receipt for tx ${toString(txData.hash)}: ${errorMessage}`);
+        console.log(`⚠️ Warning: Failed to get receipt for tx ${toString(txData.hash)}: ${errorMessage}`);
       }
     }
 
     if (!config.quiet) {
-      console.log(`\t- block #${blockData.number}: ${blockData.transactions.length} transactions recorded.`);
+      console.log(`💾 block #${blockData.number}: ${blockData.transactions.length} transactions recorded.`);
     }
   }
 
@@ -357,7 +336,7 @@ const writeTransactionsToDB: WriteTransactionsToDB = async function (
     try {
       const docs = await Transaction.insertMany(bulk, { ordered: false });
       if (!config.quiet) {
-        console.log(`* ${docs.length} transactions successfully recorded.`);
+        console.log(`✅ ${docs.length} transactions successfully recorded.`);
       }
     } catch (err: any) {
       if (err.code === 11000) {
@@ -365,7 +344,7 @@ const writeTransactionsToDB: WriteTransactionsToDB = async function (
           console.log('Skip: Duplicate transaction keys detected');
         }
       } else {
-        console.log(`Error: Failed to insert transactions: ${err}`);
+        console.log(`❌ Error: Failed to insert transactions: ${err}`);
         process.exit(9);
       }
     }
@@ -376,7 +355,7 @@ const writeTransactionsToDB: WriteTransactionsToDB = async function (
  * Listen for new blocks (real-time sync)
  */
 const listenBlocks = function (): void {
-  console.log('Starting real-time block listener...');
+  console.log('🚀 Starting real-time block listener...');
 
   const pollInterval = 3000; // Poll every 3 seconds (5秒→3秒に短縮)
   let lastProcessedBlock = 0;
@@ -393,7 +372,7 @@ const listenBlocks = function (): void {
       const currentBlock = toNumber(currentBlockBigInt);
 
       if (currentBlock > lastProcessedBlock) {
-        console.log(`New block detected: ${currentBlock} (last: ${lastProcessedBlock})`);
+        console.log(`🔍 New block detected: ${currentBlock} (last: ${lastProcessedBlock})`);
 
         // Process new blocks in batches
         const blocksToProcess = Math.min(currentBlock - lastProcessedBlock, 10); // 最大10ブロックずつ処理
@@ -411,14 +390,14 @@ const listenBlocks = function (): void {
               if (!existingBlock) {
                 await writeBlockToDB(blockData, true);
                 await writeTransactionsToDB(blockData, true);
-                console.log(`Processed new block: ${blockNum}`);
+                console.log(`📦 Processed new block: ${blockNum} (${blockData.transactions.length} transactions)`);
               } else {
-                console.log(`Block ${blockNum} already exists, skipping`);
+                console.log(`⏭️ Block ${blockNum} already exists, skipping`);
               }
             }
           } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
-            console.log(`Error processing block ${blockNum}: ${errorMessage}`);
+            console.log(`❌ Error processing block ${blockNum}: ${errorMessage}`);
           }
         }
 
@@ -436,7 +415,7 @@ const listenBlocks = function (): void {
   web3.eth.getBlockNumber()
     .then(blockNumberBigInt => {
       lastProcessedBlock = toNumber(blockNumberBigInt);
-      console.log(`Real-time listener starting from block: ${lastProcessedBlock}`);
+      console.log(`🔍 Real-time listener starting from block: ${lastProcessedBlock}`);
 
       // Start polling
       setInterval(poll, pollInterval);
@@ -460,7 +439,7 @@ const syncChain = async function (startBlock?: number, endBlock?: number): Promi
     endBlock = config.endBlock ? Math.min(config.endBlock, toNumber(latestBlockBigInt)) : toNumber(latestBlockBigInt);
   }
 
-  console.log(`Syncing blocks from ${startBlock} to ${endBlock}...`);
+  console.log(`🔄 Syncing blocks from ${startBlock} to ${endBlock}...`);
 
   // Check which blocks already exist in database
   const existingBlocks = await Block.find({ 
@@ -468,7 +447,7 @@ const syncChain = async function (startBlock?: number, endBlock?: number): Promi
   }).select('number').lean();
   
   const existingBlockNumbers = new Set(existingBlocks.map(b => b.number));
-  console.log(`Found ${existingBlocks.length} existing blocks in range ${startBlock}-${endBlock}`);
+  console.log(`🔍 Found ${existingBlocks.length} existing blocks in range ${startBlock}-${endBlock}`);
 
   let processedCount = 0;
   let skippedCount = 0;
@@ -485,9 +464,6 @@ const syncChain = async function (startBlock?: number, endBlock?: number): Promi
       const existingBlock = await Block.findOne({ number: blockNum }).lean();
       
       if (existingBlock) {
-        if (!config.quiet) {
-          console.log(`Skipping existing block #${blockNum} (already in DB)`);
-        }
         skippedCount++;
         continue;
       }
@@ -511,9 +487,14 @@ const syncChain = async function (startBlock?: number, endBlock?: number): Promi
           global.gc();
         }
       }
+
+      // 500個単位でログ出力
+      if ((blockNum - startBlock + 1) % 500 === 0) {
+        console.log(`📦 Processed ${blockNum - startBlock + 1} blocks (${blockNum}/${endBlock}) - 📈 Processed: ${processedCount}, ⏩ Skipped: ${skippedCount}`);
+      }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      console.log(`Error syncing block ${blockNum}: ${errorMessage}`);
+      console.log(`❌ Error syncing block ${blockNum}: ${errorMessage}`);
     }
   }
 
@@ -521,9 +502,9 @@ const syncChain = async function (startBlock?: number, endBlock?: number): Promi
   await writeBlockToDB(null, true);
   await writeTransactionsToDB(null, true);
 
-  console.log(`*** Sync Completed ***`);
-  console.log(`Processed: ${processedCount} blocks`);
-  console.log(`Skipped: ${skippedCount} existing blocks`);
+  console.log(`✅ Sync Completed`);
+  console.log(`📊 Processed: ${processedCount} blocks`);
+  console.log(`⏩ Skipped: ${skippedCount} existing blocks`);
 };
 
 /**
@@ -539,23 +520,23 @@ const prepareSync = async (): Promise<void> => {
       const nodeLatestBlockBigInt = await web3.eth.getBlockNumber();
       const nodeLatestBlock = toNumber(nodeLatestBlockBigInt);
 
-      console.log(`Database latest block: ${dbLatestBlock}`);
-      console.log(`Node latest block: ${nodeLatestBlock}`);
+      console.log(`📊 Database latest block: ${dbLatestBlock}`);
+      console.log(`📊 Node latest block: ${nodeLatestBlock}`);
 
       if (nodeLatestBlock > dbLatestBlock) {
-        console.log(`Syncing missing blocks: ${dbLatestBlock + 1} to ${nodeLatestBlock}`);
+        console.log(`📚 Syncing missing blocks: ${dbLatestBlock + 1} to ${nodeLatestBlock}`);
         await syncChain(dbLatestBlock + 1, nodeLatestBlock);
       } else {
-        console.log('Database is up to date');
+        console.log('✅ Database is up to date');
       }
     } else {
-      console.log('No blocks found in database, starting initial sync...');
+      console.log('📚 No blocks found in database, starting initial sync...');
       // Use config values for initial sync
       await syncChain(config.startBlock, config.endBlock || undefined);
     }
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    console.log(`Error in prepareSync: ${errorMessage}`);
+    console.log(`❌ Error in prepareSync: ${errorMessage}`);
   }
 };
 
@@ -567,16 +548,16 @@ const prepareSync = async (): Promise<void> => {
 const hybridSync = async (): Promise<void> => {
   try {
     // Start real-time listener for latest blocks
-    console.log('Starting real-time block listener for latest blocks...');
+    console.log('🚀 Starting real-time block listener for latest blocks...');
     listenBlocks();
 
     // Start background sync for past blocks
-    console.log('Starting background sync for past blocks...');
+    console.log('📚 Starting background sync for past blocks...');
     await prepareSync();
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    console.log(`Error in hybrid sync: ${errorMessage}`);
+    console.log(`❌ Error in hybrid sync: ${errorMessage}`);
   }
 };
 
@@ -585,18 +566,34 @@ const hybridSync = async (): Promise<void> => {
  */
 const main = async (): Promise<void> => {
   try {
+    // Load config.json & set MONGODB_URI
+    try {
+      const local = await import('../config.json');
+      Object.assign(config, local.default);
+        console.log('📄 config.json found.');
+  if (local.default.database && local.default.database.uri) {
+    process.env.MONGODB_URI = local.default.database.uri;
+    console.log('📄 MongoDB URI set from config.json');
+  }
+} catch {
+  console.log('📄 No config file found. Using default configuration...');
+    }
+
+    // Initialize database connection ONCE
+    await initDB();
+    
     // Test connection
     const isListening = await web3.eth.net.isListening();
     if (!isListening) {
-      console.log('Error: Cannot connect to VirBiCoin node');
+      console.log('❌ Error: Cannot connect to VirBiCoin node');
       process.exit(1);
     }
 
-    console.log('Connected to VirBiCoin node successfully');
+    console.log('🔗 Connected to VirBiCoin node successfully');
 
     // Run initial sync if requested
     if (config.syncAll) {
-      console.log('Starting full sync as requested...');
+      console.log('📚 Starting full sync as requested...');
       await syncChain(config.startBlock, config.endBlock || undefined);
       // After full sync, start hybrid mode
       await hybridSync();
@@ -607,14 +604,14 @@ const main = async (): Promise<void> => {
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    console.log(`Fatal error: ${errorMessage}`);
+    console.log(`💥 Fatal error: ${errorMessage}`);
     process.exit(1);
   }
 };
 
 // Handle process termination
 process.on('SIGINT', async () => {
-  console.log('\nShutting down gracefully...');
+  console.log('\n🛑 Shutting down gracefully...');
   // Flush any remaining data
   await writeBlockToDB(null, true);
   await writeTransactionsToDB(null, true);
@@ -655,7 +652,7 @@ if (require.main === module) {
         await runAll();
         break;
       default:
-        console.log('Usage: node tools/sync.js [sync|stats|richlist|tokens|price|all]');
+        console.log('📖 Usage: node tools/sync.js [sync|stats|richlist|tokens|price|all]');
         process.exit(1);
     }
   })();

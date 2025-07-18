@@ -101,12 +101,19 @@ export default function ContractVerifyPage() {
     
     // Auto-detect contract name from source code
     if (field === 'sourceCode' && typeof value === 'string') {
-      const contractMatch = value.match(/contract\s+([A-Za-z0-9_]+)/);
-      if (contractMatch && !formData.contractName) {
-        setFormData(prev => ({
-          ...prev,
-          contractName: contractMatch[1]
-        }));
+      const contractMatches = value.match(/contract\s+([A-Za-z0-9_]+)/g);
+      if (contractMatches && contractMatches.length > 0) {
+        // For flattened contracts, use the last contract (usually the main contract)
+        const lastContractMatch = contractMatches[contractMatches.length - 1];
+        const detectedName = lastContractMatch.replace(/contract\s+/, '');
+        
+        // Only update if no contract name is set or if it's different
+        if (!formData.contractName || formData.contractName !== detectedName) {
+          setFormData(prev => ({
+            ...prev,
+            contractName: detectedName
+          }));
+        }
       }
     }
   };
@@ -190,7 +197,11 @@ export default function ContractVerifyPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">Source Code</label>
-              <div className="text-xs text-gray-400 mb-2">Paste your complete Solidity source code. The system will automatically clean up any trailing content that doesn&apos;t belong to the contract.</div>
+              <div className="text-xs text-gray-400 mb-2">
+                Paste your complete Solidity source code. The system will automatically clean up any trailing content that doesn&apos;t belong to the contract.
+                <br />
+                <span className="text-blue-400">💡 Tip: For flattened contracts (Hardhat flattened), the system will automatically extract the main contract.</span>
+              </div>
               <textarea
                 value={formData.sourceCode}
                 onChange={(e) => handleInputChange('sourceCode', e.target.value)}
@@ -244,6 +255,9 @@ export default function ContractVerifyPage() {
                 {result.error && (
                   <div className="mt-2 p-2 bg-gray-800 rounded text-xs">
                     <strong>Error:</strong> {result.error}
+                    {result.message && (
+                      <div className="mt-1 text-gray-300">{result.message}</div>
+                    )}
                     {result.details && (
                       <div className="mt-2 p-2 bg-gray-700 rounded">
                         <strong>Compilation Errors:</strong>

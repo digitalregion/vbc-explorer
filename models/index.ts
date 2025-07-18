@@ -219,62 +219,55 @@ TokenTransferSchema.index({ to: 1, blockNumber: -1 });
 TokenTransferSchema.index({ contract: 1, blockNumber: -1 });
 
 // Database connection
+let connectionPromise: Promise<void> | null = null;
+
 export const connectDB = async (): Promise<void> => {
-  // Check if mongoose is already connected (from Express app)
+  // If already connected, return immediately
   if (mongoose.connection.readyState === 1) {
     return;
   }
 
-  try {
-    mongoose.set('strictQuery', false);
-    
-    // Only connect if not connected and not connecting
-    if (mongoose.connection.readyState === 0) {
-      let uri = process.env.MONGODB_URI || 'mongodb://localhost/explorerDB';
-      
-      // Try to load config.json for URI and connection options
-      try {
-        const config = require('../config.json');
-        if (config.database && config.database.uri) {
-          uri = config.database.uri;
-        }
-      } catch (error) {
-        // Config file not found, use default URI
-      }
-      
-      // Parse connection options from config if available
-      let connectionOptions: any = {
-        maxPoolSize: 20, // 10→20に増加
-        serverSelectionTimeoutMS: 15000, // 10秒→15秒に延長
-        socketTimeoutMS: 60000, // 45秒→60秒に延長
-        connectTimeoutMS: 15000, // 10秒→15秒に延長
-        retryWrites: true,
-        retryReads: true,
-        bufferCommands: false, // バッファリングを無効化
-        autoIndex: false, // インデックス自動作成を無効化
-      };
-
-      // Try to load config.json for additional connection options
-      try {
-        const config = require('../config.json');
-        if (config.database && config.database.options) {
-          connectionOptions = { ...connectionOptions, ...config.database.options };
-        }
-      } catch (error) {
-        // Config file not found, use default options
-      }
-      
-      await mongoose.connect(uri, connectionOptions);
-    }
-  } catch (error) {
-    // If connection fails but there's an existing connection, use it
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    if ((mongoose.connection.readyState as any) === 1) {
-      return;
-    }
-    console.error('MongoDB connection error:', error);
-    throw error;
+  // If connection is in progress, wait for it
+  if (connectionPromise) {
+    return connectionPromise;
   }
+
+  // Create new connection promise
+  connectionPromise = (async () => {
+    try {
+      mongoose.set('strictQuery', false);
+
+      if (mongoose.connection.readyState === 0) {
+        const uri = process.env.MONGODB_URI || 'mongodb://localhost/explorerDB';
+        const connectionOptions: any = {
+          maxPoolSize: 10, // Reduced from 20 to prevent too many connections
+          serverSelectionTimeoutMS: 10000, // Reduced from 15000
+          socketTimeoutMS: 30000, // Reduced from 60000
+          connectTimeoutMS: 10000, // Reduced from 15000
+          retryWrites: true,
+          retryReads: true,
+          bufferCommands: true,
+          autoIndex: false,
+          // Add heartbeat frequency to detect connection issues faster
+          heartbeatFrequencyMS: 10000,
+          // Add connection timeout
+          maxIdleTimeMS: 30000,
+        };
+        await mongoose.connect(uri, connectionOptions);
+      }
+    } catch (error) {
+      if ((mongoose.connection.readyState as any) === 1) {
+        return;
+      }
+      console.error('❌ MongoDB connection error:', error);
+      throw error;
+    } finally {
+      // Clear the promise after connection attempt
+      connectionPromise = null;
+    }
+  })();
+
+  return connectionPromise;
 };
 
 // Models

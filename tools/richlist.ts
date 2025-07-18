@@ -4,15 +4,22 @@ Tool for calculating VirBiCoin richlist
 */
 
 import Web3 from 'web3';
+import mongoose from 'mongoose';
 import { connectDB, Block, Transaction, Account, IBlock, ITransaction, IAccount } from '../models/index';
 
 // Initialize database connection
 const initDB = async () => {
   try {
+    // Check if already connected
+    if (mongoose.connection.readyState === 1) {
+      console.log('🔗 Database already connected');
+      return;
+    }
+    
     await connectDB();
-    console.log('Database connection initialized successfully');
+    console.log('🔗 Database connection initialized successfully');
   } catch (error) {
-    console.error('Failed to connect to database:', error);
+    console.error('❌ Failed to connect to database:', error);
     process.exit(1);
   }
 };
@@ -55,12 +62,12 @@ const config: Config = {
 try {
   const local = require('../config.json');
   Object.assign(config, local);
-  console.log('config.json found.');
+  console.log('📄 config.json found.');
 } catch (error) {
-  console.log('No config file found. Using default configuration...');
+  console.log('📄 No config file found. Using default configuration...');
 }
 
-console.log(`Connecting to VirBiCoin node ${config.nodeAddr}:${config.port}...`);
+console.log(`🔌 Connecting to VirBiCoin node ${config.nodeAddr}:${config.port}...`);
 
 // Web3 connection
 const web3 = new Web3(new Web3.providers.HttpProvider(`http://${config.nodeAddr}:${config.port}`));
@@ -72,7 +79,7 @@ try {
   const local = require('../config.json');
   if (local.database && local.database.uri) {
     process.env.MONGODB_URI = local.database.uri;
-    console.log('MongoDB URI set from config.json');
+    console.log('📄 MongoDB URI set from config.json');
   }
 } catch (error) {
   process.env.MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost/explorerDB';
@@ -103,8 +110,8 @@ const makeRichList: MakeRichListFunction = function (
     fromBlock = 0;
   }
 
-  if (!config.quiet) {
-    console.log(`Scan accounts from ${fromBlock} to ${toBlock} ...`);
+  if (!config.quiet && (toBlock - fromBlock) >= 100) {
+    console.log(`🔍 Scan accounts from ${fromBlock} to ${toBlock} ...`);
   }
 
   let ended = false;
@@ -183,12 +190,14 @@ const makeRichList: MakeRichListFunction = function (
 
   const updateAccountBalances = async (): Promise<void> => {
     const len = Object.keys(self.accounts!).length;
-    console.info(`* ${len} / ${self.index! + len} total accounts.`);
+    if (len >= 100 || ended) {
+      console.info(`📈 ${len} / ${self.index! + len} total accounts.`);
+    }
 
     if (updateCallback && (len >= 100 || ended)) {
       self.index = self.index! + len;
       if (!config.quiet) {
-        console.log(`* update ${len} accounts ...`);
+        console.log(`🔄 update ${len} accounts ...`);
       }
 
       // split accounts into chunks to make proper sized json-rpc batch job.
@@ -262,7 +271,7 @@ const makeRichList: MakeRichListFunction = function (
       await updateAccountBalances();
 
       if (ended) {
-        console.log('**DONE**');
+        console.log('✅ Completed Richlist Calculation.');
       } else {
         setTimeout(() => {
           makeRichList(fromBlock, blocks, updateCallback);
@@ -310,7 +319,7 @@ const bulkInsert = function (bulk: AccountData[]): void {
   Account.insertMany(localbulk, { ordered: false })
     .then((data: any) => {
       if (!config.quiet) {
-        console.log(`* ${data.length} accounts successfully inserted.`);
+        console.log(`✅ * ${data.length} accounts successfully inserted.`);
       }
       if (bulk.length > 0) {
         setTimeout(() => {
@@ -340,7 +349,7 @@ const bulkInsert = function (bulk: AccountData[]): void {
         Promise.all(updatePromises)
           .then(() => {
             if (!config.quiet) {
-              console.log(`* ${localbulk.length} accounts successfully updated.`);
+              console.log(`💾 ${localbulk.length} accounts successfully updated.`);
             }
             if (bulk.length > 0) {
               setTimeout(() => {
@@ -350,12 +359,12 @@ const bulkInsert = function (bulk: AccountData[]): void {
           })
           .catch(err => {
             const errorMessage = err instanceof Error ? err.message : String(err);
-            console.log(`ERROR: Fail to update accounts: ${errorMessage}`);
+            console.log(`❌ ERROR: Fail to update accounts: ${errorMessage}`);
           });
 
       } else {
         const errorMessage = error instanceof Error ? error.message : String(error);
-        console.log(`Error: Aborted due to error on DB: ${errorMessage}`);
+        console.log(`💥 Error: Aborted due to error on DB: ${errorMessage}`);
         process.exit(9);
       }
     });
@@ -367,17 +376,17 @@ const bulkInsert = function (bulk: AccountData[]): void {
 async function startSync(): Promise<void> {
   try {
     const latestBlock = await web3.eth.getBlockNumber();
-    console.log(`* latestBlock = ${latestBlock}`);
+    console.log(`📊 latestBlock = ${latestBlock}`);
 
     if (config.quiet) {
-      console.log('Quiet mode enabled');
+      console.log('🔇 Quiet mode enabled');
     }
 
-    makeRichList(Number(latestBlock), 500, updateAccounts);
+    makeRichList(Number(latestBlock), 10000, updateAccounts);
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    console.log(`Error starting sync: ${errorMessage}`);
+    console.log(`❌ Error starting sync: ${errorMessage}`);
     process.exit(1);
   }
 }
@@ -444,7 +453,7 @@ async function updatePercentages() {
       { $set: { percentage: percent } }
     );
   }
-  console.log('Account percentages updated');
+  console.log('📈 Account percentages updated');
 }
 
 
@@ -457,12 +466,12 @@ const main = async (): Promise<void> => {
     // Test connection
     const isListening = await web3.eth.net.isListening();
     if (!isListening) {
-      console.log('Error: Cannot connect to VirBiCoin node');
+      console.log('❌ Error: Cannot connect to VirBiCoin node');
       process.exit(1);
     }
 
-    console.log('Connected to VirBiCoin node successfully');
-    console.log('Starting richlist calculation...');
+    console.log('🔗 Connected to VirBiCoin node successfully');
+    console.log('🏆 Starting richlist calculation...');
 
     // Initial calculation
     await startSync();
@@ -470,23 +479,23 @@ const main = async (): Promise<void> => {
 
     // Set up periodic updates (every 30 minutes)
     const RICHLIST_UPDATE_INTERVAL = 30 * 60 * 1000; // 30 minutes
-    console.log(`Richlist will update every ${RICHLIST_UPDATE_INTERVAL / 1000 / 60} minutes`);
+    console.log(`⏰ Richlist will update every ${RICHLIST_UPDATE_INTERVAL / 1000 / 60} minutes`);
 
     setInterval(async () => {
       try {
-        console.log('Starting periodic richlist update...');
+        console.log('🔄 Starting periodic richlist update...');
         await startSync();
         await updatePercentages();
-        console.log('Periodic richlist update completed');
+        console.log('✅ Periodic richlist update completed');
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
-        console.log(`Error in periodic richlist update: ${errorMessage}`);
+        console.log(`❌ Error in periodic richlist update: ${errorMessage}`);
       }
     }, RICHLIST_UPDATE_INTERVAL);
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    console.log(`Fatal error: ${errorMessage}`);
+    console.log(`💥 Fatal error: ${errorMessage}`);
     process.exit(1);
   }
 };

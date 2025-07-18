@@ -34,6 +34,27 @@ const tokenTransferSchema = new mongoose.Schema({
   blockNumber: Number
 }, { collection: 'tokentransfers' });
 
+// Contract schema
+const contractSchema = new mongoose.Schema({
+  address: String,
+  blockNumber: Number,
+  ERC: Number,
+  creationTransaction: String,
+  contractName: String,
+  tokenName: String,
+  symbol: String,
+  owner: String,
+  decimals: Number,
+  totalSupply: Number,
+  compilerVersion: String,
+  optimization: Boolean,
+  sourceCode: String,
+  abi: String,
+  byteCode: String,
+  verified: Boolean,
+  verifiedAt: Date
+}, { collection: 'Contract' });
+
 // Block schema
 const blockSchema = new mongoose.Schema({
   number: Number,
@@ -48,6 +69,7 @@ const blockSchema = new mongoose.Schema({
 const Account = mongoose.models.Account || mongoose.model('Account', accountSchema);
 const Transaction = mongoose.models.Transaction || mongoose.model('Transaction', transactionSchema);
 const TokenTransfer = mongoose.models.TokenTransfer || mongoose.model('TokenTransfer', tokenTransferSchema);
+const Contract = mongoose.models.Contract || mongoose.model('Contract', contractSchema);
 const Block = mongoose.models.Block || mongoose.model('Block', blockSchema);
 
 const web3 = new Web3(new Web3.providers.HttpProvider('http://localhost:8329'));
@@ -69,6 +91,9 @@ export async function GET(
 
   // DBからアカウント取得
   const account = await Account.findOne({ address: { $regex: new RegExp(`^${address}$`, 'i') } }).lean();
+
+  // コントラクト情報を取得
+  const contract = await Contract.findOne({ address: { $regex: new RegExp(`^${address}$`, 'i') } }).lean();
 
   // Web3からリアルタイムバランス取得（表示用のみ）
   let realBalance = '0';
@@ -363,6 +388,9 @@ export async function GET(
     }))
   ].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).slice(0, 10);
 
+  // contractが配列の場合は最初の要素を使う
+  const contractObj = Array.isArray(contract) ? contract[0] : contract;
+
   return NextResponse.json({
     account: {
       address,
@@ -375,6 +403,17 @@ export async function GET(
       firstSeen: getTimeAgo(firstActivity),
       lastActivity: getTimeAgo(lastActivity)
     },
+    contract: contractObj ? {
+      address: contractObj.address,
+      name: contractObj.contractName || contractObj.tokenName || 'Unknown Contract',
+      symbol: contractObj.symbol || '',
+      type: contractObj.ERC === 2 ? 'ERC20' : contractObj.ERC === 3 ? 'ERC223' : 'Contract',
+      decimals: contractObj.decimals || 0,
+      totalSupply: contractObj.totalSupply || 0,
+      verified: contractObj.verified || false,
+      creationTransaction: contractObj.creationTransaction || '',
+      blockNumber: contractObj.blockNumber || 0
+    } : null,
     transactions: allTxs
   });
 } 

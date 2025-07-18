@@ -1,51 +1,53 @@
 'use client';
 
 import Header from '../../components/Header';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { useState, useEffect, useRef, useCallback } from 'react';
-import {
+import { 
+  CheckCircleIcon, 
+  ClipboardDocumentIcon,
   UsersIcon,
-  CubeIcon,
-  DocumentTextIcon,
   ArrowPathIcon,
   CodeBracketIcon,
   HashtagIcon,
-  ClipboardDocumentIcon,
   ClockIcon,
   PlayIcon
 } from '@heroicons/react/24/outline';
 
-interface NFTData {
-  nft: {
+interface TokenData {
+  token: {
     address: string;
     name: string;
     symbol: string;
     type: string;
+    isNFT: boolean;
     decimals: number;
     totalSupply: string;
     totalSupplyRaw: string;
-    description: string;
-    floorPrice: string;
-    volume24h: string;
-    creator: string;
+    verified?: boolean;
+    description?: string;
+    floorPrice?: string;
+    volume24h?: string;
+    creator?: string;
   };
-  contract: {
+  contract?: {
     verified: boolean;
     compiler: string | null;
     language: string | null;
     name: string;
     sourceCode: string | null;
     bytecode: string | null;
-    compilerVersion?: string; // 追加
-    metadataVersion?: string; // 追加
+    compilerVersion?: string;
+    metadataVersion?: string;
   };
   statistics: {
     holders: number;
-    totalTransfers: number;
-    transfers24h: number;
+    transfers: number;
     age: number;
     marketCap: string;
+    totalTransfers?: number;
+    transfers24h?: number;
   };
   holders: Array<{
     rank: number;
@@ -59,9 +61,11 @@ interface NFTData {
     hash: string;
     from: string;
     to: string;
-    tokenId: string;
-    timestamp: Date;
+    value: string;
+    valueRaw: string;
+    timestamp: string;
     timeAgo: string;
+    tokenId?: string;
   }>;
 }
 
@@ -74,7 +78,7 @@ interface TokenMetadata {
     value: string | number;
   }>;
   tokenURI: string;
-  createdAt?: string; // NFT creation timestamp from metadata
+  createdAt?: string;
 }
 
 interface ImageLoadState {
@@ -88,12 +92,13 @@ const formatAddress = (address: string) => {
   return `${address.slice(0, 8)}...${address.slice(-6)}`;
 };
 
-export default function NFTDetailPage({ params }: { params: Promise<{ address: string }> }) {
-  const [nftData, setNftData] = useState<NFTData | null>(null);
+export default function TokenDetailPage({ params }: { params: Promise<{ address: string }> }) {
+  const [address, setAddress] = useState<string>('');
+  const [tokenData, setTokenData] = useState<TokenData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [address, setAddress] = useState<string>('');
-  const [activeTab, setActiveTab] = useState<string>('balance');
+  const [copiedAddress, setCopiedAddress] = useState(false);
+  const [activeTab, setActiveTab] = useState<string>('holders');
   const [balanceAddress, setBalanceAddress] = useState<string>('');
   const [balanceResult, setBalanceResult] = useState<{
     address: string;
@@ -105,41 +110,53 @@ export default function NFTDetailPage({ params }: { params: Promise<{ address: s
   const [tokenMetadata, setTokenMetadata] = useState<Record<number, TokenMetadata>>({});
   const [metadataLoading, setMetadataLoading] = useState<Record<number, boolean>>({});
   const [imageLoadState, setImageLoadState] = useState<ImageLoadState>({});
-  const [copiedAddress, setCopiedAddress] = useState(false);
-  const tokenIdsSectionRef = useRef<HTMLHeadingElement | null>(null);
+
 
   useEffect(() => {
-    async function getAddress() {
+    const getParams = async () => {
       const resolvedParams = await params;
       setAddress(resolvedParams.address);
-    }
-    getAddress();
+    };
+    getParams();
   }, [params]);
 
   useEffect(() => {
     if (!address) return;
 
-    async function fetchNFTData() {
+    const fetchTokenData = async () => {
       try {
         setLoading(true);
-        const response = await fetch(`/api/nft/${address}`);
-
+        setError(null);
+        
+        // Use the unified tokens API
+        const response = await fetch(`/api/tokens/${address}`);
+        
         if (!response.ok) {
-          throw new Error('Failed to fetch NFT data');
+          throw new Error('Failed to fetch token/NFT data');
         }
-
+        
         const data = await response.json();
-        setNftData(data);
+        setTokenData(data);
       } catch (err) {
-        console.error('Error fetching NFT data:', err);
-        setError(err instanceof Error ? err.message : 'Unknown error');
+        setError(err instanceof Error ? err.message : 'Unknown error occurred');
       } finally {
         setLoading(false);
       }
-    }
+    };
 
-    fetchNFTData();
+    fetchTokenData();
   }, [address]);
+
+  // Copy address to clipboard handler
+  const copyAddressToClipboard = async () => {
+    try {
+      await navigator.clipboard.writeText(tokenData?.token.address || '');
+      setCopiedAddress(true);
+      setTimeout(() => setCopiedAddress(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy address:', err);
+    }
+  };
 
   const fetchTokenMetadata = useCallback(async (tokenId: number) => {
     if (tokenMetadata[tokenId] || metadataLoading[tokenId]) return;
@@ -147,7 +164,8 @@ export default function NFTDetailPage({ params }: { params: Promise<{ address: s
     setMetadataLoading(prev => ({ ...prev, [tokenId]: true }));
     
     try {
-      const response = await fetch(`/api/nft/${address}/metadata/${tokenId}`);
+      // Use the unified tokens API with tokenId parameter
+      const response = await fetch(`/api/tokens/${address}?tokenId=${tokenId}`);
       
       if (!response.ok) {
         console.warn(`❌ Metadata fetch failed - Token ${tokenId}: HTTP ${response.status}`);
@@ -171,12 +189,12 @@ export default function NFTDetailPage({ params }: { params: Promise<{ address: s
   }, [address, tokenMetadata, metadataLoading]);
 
   const checkBalance = async () => {
-    if (!balanceAddress || !nftData) return;
+    if (!balanceAddress || !tokenData) return;
 
     setBalanceLoading(true);
     try {
       // Find balance for the address in holders data
-      const holder = nftData.holders.find(h =>
+      const holder = tokenData.holders.find(h =>
         h.address.toLowerCase() === balanceAddress.toLowerCase()
       );
 
@@ -203,48 +221,51 @@ export default function NFTDetailPage({ params }: { params: Promise<{ address: s
     }
   };
 
-  const copyAddressToClipboard = async () => {
-    try {
-      await navigator.clipboard.writeText(address);
-      setCopiedAddress(true);
-      setTimeout(() => setCopiedAddress(false), 2000);
-    } catch (err) {
-      console.error('Failed to copy address:', err);
-    }
-  };
-
-  const tabs = [
-    { id: 'balance', label: 'Get Balance', icon: UsersIcon },
-    { id: 'transfers', label: 'Token Transfers', icon: ArrowPathIcon },
-    { id: 'transactions', label: 'Contract Transactions', icon: DocumentTextIcon },
-    { id: 'source', label: 'Contract Source', icon: CodeBracketIcon },
-    { id: 'tokenids', label: 'VRC-721 TokenIDs', icon: HashtagIcon }
-  ];
-
-  // Load metadata when tokenids tab is active and we have NFT data
+  // Load metadata when tokenids tab is active and we have token data
   useEffect(() => {
-    if (activeTab === 'tokenids' && nftData && nftData.holders) {
-      const allTokenIds = nftData.holders.flatMap(holder => holder.tokenIds || []);
+    if (activeTab === 'tokenids' && tokenData && tokenData.holders) {
+      const allTokenIds = tokenData.holders.flatMap(holder => holder.tokenIds || []);
       allTokenIds.forEach(tokenId => {
         if (!tokenMetadata[tokenId] && !metadataLoading[tokenId]) {
           fetchTokenMetadata(tokenId);
         }
       });
     }
-  }, [activeTab, nftData, address, fetchTokenMetadata, metadataLoading, tokenMetadata]);
-
-
+  }, [activeTab, tokenData, address, fetchTokenMetadata, metadataLoading, tokenMetadata]);
 
   // スクロール用useEffect
   useEffect(() => {
-    if (activeTab === 'tokenids' && tokenIdsSectionRef.current) {
-      // 100ms遅延してからスクロール（よりふわっと感を出す）
+    if (activeTab === 'tokenids') {
+      // タブ切り替え後に少し遅延してからスクロール
       const timer = setTimeout(() => {
-        tokenIdsSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }, 100);
+        const tokenIdsSection = document.querySelector('[data-tab-content="tokenids"]');
+        if (tokenIdsSection) {
+          const element = tokenIdsSection as HTMLElement;
+          const rect = element.getBoundingClientRect();
+          const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+          const targetY = scrollTop + rect.top - 120; // ヘッダー分のオフセット
+          
+          window.scrollTo({
+            top: targetY,
+            behavior: 'smooth'
+          });
+        }
+      }, 150);
       return () => clearTimeout(timer);
     }
   }, [activeTab]);
+
+  // NFT固有の情報を表示するかどうかを判定
+  const isNFT = tokenData?.token.type === 'VRC-721' || tokenData?.token.type === 'VRC-1155';
+  const showNFTFeatures = isNFT && (tokenData?.token.floorPrice || tokenData?.token.volume24h || tokenData?.token.creator);
+
+  const tabs = [
+    { id: 'holders', label: 'Token Holders', icon: UsersIcon },
+    { id: 'transfers', label: 'Token Transfers', icon: ArrowPathIcon },
+    { id: 'balance', label: 'Get Balance', icon: UsersIcon },
+    { id: 'source', label: 'Contract Source', icon: CodeBracketIcon },
+    ...(isNFT ? [{ id: 'tokenids', label: 'VRC-721 TokenIDs', icon: HashtagIcon }] : [])
+  ];
 
   const renderTabContent = () => {
     switch (activeTab) {
@@ -277,8 +298,8 @@ export default function NFTDetailPage({ params }: { params: Promise<{ address: s
                     <span className='text-blue-400 font-mono text-sm'>{balanceResult.address}</span>
                   </div>
                   <div className='flex justify-between'>
-                    <span className='text-gray-400'>NFT Balance:</span>
-                    <span className='text-green-400 font-bold'>{balanceResult.balance} {nftData?.nft.symbol}</span>
+                    <span className='text-gray-400'>Token Balance:</span>
+                    <span className='text-green-400 font-bold'>{balanceResult.balance} {tokenData?.token.symbol}</span>
                   </div>
                   <div className='flex justify-between'>
                     <span className='text-gray-400'>Percentage of Supply:</span>
@@ -300,7 +321,7 @@ export default function NFTDetailPage({ params }: { params: Promise<{ address: s
         return (
           <div className='space-y-4'>
             <h4 className='text-lg font-semibold text-gray-100'>Recent Transfers</h4>
-            {nftData?.transfers && nftData.transfers.length > 0 ? (
+            {tokenData?.transfers && tokenData.transfers.length > 0 ? (
               <div className='overflow-x-auto'>
                 <table className='w-full'>
                   <thead>
@@ -308,12 +329,15 @@ export default function NFTDetailPage({ params }: { params: Promise<{ address: s
                       <th className='text-left py-2 text-gray-400'>Tx Hash</th>
                       <th className='text-left py-2 text-gray-400'>From</th>
                       <th className='text-left py-2 text-gray-400'>To</th>
-                      <th className='text-left py-2 text-gray-400'>Token ID</th>
+                      <th className='text-left py-2 text-gray-400'>Value</th>
+                      {tokenData.token.type === 'VRC-721' && (
+                        <th className='text-left py-2 text-gray-400'>Token ID</th>
+                      )}
                       <th className='text-left py-2 text-gray-400'>Time</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {nftData.transfers.map((transfer, index) => (
+                    {tokenData.transfers.map((transfer, index) => (
                       <tr key={index} className='border-b border-gray-700/50'>
                         <td className='py-2'>
                           <Link href={`/tx/${transfer.hash}`} className='text-blue-400 hover:text-blue-300 font-mono text-sm'>
@@ -344,7 +368,10 @@ export default function NFTDetailPage({ params }: { params: Promise<{ address: s
                             </Link>
                           )}
                         </td>
-                        <td className='py-2 text-gray-300'>{transfer.tokenId}</td>
+                        <td className='py-2 text-green-400 font-bold'>{transfer.value}</td>
+                        {tokenData.token.type === 'VRC-721' && (
+                          <td className='py-2 text-gray-300'>{transfer.tokenId || '-'}</td>
+                        )}
                         <td className='py-2 text-gray-400 text-sm'>
                           <div className='flex items-center'>
                             <ClockIcon className='w-4 h-4 text-gray-400 mr-2' />
@@ -368,18 +395,6 @@ export default function NFTDetailPage({ params }: { params: Promise<{ address: s
           </div>
         );
 
-      case 'transactions':
-        return (
-          <div className='space-y-4'>
-            <h4 className='text-lg font-semibold text-gray-100'>Contract Transactions</h4>
-            <div className='text-center py-8'>
-              <DocumentTextIcon className='w-12 h-12 text-gray-500 mx-auto mb-4' />
-              <p className='text-gray-400'>Contract transactions will be displayed here</p>
-              <p className='text-gray-500 text-sm mt-2'>Feature coming soon</p>
-            </div>
-          </div>
-        );
-
       case 'source':
         return (
           <div className='space-y-4'>
@@ -390,7 +405,7 @@ export default function NFTDetailPage({ params }: { params: Promise<{ address: s
                 <span className='font-mono text-blue-400'>{address}</span>
               </div>
 
-              {nftData?.contract?.verified ? (
+              {tokenData?.contract?.verified ? (
                 <div className='space-y-4'>
                   <div className='flex items-center justify-between mb-4'>
                     <div className='flex items-center gap-2'>
@@ -408,22 +423,17 @@ export default function NFTDetailPage({ params }: { params: Promise<{ address: s
                   <div className='grid grid-cols-1 md:grid-cols-3 gap-4 mb-6'>
                     <div className='bg-gray-800 rounded p-3'>
                       <div className='text-gray-400 text-sm'>Contract Name</div>
-                      <div className='text-gray-200 font-medium'>{nftData.contract.name}</div>
+                      <div className='text-gray-200 font-medium'>{tokenData.contract.name}</div>
                     </div>
                     <div className='bg-gray-800 rounded p-3'>
                       <div className='text-gray-400 text-sm'>Compiler</div>
                       <div className='text-gray-200 font-medium'>
-                        {/* latestやUnknownの場合でも、実際のバージョン番号が取得できれば表示 */}
                         {(() => {
-                          const compiler = nftData.contract.compiler;
-                          // latestやunknownなら空文字扱い
+                          const compiler = tokenData.contract.compiler;
                           if (!compiler || compiler.toLowerCase() === 'latest' || compiler.toLowerCase() === 'unknown') {
-                            // contract.nameや他の情報からバージョンが取得できる場合はここで表示（例: contract.compilerVersionやcontract.metadataVersionなど）
-                            // ここではcompiler以外のバージョン情報があれば優先表示する例
-                            if (nftData.contract.compilerVersion && nftData.contract.compilerVersion !== 'latest' && nftData.contract.compilerVersion !== 'unknown') {
-                              return nftData.contract.compilerVersion;
+                            if (tokenData.contract.compilerVersion && tokenData.contract.compilerVersion !== 'latest' && tokenData.contract.compilerVersion !== 'unknown') {
+                              return tokenData.contract.compilerVersion;
                             }
-                            // それもなければ"-"
                             return '-';
                           }
                           return compiler;
@@ -432,20 +442,49 @@ export default function NFTDetailPage({ params }: { params: Promise<{ address: s
                     </div>
                     <div className='bg-gray-800 rounded p-3'>
                       <div className='text-gray-400 text-sm'>Language</div>
-                      <div className='text-gray-200 font-medium'>{nftData.contract.language}</div>
+                      <div className='text-gray-200 font-medium'>{tokenData.contract.language}</div>
                     </div>
                   </div>
 
+                  {/* Contract Source Code */}
+                  {tokenData.contract.sourceCode && (
+                    <div className='bg-gray-950 rounded border border-gray-700 overflow-hidden'>
+                      <div className='bg-gray-800 px-4 py-2 border-b border-gray-700'>
+                        <span className='text-sm font-medium text-gray-300'>Contract Source Code</span>
+                      </div>
+                      <pre className='p-4 overflow-x-auto text-sm text-gray-300 max-h-96 overflow-y-auto'>
+                        <code className='whitespace-pre-wrap break-all'>
+                          {tokenData.contract.sourceCode}
+                        </code>
+                      </pre>
+                    </div>
+                  )}
+
+                  {/* Contract Bytecode */}
                   <div className='bg-gray-950 rounded border border-gray-700 overflow-hidden'>
                     <div className='bg-gray-800 px-4 py-2 border-b border-gray-700'>
                       <span className='text-sm font-medium text-gray-300'>Contract Bytecode</span>
                     </div>
                     <pre className='p-4 overflow-x-auto text-sm text-gray-300 max-h-96 overflow-y-auto'>
                       <code className='whitespace-pre-wrap break-all'>
-                        {nftData.contract.bytecode}
+                        {tokenData.contract.bytecode}
                       </code>
                     </pre>
                   </div>
+
+                  {/* Compiled Code */}
+                  {tokenData.contract.sourceCode && (
+                    <div className='bg-gray-950 rounded border border-gray-700 overflow-hidden'>
+                      <div className='bg-gray-800 px-4 py-2 border-b border-gray-700'>
+                        <span className='text-sm font-medium text-gray-300'>Compiled Code</span>
+                      </div>
+                      <pre className='p-4 overflow-x-auto text-sm text-gray-300 max-h-96 overflow-y-auto'>
+                        <code className='whitespace-pre-wrap break-all'>
+                          {tokenData.contract.bytecode}
+                        </code>
+                      </pre>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className='space-y-4'>
@@ -460,12 +499,12 @@ export default function NFTDetailPage({ params }: { params: Promise<{ address: s
                       <span className='text-sm font-medium text-gray-300'>Contract Bytecode</span>
                       <div className='flex items-center gap-2'>
                         <span className='text-xs text-gray-400'>Contract Address: {address}</span>
-                        <span className='text-xs text-gray-400'>Token: {nftData?.nft?.name || 'Unknown'}</span>
+                        <span className='text-xs text-gray-400'>Token: {tokenData?.token?.name || 'Unknown'}</span>
                       </div>
                     </div>
                     <pre className='p-4 overflow-x-auto text-sm text-gray-300 max-h-96 overflow-y-auto'>
                       <code className='whitespace-pre-wrap break-all'>
-                        {nftData?.contract?.bytecode || '0x'}
+                        {tokenData?.contract?.bytecode || '0x'}
                       </code>
                     </pre>
                   </div>
@@ -481,7 +520,7 @@ export default function NFTDetailPage({ params }: { params: Promise<{ address: s
                       
                       <div className='flex flex-col sm:flex-row gap-3 justify-center'>
                         <Link 
-                          href={`/contract/verify?address=${address}&contractName=${nftData?.nft?.name?.replace(/\s+/g, '') || 'NFTContract'}`}
+                          href={`/contract/verify?address=${address}&contractName=${tokenData?.token?.name?.replace(/\s+/g, '') || 'TokenContract'}`}
                           className='inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors'
                         >
                           <CodeBracketIcon className='w-5 h-5' />
@@ -512,12 +551,21 @@ export default function NFTDetailPage({ params }: { params: Promise<{ address: s
 
       case 'tokenids':
         return (
-          <div className='space-y-4'>
-            <h4 ref={tokenIdsSectionRef} className='text-lg font-semibold text-gray-100'>VRC-721 Token IDs</h4>
+          <div 
+            data-tab-content="tokenids"
+            className='space-y-4 animate-fadeIn' 
+            style={{
+              animation: 'fadeIn 0.6s ease-out'
+            }}
+          >
+            <h4 className='text-lg font-semibold text-gray-100'>VRC-721 Token IDs</h4>
+            
+
+            
             <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4'>
-              {nftData?.holders && nftData.holders.length > 0 ? (
+              {tokenData?.holders && tokenData.holders.length > 0 ? (
                 // Collect all token IDs and sort by token ID in descending order (newest first)
-                nftData.holders.flatMap((holder) =>
+                tokenData.holders.flatMap((holder) =>
                   (holder.tokenIds || []).map(tokenId => ({ tokenId, holder }))
                 )
                 .sort((a, b) => b.tokenId - a.tokenId) // Sort by token ID descending
@@ -566,7 +614,6 @@ export default function NFTDetailPage({ params }: { params: Promise<{ address: s
                                 {imageLoadState[tokenId] === 'error' && (
                                   <div className='absolute inset-0 flex items-center justify-center bg-red-900/20 z-15'>
                                     <div className='text-center'>
-                                      <HashtagIcon className='w-8 h-8 text-red-400 mx-auto mb-1' />
                                       <span className='text-xs text-red-400'>Load failed</span>
                                       <div className='text-xs text-gray-500 mt-1 px-2 break-all'>
                                         {metadata.image}
@@ -591,95 +638,50 @@ export default function NFTDetailPage({ params }: { params: Promise<{ address: s
                                     className={`w-full h-full object-cover z-10 ${
                                       imageLoadState[tokenId] === 'loaded' ? 'opacity-100' : 'opacity-0'
                                     }`}
-                                                                      onLoadStart={() => {
-                                    setImageLoadState(prev => ({ ...prev, [tokenId]: 'loading' }));
-                                  }}
-                                  onLoad={() => {
-                                    setImageLoadState(prev => ({ ...prev, [tokenId]: 'loaded' }));
-                                  }}
-                                  onError={() => {
-                                    setImageLoadState(prev => ({ ...prev, [tokenId]: 'error' }));
-                                  }}
+                                    onLoadStart={() => {
+                                      setImageLoadState(prev => ({ ...prev, [tokenId]: 'loading' }));
+                                    }}
+                                    onLoad={() => {
+                                      setImageLoadState(prev => ({ ...prev, [tokenId]: 'loaded' }));
+                                    }}
+                                    onError={() => {
+                                      setImageLoadState(prev => ({ ...prev, [tokenId]: 'error' }));
+                                    }}
+                                    unoptimized
                                   />
                                 </a>
-                                
-                                {/* Default fallback when no specific state */}
-                                {(!imageLoadState[tokenId] || imageLoadState[tokenId] === 'initial') && (
-                                  <div className='absolute inset-0 flex items-center justify-center bg-gray-800 z-5'>
-                                    <div className='text-center'>
-                                      <HashtagIcon className='w-8 h-8 text-gray-500 mx-auto mb-1' />
-                                      <span className='text-xs text-gray-500'>NFT #{tokenId}</span>
-                                      <span className='text-xs text-yellow-400 block mt-1'>Waiting...</span>
-                                    </div>
-                                  </div>
-                                )}
                               </div>
                             ) : (
-                              <div className='h-48 flex items-center justify-center'>
-                                <div className='text-center'>
-                                  <HashtagIcon className='w-8 h-8 text-gray-500 mx-auto mb-1' />
-                                  <span className='text-xs text-gray-500'>NFT #{tokenId}</span>
-                                </div>
+                              <div className='h-48 flex items-center justify-center bg-gray-800'>
+                                <span className='text-gray-500 text-sm'>No image</span>
                               </div>
                             )}
                             
-                            {/* Metadata Info */}
-                            <div className='p-3 bg-gray-800/50'>
-                              <h5 className='font-semibold text-gray-100 text-sm mb-1'>
-                                {metadata.name || `Token #${tokenId}`}
-                              </h5>
+                            {/* Metadata info */}
+                            <div className='p-3'>
+                              <h5 className='font-semibold text-gray-200 mb-2'>{metadata.name || `Token #${tokenId}`}</h5>
                               {metadata.description && (
-                                <p className='text-xs text-gray-400 line-clamp-2 mb-2'>
-                                  {metadata.description}
-                                </p>
+                                <p className='text-sm text-gray-400 mb-2'>{metadata.description}</p>
                               )}
                               
-                              {/* Metadata info */}
-                              <div className='text-xs text-gray-500 mb-2 space-y-1'>
-                                {metadata.createdAt && (
-                                  <div className='flex items-center gap-1'>
-                                    <ClockIcon className='w-3 h-3' />
-                                    <span>Created: {new Date(metadata.createdAt).toLocaleString()}</span>
-                                  </div>
-                                )}
-                                <div className='break-all'>
-                                  Metadata: <a 
-                                    href={metadata.tokenURI} 
-                                    target="_blank" 
-                                    rel="noopener noreferrer" 
-                                    className='text-blue-400 hover:text-blue-300'
-                                  >
-                                    {metadata.tokenURI}
-                                  </a>
-                                </div>
-                              </div>
-                              
+                              {/* Attributes */}
                               {metadata.attributes && metadata.attributes.length > 0 && (
-                                <div className='flex flex-wrap gap-1'>
-                                  {metadata.attributes.slice(0, 2).map((attr, index) => (
-                                    <span 
-                                      key={index}
-                                      className='text-xs bg-blue-600/20 text-blue-300 px-2 py-1 rounded'
-                                    >
-                                      {attr.trait_type}: {attr.value}
-                                    </span>
-                                  ))}
-                                  {metadata.attributes.length > 2 && (
-                                    <span className='text-xs text-gray-500'>
-                                      +{metadata.attributes.length - 2} more
-                                    </span>
-                                  )}
+                                <div className='space-y-1'>
+                                  <span className='text-xs text-gray-500 font-medium'>Attributes:</span>
+                                  <div className='flex flex-wrap gap-1'>
+                                    {metadata.attributes.map((attr, idx) => (
+                                      <span key={idx} className='text-xs bg-gray-700 text-gray-300 px-2 py-1 rounded'>
+                                        {attr.trait_type}: {attr.value}
+                                      </span>
+                                    ))}
+                                  </div>
                                 </div>
                               )}
                             </div>
                           </div>
                         ) : (
-                          <div className='h-48 flex items-center justify-center'>
-                            <div className='text-center'>
-                              <HashtagIcon className='w-8 h-8 text-gray-500 mx-auto mb-1' />
-                              <span className='text-xs text-gray-500'>NFT #{tokenId}</span>
-                              <p className='text-xs text-red-400 mt-1'>Metadata unavailable</p>
-                            </div>
+                          <div className='h-48 flex items-center justify-center bg-gray-800'>
+                            <span className='text-gray-500 text-sm'>No metadata</span>
                           </div>
                         )}
                       </div>
@@ -688,24 +690,62 @@ export default function NFTDetailPage({ params }: { params: Promise<{ address: s
                 })
               ) : (
                 <div className='col-span-full text-center py-8'>
-                  <HashtagIcon className='w-12 h-12 text-gray-500 mx-auto mb-4' />
                   <p className='text-gray-400'>No token IDs found</p>
                 </div>
               )}
             </div>
-            <div className='text-center mt-4'>
-              <p className='text-gray-500 text-sm'>
-                Total NFTs in collection: {nftData?.nft.totalSupply || '0'}
-              </p>
-              <p className='text-gray-500 text-sm'>
-                Showing all {nftData?.holders?.flatMap(h => h.tokenIds || []).length || 0} token IDs
-              </p>
-            </div>
+            
+            {tokenData?.holders && tokenData.holders.flatMap(h => h.tokenIds || []).length > 0 && (
+              <div className='text-center mt-4'>
+                <p className='text-sm text-gray-400'>
+                  Showing all {tokenData.holders.flatMap(h => h.tokenIds || []).length} token IDs
+                </p>
+              </div>
+            )}
           </div>
         );
 
       default:
-        return null;
+        return (
+          <div className='space-y-4'>
+            <h4 className='text-lg font-semibold text-gray-100'>Token Holders</h4>
+            {tokenData?.holders && tokenData.holders.length > 0 ? (
+              <div className='overflow-x-auto'>
+                <table className='w-full'>
+                  <thead>
+                    <tr className='border-b border-gray-700'>
+                      <th className='text-left py-3 px-4 text-sm font-medium text-gray-300'>#</th>
+                      <th className='text-left py-3 px-4 text-sm font-medium text-gray-300'>Address</th>
+                      <th className='text-left py-3 px-4 text-sm font-medium text-gray-300'>Balance</th>
+                      <th className='text-left py-3 px-4 text-sm font-medium text-gray-300'>Percentage</th>
+                    </tr>
+                  </thead>
+                  <tbody className='divide-y divide-gray-700'>
+                    {tokenData.holders.map((holder) => (
+                      <tr key={holder.rank} className='hover:bg-gray-700/50 transition-colors'>
+                        <td className='py-3 px-4 text-gray-200 font-bold'>#{holder.rank}</td>
+                        <td className='py-3 px-4'>
+                          <Link
+                            href={`/address/${holder.address}`}
+                            className='font-mono text-blue-400 hover:text-blue-300 transition-colors break-all'
+                          >
+                            {formatAddress(holder.address)}
+                          </Link>
+                        </td>
+                        <td className='py-3 px-4 text-green-400 font-bold'>{holder.balance}</td>
+                        <td className='py-3 px-4 text-yellow-400 font-medium'>{holder.percentage}%</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className='text-center py-8'>
+                <p className='text-gray-400'>No holders data available</p>
+              </div>
+            )}
+          </div>
+        );
     }
   };
 
@@ -713,12 +753,20 @@ export default function NFTDetailPage({ params }: { params: Promise<{ address: s
     return (
       <>
         <Header />
-        <div className='container mx-auto px-4 py-8'>
-          <div className='animate-pulse'>
-            <div className='h-8 bg-gray-700 rounded mb-4'></div>
-            <div className='h-64 bg-gray-700 rounded'></div>
+        <div className='page-header-container'>
+          <div className='container mx-auto px-4 py-8'>
+            <h1 className='text-3xl font-bold mb-2 text-gray-100'>Token Details</h1>
+            <p className='text-gray-400'>Loading token information...</p>
           </div>
         </div>
+        <main className='container mx-auto px-4 py-8'>
+          <div className='bg-gray-800 rounded-lg border border-gray-700 p-6'>
+            <div className='text-center py-8'>
+              <div className='inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-400'></div>
+              <p className='text-gray-400 mt-2'>Loading token data...</p>
+            </div>
+          </div>
+        </main>
       </>
     );
   }
@@ -727,22 +775,25 @@ export default function NFTDetailPage({ params }: { params: Promise<{ address: s
     return (
       <>
         <Header />
-        <div className='container mx-auto px-4 py-8'>
-          <div className='text-red-400'>Error: {error}</div>
+        <div className='page-header-container'>
+          <div className='container mx-auto px-4 py-8'>
+            <h1 className='text-3xl font-bold mb-2 text-gray-100'>Token Details</h1>
+            <p className='text-gray-400'>Error loading token information</p>
+          </div>
         </div>
+        <main className='container mx-auto px-4 py-8'>
+          <div className='bg-gray-800 rounded-lg border border-gray-700 p-6'>
+            <div className='text-center py-8'>
+              <p className='text-red-400'>Error: {error}</p>
+            </div>
+          </div>
+        </main>
       </>
     );
   }
 
-  if (!nftData) {
-    return (
-      <>
-        <Header />
-        <div className='container mx-auto px-4 py-8'>
-          <div className='text-gray-400'>No NFT data found</div>
-        </div>
-      </>
-    );
+  if (!tokenData) {
+    return null;
   }
 
   return (
@@ -752,121 +803,173 @@ export default function NFTDetailPage({ params }: { params: Promise<{ address: s
       {/* Page Header */}
       <div className='page-header-container'>
         <div className='container mx-auto px-4 py-8'>
-          <div className='flex items-center gap-4 mb-4'>
-            <div className='w-20 h-20 bg-gray-700 border border-gray-600 rounded-lg flex items-center justify-center'>
-              <Image
-                src={`/img/tokens/${nftData.nft.symbol}.svg`}
-                alt={`${nftData.nft.symbol} logo`}
-                width={56}
-                height={56}
-                className='rounded'
-                unoptimized
-              />
-            </div>
-            <div>
-              <div className='flex items-center gap-3 mb-2'>
-                <h1 className='text-3xl font-bold text-gray-100'>{nftData.nft.name} ({nftData.nft.symbol})</h1>
-                {nftData.nft.type === 'VRC-721' && (
-                  <span className='px-3 py-1 bg-purple-500/20 text-purple-400 text-sm font-medium rounded-full border border-purple-500/30'>
-                    VRC-721
-                  </span>
-                )}
-              </div>
-              <p className='text-gray-400'>NFT Collection on VirBiCoin Network</p>
-            </div>
-          </div>
+          <h1 className='text-3xl font-bold mb-2 text-gray-100'>Token Details</h1>
+          <p className='text-gray-400'>
+            Token information and holder statistics for {tokenData.token.name} ({tokenData.token.symbol})
+          </p>
         </div>
       </div>
 
       <main className='container mx-auto px-4 py-8'>
-        {/* Collection Info Card */}
-        <div className='bg-gray-800 rounded-lg border border-gray-700 p-6 mb-6'>
-          <div className='grid grid-cols-1 lg:grid-cols-3 gap-6'>
-            <div className='lg:col-span-2'>
-              <h3 className='text-lg font-semibold text-gray-100 mb-4 flex items-center gap-2'>
-                <DocumentTextIcon className='w-5 h-5 text-blue-400' />
-                Collection Information
-              </h3>
-              <div className='space-y-4'>
-                <div className='flex flex-col sm:flex-row sm:items-center gap-2'>
-                  <span className='text-gray-400 font-medium min-w-[120px]'>Contract:</span>
-                  <div className='flex items-center gap-2'>
-                    <span className='font-mono text-blue-400 break-all'>{address}</span>
-                    <button
-                      onClick={copyAddressToClipboard}
-                      className='p-1 text-gray-400 hover:text-blue-400 transition-colors'
-                      title='Copy address to clipboard'
+        {/* Token Info Card */}
+        <div className='bg-gray-800 rounded-lg border border-gray-700 p-6 mb-8'>
+          <div className='flex items-center justify-between mb-6'>
+            <h2 className='text-xl font-semibold text-gray-100'>Token Information</h2>
+            {isNFT && (
+              <button
+                onClick={() => {
+                  setActiveTab('tokenids');
+                  
+                  // タブ切り替え後にスクロール
+                  setTimeout(() => {
+                    const tokenIdsSection = document.querySelector('[data-tab-content="tokenids"]');
+                    if (tokenIdsSection) {
+                      const element = tokenIdsSection as HTMLElement;
+                      const rect = element.getBoundingClientRect();
+                      const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+                      const targetY = scrollTop + rect.top - 120; // ヘッダー分のオフセット
+                      
+                      window.scrollTo({
+                        top: targetY,
+                        behavior: 'smooth'
+                      });
+                    }
+                  }, 300);
+                }}
+                className='px-4 py-2 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white text-base font-bold rounded-lg shadow-lg flex items-center gap-2 transition-all duration-300 transform hover:scale-105 hover:shadow-xl active:scale-95 min-h-[40px]'
+                style={{ minWidth: 'auto' }}
+              >
+                <svg className='w-5 h-5' fill='none' stroke='currentColor' strokeWidth='2' viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' d='M9 17v-2a4 4 0 014-4h2m4 0V7a2 2 0 00-2-2h-7a2 2 0 00-2 2v10a2 2 0 002 2h7a2 2 0 002-2v-4a2 2 0 00-2-2h-2a4 4 0 00-4 4v2'></path></svg>
+                View NFTs
+              </button>
+            )}
+          </div>
+          <div className='grid grid-cols-1 md:grid-cols-3 gap-6'>
+            <div>
+              <div className='text-sm font-medium text-gray-300 mb-2'>Token Address</div>
+              <div className='flex items-center gap-2 font-mono text-blue-400 text-sm break-all'>
+                <Link
+                  href={`/address/${tokenData.token.address}`}
+                  className='hover:text-blue-300 transition-colors'
+                  title='View contract details'
+                >
+                  {tokenData.token.address}
+                </Link>
+                {/* Copy icon */}
+                <button
+                  onClick={copyAddressToClipboard}
+                  className='p-1 text-gray-400 hover:text-blue-400 transition-colors'
+                  title='Copy address to clipboard'
+                >
+                  <ClipboardDocumentIcon className='w-4 h-4' />
+                </button>
+                {copiedAddress && (
+                  <span className='text-green-400 text-xs'>Copied!</span>
+                )}
+              </div>
+            </div>
+            <div>
+              <div className='text-sm font-medium text-gray-300 mb-2'>Token Name</div>
+              <div className='text-orange-400 text-lg font-semibold'>{tokenData.token.name}</div>
+            </div>
+            <div>
+              <div className='text-sm font-medium text-gray-300 mb-2'>Symbol</div>
+              <div className='text-blue-400 text-lg font-bold'>{tokenData.token.symbol}</div>
+            </div>
+            <div>
+              <div className='text-sm font-medium text-gray-300 mb-2'>Type</div>
+              <span className={`px-2 py-1 rounded text-xs font-medium ${
+                tokenData.token.type === 'Native' ? 'bg-cyan-500/20 text-cyan-400' :
+                  tokenData.token.type === 'VRC-721' ? 'bg-purple-500/20 text-purple-400' :
+                    tokenData.token.type === 'VRC-1155' ? 'bg-orange-500/20 text-orange-400' :
+                      tokenData.token.type === 'VRC-20' ? 'bg-blue-500/20 text-blue-400' :
+                        'bg-gray-500/20 text-gray-400'
+              }`}>
+                {tokenData.token.type}
+              </span>
+            </div>
+            <div>
+              <div className='text-sm font-medium text-gray-300 mb-2'>Total Supply</div>
+              <div className='text-gray-100 text-lg font-semibold'>{tokenData.token.totalSupply}</div>
+            </div>
+            <div>
+              <div className='text-sm font-medium text-gray-300 mb-2'>Verify</div>
+              {tokenData.token.verified ? (
+                <div className='flex items-center gap-1 px-2 py-1 bg-green-500/20 text-green-400 rounded text-sm font-medium w-fit'>
+                  <CheckCircleIcon className='w-5 h-5' />
+                  <span>Verified</span>
+                </div>
+              ) : (
+                <span className='text-gray-400 text-xs'>-</span>
+              )}
+            </div>
+            {showNFTFeatures && (
+              <>
+                {tokenData.token.creator && (
+                  <div>
+                    <div className='text-sm font-medium text-gray-300 mb-2'>Creator</div>
+                    <Link
+                      href={`/address/${tokenData.token.creator}`}
+                      className='font-mono text-blue-400 hover:text-blue-300 transition-colors break-all text-sm'
                     >
-                      <ClipboardDocumentIcon className='w-4 h-4' />
-                    </button>
-                    {copiedAddress && (
-                      <span className='text-green-400 text-sm'>Copied!</span>
-                    )}
+                      {formatAddress(tokenData.token.creator)}
+                    </Link>
                   </div>
-                </div>
-                <div className='flex flex-col sm:flex-row sm:items-center gap-2'>
-                  <span className='text-gray-400 font-medium min-w-[120px]'>Creator:</span>
-                  <Link
-                    href={`/address/${nftData.nft.creator}`}
-                    className='font-mono text-blue-400 hover:text-blue-300 transition-colors break-all'
-                  >
-                    {nftData.nft.creator}
-                  </Link>
-                </div>
-                <div className='flex flex-col sm:flex-row sm:items-center gap-2'>
-                  <span className='text-gray-400 font-medium min-w-[120px]'>Description:</span>
-                  <span className='text-gray-200'>{nftData.nft.description}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Quick Stats */}
-            <div className='bg-gray-700/50 rounded-lg p-4 border border-gray-600/50'>
-              <h4 className='text-sm font-medium text-gray-300 mb-4'>Collection Stats</h4>
-              <div className='space-y-3'>
-                <div className='flex justify-between items-center'>
-                  <span className='text-gray-400'>Total Supply:</span>
-                  <span className='text-purple-400 font-bold'>{nftData.nft.totalSupply || '0'}</span>
-                </div>
-                <div className='flex justify-between items-center'>
-                  <span className='text-gray-400'>Holders:</span>
-                  <span className='text-green-400 font-bold'>{nftData.statistics.holders}</span>
-                </div>
-                <div className='flex justify-between items-center'>
-                  <span className='text-gray-400'>Total Transfers:</span>
-                  <span className='text-blue-400 font-bold'>{nftData.statistics.totalTransfers}</span>
-                </div>
-                <div className='flex justify-between items-center'>
-                  <span className='text-gray-400'>Floor Price:</span>
-                  <span className='text-yellow-400 font-bold'>{nftData.nft.floorPrice} VBC</span>
-                </div>
-                <div className='flex justify-between items-center'>
-                  <span className='text-gray-400'>24h Volume:</span>
-                  <span className='text-blue-400 font-bold'>{nftData.nft.volume24h} VBC</span>
-                </div>
-                {/* View NFT Button */}
-                <div className='pt-2'>
-                  <button
-                    onClick={() => setActiveTab('tokenids')}
-                    className='w-full px-4 py-2 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white font-semibold rounded-lg transition-all duration-200 flex items-center justify-center gap-2'
-                  >
-                    <CubeIcon className='w-4 h-4' />
-                    View NFT Arts
-                  </button>
-                </div>
-              </div>
-            </div>
+                )}
+                {tokenData.token.floorPrice && (
+                  <div>
+                    <div className='text-sm font-medium text-gray-300 mb-2'>Floor Price</div>
+                    <div className='text-pink-400 font-bold'>{tokenData.token.floorPrice} VBC</div>
+                  </div>
+                )}
+                {tokenData.token.volume24h && (
+                  <div>
+                    <div className='text-sm font-medium text-gray-300 mb-2'>24h Volume</div>
+                    <div className='text-green-400 font-bold'>{tokenData.token.volume24h} VBC</div>
+                  </div>
+                )}
+              </>
+            )}
           </div>
         </div>
 
-        {/* Balance Checker */}
-        <div className='bg-gray-800 rounded-lg border border-gray-700 p-6 mb-6'>
-          <div className='flex items-center gap-2 mb-4'>
-            <UsersIcon className='w-5 h-5 text-cyan-400' />
-            <h3 className='text-lg font-semibold text-gray-100'>NFT Collection Tools</h3>
+        {/* Stats Cards */}
+        <div className='mt-8 grid grid-cols-1 md:grid-cols-4 gap-4 mb-8'>
+          <div className='bg-gray-700/50 rounded-lg p-4 border border-gray-600/50'>
+            <h3 className='text-sm font-medium text-gray-300 mb-2'>Holders</h3>
+            <p className='text-2xl font-bold text-yellow-400'>{(tokenData.statistics.holders || 0).toLocaleString()}</p>
+            <p className='text-xs text-gray-400'>Unique addresses</p>
           </div>
-          <p className='text-gray-400 mb-4'>Explore and interact with this NFT collection using the tools below</p>
+
+          <div className='bg-gray-700/50 rounded-lg p-4 border border-gray-600/50'>
+            <h3 className='text-sm font-medium text-gray-300 mb-2'>Transfers</h3>
+            <p className='text-2xl font-bold text-green-400'>{(tokenData.statistics.totalTransfers || tokenData.statistics.transfers || 0).toLocaleString()}</p>
+            <p className='text-xs text-gray-400'>Total transactions</p>
+          </div>
+
+          <div className='bg-gray-700/50 rounded-lg p-4 border border-gray-600/50'>
+            <h3 className='text-sm font-medium text-gray-300 mb-2'>Market Cap</h3>
+            <p className='text-2xl font-bold text-yellow-400'>{tokenData.statistics.marketCap}</p>
+            <p className='text-xs text-gray-400'>Current valuation</p>
+          </div>
+
+          <div className='bg-gray-700/50 rounded-lg p-4 border border-gray-600/50'>
+            <h3 className='text-sm font-medium text-gray-300 mb-2'>Age</h3>
+            <p className='text-2xl font-bold text-purple-400'>{tokenData.statistics.age || 0} days</p>
+            <p className='text-xs text-gray-400'>Since creation</p>
+          </div>
         </div>
+
+        {/* NFT Tools Section (NFTの場合のみ表示) */}
+        {isNFT && (
+          <div className='bg-gray-800 rounded-lg border border-gray-700 p-6 mb-6'>
+            <div className='flex items-center gap-2 mb-4'>
+              <UsersIcon className='w-5 h-5 text-cyan-400' />
+              <h3 className='text-lg font-semibold text-gray-100'>NFT Collection Tools</h3>
+            </div>
+            <p className='text-gray-400 mb-4'>Explore and interact with this NFT collection using the tools below</p>
+          </div>
+        )}
 
         {/* Tabs Section */}
         <div className='bg-gray-800 rounded-lg border border-gray-700 p-6'>
@@ -896,24 +999,26 @@ export default function NFTDetailPage({ params }: { params: Promise<{ address: s
           </div>
         </div>
 
-        {/* Activity Stats */}
-        <div className='mt-8 grid grid-cols-1 md:grid-cols-3 gap-4'>
-          <div className='bg-gray-800 rounded-lg border border-gray-700 p-4'>
-            <h3 className='text-sm font-medium text-gray-300 mb-2'>24h Transfers</h3>
-            <p className='text-2xl font-bold text-green-400'>{nftData.statistics.transfers24h || 0}</p>
-            <p className='text-xs text-gray-400'>Token movements</p>
+        {/* Activity Stats (NFTの場合のみ表示) */}
+        {isNFT && tokenData.statistics.transfers24h !== undefined && (
+          <div className='mt-8 grid grid-cols-1 md:grid-cols-3 gap-4'>
+            <div className='bg-gray-800 rounded-lg border border-gray-700 p-4'>
+              <h3 className='text-sm font-medium text-gray-300 mb-2'>24h Transfers</h3>
+              <p className='text-2xl font-bold text-green-400'>{tokenData.statistics.transfers24h || 0}</p>
+              <p className='text-xs text-gray-400'>Token movements</p>
+            </div>
+            <div className='bg-gray-800 rounded-lg border border-gray-700 p-4'>
+              <h3 className='text-sm font-medium text-gray-300 mb-2'>Total Transfers</h3>
+              <p className='text-2xl font-bold text-blue-400'>{(tokenData.statistics.totalTransfers || tokenData.statistics.transfers || 0).toLocaleString()}</p>
+              <p className='text-xs text-gray-400'>All time transfers</p>
+            </div>
+            <div className='bg-gray-800 rounded-lg border border-gray-700 p-4'>
+              <h3 className='text-sm font-medium text-gray-300 mb-2'>Unique Holders</h3>
+              <p className='text-2xl font-bold text-yellow-400'>{(tokenData.statistics.holders || 0).toLocaleString()}</p>
+              <p className='text-xs text-gray-400'>Collection owners</p>
+            </div>
           </div>
-          <div className='bg-gray-800 rounded-lg border border-gray-700 p-4'>
-            <h3 className='text-sm font-medium text-gray-300 mb-2'>Total Transfers</h3>
-            <p className='text-2xl font-bold text-blue-400'>{nftData.statistics.totalTransfers || 0}</p>
-            <p className='text-xs text-gray-400'>All time transfers</p>
-          </div>
-          <div className='bg-gray-800 rounded-lg border border-gray-700 p-4'>
-            <h3 className='text-sm font-medium text-gray-300 mb-2'>Unique Holders</h3>
-            <p className='text-2xl font-bold text-purple-400'>{nftData.statistics.holders || 0}</p>
-            <p className='text-xs text-gray-400'>Collection owners</p>
-          </div>
-        </div>
+        )}
       </main>
     </>
   );

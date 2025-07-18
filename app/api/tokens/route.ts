@@ -41,6 +41,7 @@ export async function GET() {
     verificationMap.set(contract.address.toLowerCase(), contract.verified || false);
   });
 
+
   // Fetch all tokens from the database
   const dbTokens = await Token.find({}).lean() as Record<string, unknown>[];
 
@@ -114,12 +115,14 @@ export async function GET() {
       console.error(`Error getting stats for token ${token.address}:`, error);
     }
 
+    const verificationStatus = typeof token.address === 'string' ? verificationMap.get(token.address.toLowerCase()) : null;
+    
     return { 
       ...token, 
       type,
       holders: actualHolders,
       supply: actualSupply,
-      verified: (typeof token.address === 'string' ? verificationMap.get(token.address.toLowerCase()) : null) || false
+      verified: verificationStatus !== null ? verificationStatus : false
     };
   }));
 

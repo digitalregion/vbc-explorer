@@ -4,15 +4,22 @@ Tool for fetching and updating VirBiCoin price data
 */
 
 import { Market } from '../models/index';
+import mongoose from 'mongoose';
 import { connectDB } from '../models/index';
 
 // Initialize database connection
 const initDB = async () => {
   try {
+    // Check if already connected
+    if (mongoose.connection.readyState === 1) {
+      console.log('🔗 Database already connected');
+      return;
+    }
+    
     await connectDB();
-    console.log('Database connection initialized successfully');
+    console.log('🔗 Database connection initialized successfully');
   } catch (error) {
-    console.error('Failed to connect to database:', error);
+    console.error('❌ Failed to connect to database:', error);
     process.exit(1);
   }
 };
@@ -45,16 +52,16 @@ try {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const local = require('../config.json');
   Object.assign(config, local);
-  console.log('config.json found.');
+  console.log('📄 config.json found.');
 } catch (error) {
-  console.log('No config file found. Using default configuration...');
+  console.log('📄 No config file found. Using default configuration...');
 }
 
 // Initialize database connection after config is loaded
 initDB();
 
 if (config.quiet) {
-  console.log('Quiet mode enabled');
+  console.log('🔇 Quiet mode enabled');
 }
 
 /**
@@ -99,13 +106,13 @@ const fetchVBCPrice = async (): Promise<PriceData | null> => {
           };
         }
       } catch (error) {
-        console.log(`Failed to fetch from ${source}: ${error}`);
+        console.log(`❌ Failed to fetch from ${source}: ${error}`);
         continue;
       }
     }
 
     // Fallback: use mock data if no external API works
-    console.log('Using fallback price data');
+    console.log('🔄 Using fallback price data');
     return {
       symbol: 'VBC',
       timestamp: Date.now(),
@@ -114,7 +121,7 @@ const fetchVBCPrice = async (): Promise<PriceData | null> => {
     };
 
   } catch (error) {
-    console.error('Error fetching VBC price:', error);
+    console.error('❌ Error fetching VBC price:', error);
     return null;
   }
 };
@@ -128,10 +135,10 @@ const updatePriceData = async (priceData: PriceData): Promise<void> => {
     await market.save();
 
     if (!config.quiet) {
-      console.log(`Price data updated: VBC = $${priceData.quoteUSD} (${priceData.quoteBTC} BTC)`);
+      console.log(`💰 Price data updated: VBC = $${priceData.quoteUSD} (${priceData.quoteBTC} BTC)`);
     }
   } catch (error) {
-    console.error('Error updating price data:', error);
+    console.error('❌ Error updating price data:', error);
   }
 };
 
@@ -143,7 +150,7 @@ const getLatestPrice = async (): Promise<PriceData | null> => {
     const latestPrice = await Market.findOne().sort({ timestamp: -1 });
     return latestPrice;
   } catch (error) {
-    console.error('Error getting latest price:', error);
+    console.error('❌ Error getting latest price:', error);
     return null;
   }
 };
@@ -159,7 +166,7 @@ const shouldUpdatePrice = async (): Promise<boolean> => {
     const timeSinceLastUpdate = Date.now() - latestPrice.timestamp;
     return timeSinceLastUpdate > config.priceUpdateInterval;
   } catch (error) {
-    console.error('Error checking price update status:', error);
+    console.error('❌ Error checking price update status:', error);
     return true;
   }
 };
@@ -171,7 +178,7 @@ const updatePrice = async (): Promise<void> => {
   try {
     if (!(await shouldUpdatePrice())) {
       if (!config.quiet) {
-        console.log('Price data is up to date');
+        console.log('✅ Price data is up to date');
       }
       return;
     }
@@ -180,10 +187,10 @@ const updatePrice = async (): Promise<void> => {
     if (priceData) {
       await updatePriceData(priceData);
     } else {
-      console.error('Failed to fetch price data');
+      console.error('❌ Failed to fetch price data');
     }
   } catch (error) {
-    console.error('Error in price update:', error);
+    console.error('❌ Error in price update:', error);
   }
 };
 
@@ -191,8 +198,8 @@ const updatePrice = async (): Promise<void> => {
  * Continuous price monitoring
  */
 const startPriceMonitoring = async (): Promise<void> => {
-  console.log('Starting VBC price monitoring...');
-  console.log(`Update interval: ${config.priceUpdateInterval / 1000} seconds`);
+  console.log('💰 Starting VBC price monitoring...');
+  console.log(`⏰ Update interval: ${config.priceUpdateInterval / 1000} seconds`);
   
   // Initial update
   await updatePrice();
@@ -207,7 +214,7 @@ const startPriceMonitoring = async (): Promise<void> => {
  * One-time price update
  */
 const runOnce = async (): Promise<void> => {
-  console.log('Running one-time price update...');
+  console.log('🔄 Running one-time price update...');
   await updatePrice();
   process.exit(0);
 };
@@ -218,10 +225,10 @@ const runOnce = async (): Promise<void> => {
 const showCurrentPrice = async (): Promise<void> => {
   const latestPrice = await getLatestPrice();
   if (latestPrice) {
-    console.log(`Current VBC price: $${latestPrice.quoteUSD} (${latestPrice.quoteBTC} BTC)`);
-    console.log(`Last updated: ${new Date(latestPrice.timestamp).toLocaleString()}`);
+    console.log(`💰 Current VBC price: $${latestPrice.quoteUSD} (${latestPrice.quoteBTC} BTC)`);
+    console.log(`🕐 Last updated: ${new Date(latestPrice.timestamp).toLocaleString()}`);
   } else {
-    console.log('No price data available');
+    console.log('❌ No price data available');
   }
   process.exit(0);
 };
@@ -236,7 +243,7 @@ const main = async (): Promise<void> => {
     await showCurrentPrice();
   } else if (args.includes('--help') || args.includes('-h')) {
     console.log(`
-VBC Price Tool
+💰 VBC Price Tool
 
 Usage:
   npm run price                    # Start continuous monitoring
@@ -263,11 +270,11 @@ if (require.main === module) {
 
 // Handle process termination
 process.on('SIGINT', () => {
-  console.log('\nPrice monitoring stopped');
+  console.log('\n🛑 Price monitoring stopped');
   process.exit(0);
 });
 
 process.on('SIGTERM', () => {
-  console.log('\nPrice monitoring stopped');
+  console.log('\n🛑 Price monitoring stopped');
   process.exit(0);
 }); 

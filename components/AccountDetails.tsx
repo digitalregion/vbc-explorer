@@ -25,6 +25,17 @@ interface AccountData {
     firstSeen: string;
     lastActivity: string;
   };
+  contract?: {
+    address: string;
+    name: string;
+    symbol: string;
+    type: string;
+    decimals: number;
+    totalSupply: number;
+    verified: boolean;
+    creationTransaction: string;
+    blockNumber: number;
+  };
   transactions: Array<{
     hash: string;
     from: string;
@@ -172,7 +183,7 @@ export default function AccountDetails({ address }: AccountDetailsProps) {
                 <div className='flex flex-col sm:flex-row sm:items-center gap-2'>
                   <span className='text-gray-400 font-medium min-w-[80px]'>Address:</span>
                   <div className='flex items-center gap-2'>
-                    <span className='font-mono text-blue-400 break-all'>{accountData.account.address}</span>
+                    <span className='font-mono text-gray-100 break-all'>{accountData.account.address}</span>
                     <button
                       onClick={copyAddressToClipboard}
                       className='p-1 text-gray-400 hover:text-blue-400 transition-colors'
@@ -185,12 +196,62 @@ export default function AccountDetails({ address }: AccountDetailsProps) {
                     )}
                   </div>
                 </div>
+                
+                {/* Type表示（コントラクトの場合はコントラクト情報、通常の場合はWallet） */}
+                <div className='flex flex-col sm:flex-row sm:items-center gap-2'>
+                  <span className='text-gray-400 font-medium min-w-[80px]'>Type:</span>
+                  {accountData.contract ? (
+                    <span className='text-purple-400 font-medium'>
+                      {accountData.contract.type}
+                      {accountData.contract.verified && (
+                        <span className='ml-2 text-green-400 text-sm'>✓ Verified</span>
+                      )}
+                    </span>
+                  ) : (
+                    <span className='text-cyan-400 font-medium'>Wallet</span>
+                  )}
+                </div>
+                
+                {/* コントラクト情報の表示 */}
+                {accountData.contract && (
+                  <>
+                    <div className='flex flex-col sm:flex-row sm:items-center gap-2'>
+                      <span className='text-gray-400 font-medium min-w-[80px]'>Name:</span>
+                      <span className='text-orange-400 font-medium'>{accountData.contract.name}</span>
+                    </div>
+                    {accountData.contract.symbol && (
+                      <div className='flex flex-col sm:flex-row sm:items-center gap-2'>
+                        <span className='text-gray-400 font-medium min-w-[80px]'>Symbol:</span>
+                        <span className='text-cyan-400 font-medium'>{accountData.contract.symbol}</span>
+                      </div>
+                    )}
+                    {accountData.contract.decimals > 0 && (
+                      <div className='flex flex-col sm:flex-row sm:items-center gap-2'>
+                        <span className='text-gray-400 font-medium min-w-[80px]'>Decimals:</span>
+                        <span className='text-gray-300'>{accountData.contract.decimals}</span>
+                      </div>
+                    )}
+                    {accountData.contract.totalSupply > 0 && (
+                      <div className='flex flex-col sm:flex-row sm:items-center gap-2'>
+                        <span className='text-gray-400 font-medium min-w-[80px]'>Total Supply:</span>
+                        <span className='text-green-400'>{accountData.contract.totalSupply.toLocaleString()}</span>
+                      </div>
+                    )}
+                    {accountData.contract.creationTransaction && (
+                      <div className='flex flex-col sm:flex-row sm:items-center gap-2'>
+                        <span className='text-gray-400 font-medium min-w-[80px]'>Created:</span>
+                        <span className='text-gray-300'>Block #{accountData.contract.blockNumber}</span>
+                      </div>
+                    )}
+                  </>
+                )}
+                
                 {(() => {
                   const poolName = getPoolName(accountData.account.address);
                   return poolName ? (
                     <div className='flex flex-col sm:flex-row sm:items-center gap-2'>
-                      <span className='text-gray-400 font-medium min-w-[80px]'>Pool Name:</span>
-                      <span className='text-green-400 font-medium'>{poolName}</span>
+                      <span className='text-gray-400 font-medium min-w-[80px]'>Name:</span>
+                      <span className='text-orange-400 font-medium'>{poolName}</span>
                     </div>
                   ) : null;
                 })()}
@@ -292,15 +353,13 @@ export default function AccountDetails({ address }: AccountDetailsProps) {
                         </Link>
                       </td>
                       <td className='py-3 px-2'>
-                        <span className={`font-medium text-sm ${
-                          tx.type === 'mining_reward' ? 'text-yellow-400' : 'text-green-400'
-                        }`}>
+                        <span className='font-medium text-sm text-green-400'>
                           {tx.value} {tx.type === 'token' ? 'Tokens' : 'VBC'}
                         </span>
                         {tx.type === 'mining_reward' && tx.details && (
                           <div className='text-xs text-gray-500 mt-1'>
-                            <div>Block: {tx.details.blockReward} VBC</div>
-                            <div>Gas: {tx.details.gasFees} VBC</div>
+                            <div className='text-green-400'>Block: {tx.details.blockReward} VBC</div>
+                            <div className='text-green-400'>Gas: {tx.details.gasFees} VBC</div>
                           </div>
                         )}
                       </td>

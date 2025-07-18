@@ -6,7 +6,6 @@ import {
   CurrencyDollarIcon,
   UsersIcon,
   GlobeAltIcon,
-  PhotoIcon,
   CodeBracketIcon
 } from '@heroicons/react/24/outline';
 
@@ -48,12 +47,7 @@ const Header = () => {
               <span className='hidden sm:inline'>Tokens</span>
             </Link>
           </li>
-          <li>
-            <Link href='/nft' className='nav-link text-gray-200 flex items-center gap-1'>
-              <PhotoIcon className='w-5 h-5' />
-              <span className='hidden sm:inline'>NFTs</span>
-            </Link>
-          </li>
+
           <li>
             <Link href='/contract/verify' className='nav-link text-gray-200 flex items-center gap-1'>
               <CodeBracketIcon className='w-5 h-5' />

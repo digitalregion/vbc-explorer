@@ -150,7 +150,7 @@ export default function RichlistPage() {
                           <span className={`px-2 py-1 rounded text-xs font-medium ${
                             acc.type === 'Contract' ?
                               'bg-purple-500/20 text-purple-400' :
-                              'bg-green-500/20 text-green-400'
+                              'bg-cyan-500/20 text-cyan-400'
                           }`}>
                             {acc.type}
                           </span>

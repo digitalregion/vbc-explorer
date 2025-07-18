@@ -5,24 +5,22 @@ Tool for calculating VirBiCoin block statistics
 
 import Web3 from 'web3';
 import type { Block as Web3Block } from 'web3-types';
+import mongoose from 'mongoose';
 import { connectDB, Block, BlockStat, IBlock, IBlockStat } from '../models/index';
 
 // Initialize database connection
 const initDB = async () => {
   try {
-    // 軽量化されたDB接続設定
-    const connectionOptions = {
-      maxPoolSize: 5, // 10→5に削減
-      serverSelectionTimeoutMS: 5000,
-      socketTimeoutMS: 30000,
-      bufferCommands: false,
-      autoIndex: false, // インデックス自動作成を無効化
-    };
+    // Check if already connected
+    if (mongoose.connection.readyState === 1) {
+      console.log('🔗 Database already connected');
+      return;
+    }
     
     await connectDB();
-    console.log('Database connection initialized successfully');
+    console.log('🔗 Database connection initialized successfully');
   } catch (error) {
-    console.error('Failed to connect to database:', error);
+    console.error('❌ Failed to connect to database:', error);
     process.exit(1);
   }
 };
@@ -90,27 +88,27 @@ const config: Config = {
 try {
   const local = require('../config.json');
   Object.assign(config, local);
-  console.log('config.json found.');
+  console.log('📄 config.json found.');
   
   // Set MongoDB URI from config if available
   if (local.database && local.database.uri) {
     process.env.MONGODB_URI = local.database.uri;
-    console.log('MongoDB URI set from config.json');
+    console.log('📄 MongoDB URI set from config.json');
   }
 } catch (error) {
-  console.log('No config file found. Using default configuration...');
+  console.log('📄 No config file found. Using default configuration...');
 }
 
 // Initialize database connection after config is loaded
 initDB();
 
-console.log(`Connecting to VirBiCoin node ${config.nodeAddr}:${config.port}...`);
+console.log(`🔌 Connecting to VirBiCoin node ${config.nodeAddr}:${config.port}...`);
 
 // Web3 connection
 const web3 = new Web3(new Web3.providers.HttpProvider(`http://${config.nodeAddr}:${config.port}`));
 
 if (config.quiet) {
-  console.log('Quiet mode enabled');
+  console.log('🔇 Quiet mode enabled');
 }
 
 /**
@@ -122,7 +120,7 @@ const updateStats = async (range: number, interval: number, rescan: boolean): Pr
 
   interval = Math.abs(parseInt(interval.toString()));
   if (!range) {
-    range = 500; // 1000→500に削減
+    range = 10000;
   }
   range *= interval;
   if (interval >= 10) {
@@ -137,7 +135,7 @@ const updateStats = async (range: number, interval: number, rescan: boolean): Pr
   }).select('number').lean();
   
   const existingStatNumbers = new Set(existingStats.map(s => s.number));
-  console.log(`Found ${existingStats.length} existing block statistics in range ${latestBlock - range}-${latestBlock}`);
+  console.log(`📊 Found ${existingStats.length} existing block statistics in range ${latestBlock - range}-${latestBlock}`);
   
   getStats(latestBlock, null, latestBlock - range, interval, rescan, existingStatNumbers);
 };
@@ -171,7 +169,7 @@ const getStats = async function (
   try {
     const isListening = await web3.eth.net.isListening();
     if (!isListening) {
-      console.log(`Error: Aborted due to web3 not connected when trying to get block ${blockNumber}`);
+      console.log(`❌ Error: Aborted due to web3 not connected when trying to get block ${blockNumber}`);
       process.exit(9);
       return;
     }
@@ -179,7 +177,7 @@ const getStats = async function (
     const blockData = await web3.eth.getBlock(blockNumber, true);
 
     if (!blockData) {
-      console.log(`Warning: null block data received from block number: ${blockNumber}`);
+      console.log(`⚠️  Warning: null block data received from block number: ${blockNumber}`);
       return;
     }
 
@@ -191,7 +189,7 @@ const getStats = async function (
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    console.log(`Warning: error on getting block with number: ${blockNumber}: ${errorMessage}`);
+    console.log(`⚠️  Warning: error on getting block with number: ${blockNumber}: ${errorMessage}`);
   }
 };
 
@@ -213,9 +211,6 @@ const checkBlockDBExistsThenWrite = async function (
     const existingStat = await BlockStat.findOne({ number: blockNumber });
     
     if (existingStat && !rescan) {
-      if (!config.quiet) {
-        console.log(`Skipping existing block statistics for block #${blockNumber} (already in DB)`);
-      }
       getStats(blockNumber - interval, blockData, endNumber, interval, rescan, existingStatNumbers);
       return;
     }
@@ -237,8 +232,9 @@ const checkBlockDBExistsThenWrite = async function (
       const blockStat = new BlockStat(stat);
       await blockStat.save();
 
-      if (!config.quiet) {
-        console.log(`DB successfully written for block number ${blockNumber}`);
+      // 500ブロックごとにログ出力
+      if (blockNumber % 500 === 0) {
+        console.log(`📦 Processed ${blockNumber} blocks for statistics`);
       }
 
       getStats(blockNumber - interval, blockData, endNumber, interval, rescan, existingStatNumbers);
@@ -250,7 +246,7 @@ const checkBlockDBExistsThenWrite = async function (
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    console.log(`Error: Aborted due to error on block number ${toNumber(blockData.number)}: ${errorMessage}`);
+    console.log(`💥 Error: Aborted due to error on block number ${toNumber(blockData.number)}: ${errorMessage}`);
     process.exit(9);
   }
 };
@@ -282,7 +278,7 @@ if (process.env.RESCAN) {
     i = parseInt((i / 10).toString());
   }
   interval = Math.pow(10, j);
-  console.log(`Selected interval = ${interval}`);
+  console.log(`📊 Selected interval = ${interval}`);
 
   rescan = true;
 }
@@ -301,8 +297,8 @@ const main = async (): Promise<void> => {
       process.exit(1);
     }
 
-    console.log('Connected to VirBiCoin node successfully');
-    console.log('Starting statistics calculation...');
+    console.log('🔗 Connected to VirBiCoin node successfully');
+    console.log('📊 Starting statistics calculation...');
 
     // Run statistics update
     await updateStats(range, interval, rescan);
@@ -314,14 +310,14 @@ const main = async (): Promise<void> => {
           await updateStats(range, interval, false);
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : String(error);
-          console.log(`Error in interval update: ${errorMessage}`);
+          console.log(`❌ Error in interval update: ${errorMessage}`);
         }
       }, statInterval);
     }
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    console.log(`Fatal error: ${errorMessage}`);
+    console.log(`💥 Fatal error: ${errorMessage}`);
     process.exit(1);
   }
 };
