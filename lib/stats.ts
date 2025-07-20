@@ -1,17 +1,9 @@
 import mongoose from 'mongoose';
+import { connectDB as connectDBFromModels } from '../models/index';
 
-// This is a simplified connection function for the library.
-// Assumes connection is handled by the calling API route.
+// Use the connectDB function from models/index.ts
 async function connectDB() {
-  if (mongoose.connection.readyState < 1) {
-    const uri = process.env.MONGODB_URI || 'mongodb://localhost/explorerDB';
-    try {
-      await mongoose.connect(uri);
-    } catch (error) {
-      console.error('[Stats] Connection failed:', error instanceof Error ? error.message : String(error));
-      throw error;
-    }
-  }
+  await connectDBFromModels();
 }
 
 export async function getChainStats() {
