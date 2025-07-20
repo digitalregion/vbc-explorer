@@ -146,39 +146,6 @@ Edit `config.json` for your blockchain:
 - **PM2** - Production process management
 - **Next.js Build** - Optimized production builds
 
-## 🏗️ Project Structure
-
-```
-vbc-explorer/
-├── app/                      # Next.js 15 App Router
-│   ├── api/                  # API Routes
-│   │   ├── accounts/         # Account balance APIs
-│   │   ├── blocks/           # Block data APIs
-│   │   ├── nft/             # NFT metadata APIs
-│   │   ├── richlist/        # Wealth tracking APIs
-│   │   ├── stats/           # Network statistics APIs
-│   │   ├── tokens/          # Token data APIs
-│   │   └── transactions/    # Transaction APIs
-│   ├── components/          # Reusable React components
-│   ├── nft/                # NFT explorer pages
-│   ├── richlist/           # Rich list pages
-│   ├── tokens/             # Token explorer pages  
-│   ├── transactions/       # Transaction explorer pages
-│   └── globals.css         # Global styles
-├── lib/                    # Utility libraries
-│   ├── config.ts          # Configuration management
-│   ├── db.ts              # Database connections
-│   └── etherUnits.ts      # Unit conversion utilities
-├── models/                # MongoDB data models
-├── tools/                 # Blockchain sync tools
-│   ├── sync.ts           # Block synchronization
-│   ├── stats.ts          # Statistics calculation
-│   └── richlist.ts       # Wealth tracking
-├── public/               # Static assets
-├── config.json           # Main configuration
-└── package.json          # Dependencies and scripts
-```
-
 ### Key Directories
 
 - **`app/`** - Next.js App Router with page components and API routes
@@ -186,6 +153,49 @@ vbc-explorer/
 - **`models/`** - MongoDB schemas and data models  
 - **`tools/`** - Background services for blockchain synchronization
 - **`public/`** - Static assets including images, CSS, and client libraries
+    
+## System Architecture
+
+```mermaid
+graph TB
+    subgraph "Frontend Layer"
+        A[Next.js App Router]
+        B[React Components]
+        C[TypeScript]
+        D[Tailwind CSS]
+    end
+    
+    subgraph "API Layer"
+        E[Next.js API Routes]
+        F[Data Fetching]
+        G[Real-time Updates]
+    end
+    
+    subgraph "Data Processing Layer"
+        H[Sync Service]
+        I[Stats Service]
+        J[Price Service]
+        K[Tokens Service]
+        L[Richlist Service]
+    end
+    
+    subgraph "Database Layer"
+        M[MongoDB]
+        N[Mongoose ODM]
+        O[Data Models]
+    end
+    
+    subgraph "Blockchain Layer"
+        P[VirBiCoin Node]
+        Q[Web3.js]
+        R[RPC Connection]
+    end
+    
+    subgraph "External Services"
+        S[Price APIs]
+        T[NFT Metadata]
+        U[Contract Verification]
+    end
     
     A --> E
     B --> E
@@ -1249,12 +1259,41 @@ await db.collection('tokens').updateMany({}, {
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
+## Contributors
+
+<div align="center" markdown="1">
+
+[![Contributors](https://contrib.rocks/image?repo=virbicoin/vbc-explorer)](https://github.com/virbicoin/vbc-explorer/graphs/contributors)
+
+</div>
+
 ## Support
 
 - **Documentation**: [GitHub Wiki](https://github.com/virbicoin/vbc-explorer/wiki)
 - **Issues**: [GitHub Issues](https://github.com/virbicoin/vbc-explorer/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/virbicoin/vbc-explorer/discussions)
 - **Live Demo**: [explorer.digitalregion.jp](https://explorer.digitalregion.jp)
+
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=virbicoin/vbc-explorer&type=Date&theme=dark)](https://star-history.com/#virbicoin/vbc-explorer&Date)
+
+## 📊 Statistics
+
+![GitHub Stats](https://github-readme-stats.vercel.app/api?username=emerauda&repo=TopazBot&show_icons=true&theme=dark)
+
+<div align="center" markdown="1">
+
+**⭐ If you like this project, please give it a star! ⭐**
+
+[![GitHub stars](https://img.shields.io/github/stars/virbicoin/vbc-explorer.svg?style=social&label=Star)](https://github.com/virbicoin/vbc-explorer)
+[![GitHub forks](https://img.shields.io/github/forks/virbicoin/vbc-explorer.svg?style=social&label=Fork)](https://github.com/virbicoin/vbc-explorer/fork)
+[![GitHub watchers](https://img.shields.io/github/watchers/virbicoin/vbc-explorer.svg?style=social&label=Watch)](https://github.com/virbicoin/vbc-explorer)
+
+Made with ❤️ by [VirBiCoin Project](https://github.com/virbicoin)
+
+</div>
 
 ## Acknowledgments
 
