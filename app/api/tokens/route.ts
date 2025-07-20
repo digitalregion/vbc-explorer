@@ -1,8 +1,22 @@
 import { NextResponse } from 'next/server';
 import mongoose from 'mongoose';
-import Token from '../../../models/Token.js'; // Assuming ESM syntax
 import { getChainStats } from '../../../lib/stats'; // Import the stats function
 import { Contract } from '../../../models/index';
+
+// Define Token schema inline since it's not exported from models/index
+const tokenSchema = new mongoose.Schema({
+  address: String,
+  name: String,
+  symbol: String,
+  decimals: { type: Number, default: 18 },
+  totalSupply: String,
+  holders: { type: Number, default: 0 },
+  type: String,
+  supply: String,
+  verified: { type: Boolean, default: false }
+}, { collection: 'tokens' });
+
+const Token = mongoose.models.Token || mongoose.model('Token', tokenSchema);
 
 // Define the structure of a token, including the optional fields
 interface IToken {

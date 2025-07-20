@@ -1,4 +1,4 @@
-import virBiCoinUnits from './etherUnits';
+import currencyUnits, { updateCurrencyConfig, updateCurrencyUnits } from './etherUnits';
 // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-unused-vars
 const RLP = require('rlp');
 
@@ -35,6 +35,21 @@ interface TraceTransaction {
   value?: string | number;
 }
 
+interface CurrencyConfig {
+  currency?: {
+    name?: string;
+    symbol?: string;
+    unit?: string;
+    decimals?: number;
+  };
+}
+
+// Function to initialize currency configuration
+function initializeCurrency(config: CurrencyConfig) {
+  updateCurrencyConfig(config);
+  updateCurrencyUnits();
+}
+
 /**
  * Filter an array of transactions for display
  */
@@ -44,7 +59,7 @@ function filterTX(txs: Transaction[]): unknown[] {
     tx.blockNumber, 
     tx.from, 
     tx.to, 
-    virBiCoinUnits.toVBC(tx.value.toString(), 'niku'), 
+    currencyUnits.toMainUnit(tx.value.toString(), currencyUnits.baseUnit), 
     tx.gas, 
     tx.timestamp, 
     tx.creates
@@ -59,7 +74,7 @@ function filterTrace(txs: TraceTransaction[]): unknown[] {
     const t = { ...tx };
     if (t.type == 'suicide') {
       if (t.action.address) t.from = t.action.address;
-      if (t.action.balance) t.value = virBiCoinUnits.toVBC(t.action.balance.toString(), 'niku');
+      if (t.action.balance) t.value = currencyUnits.toMainUnit(t.action.balance.toString(), currencyUnits.baseUnit);
       if (t.action.refundAddress) t.to = t.action.refundAddress;
     } else {
       if (t.action.to) t.to = t.action.to;
@@ -67,7 +82,7 @@ function filterTrace(txs: TraceTransaction[]): unknown[] {
       if (t.action.gas) t.gas = Number(t.action.gas);
       if ((t.result) && (t.result.gasUsed)) t.gasUsed = Number(t.result.gasUsed);
       if ((t.result) && (t.result.address)) t.to = t.result.address;
-      t.value = virBiCoinUnits.toVBC(t.action.value.toString(), 'niku');
+      t.value = currencyUnits.toMainUnit(t.action.value.toString(), currencyUnits.baseUnit);
     }
     return t;
   });
@@ -95,7 +110,7 @@ function filterInternalTx(txs: TraceTransaction[]): unknown[] {
     const t = { ...tx };
     if (t.type == 'suicide') {
       if (t.action.address) t.from = t.action.address;
-      if (t.action.balance) t.value = virBiCoinUnits.toVBC(t.action.balance.toString(), 'niku');
+      if (t.action.balance) t.value = currencyUnits.toMainUnit(t.action.balance.toString(), currencyUnits.baseUnit);
       if (t.action.refundAddress) t.to = t.action.refundAddress;
     } else {
       if (t.action.to) t.to = t.action.to;
@@ -103,7 +118,7 @@ function filterInternalTx(txs: TraceTransaction[]): unknown[] {
       if (t.action.gas) t.gas = Number(t.action.gas);
       if ((t.result) && (t.result.gasUsed)) t.gasUsed = Number(t.result.gasUsed);
       if ((t.result) && (t.result.address)) t.to = t.result.address;
-      t.value = virBiCoinUnits.toVBC(t.action.value.toString(), 'niku');
+      t.value = currencyUnits.toMainUnit(t.action.value.toString(), currencyUnits.baseUnit);
     }
     return t;
   });
@@ -112,22 +127,22 @@ function filterInternalTx(txs: TraceTransaction[]): unknown[] {
 /**
  * Helper function to format currency values
  */
-function formatCurrency(value: string | number | bigint, unit: string = 'niku'): string {
-  return virBiCoinUnits.toVBC(value, unit);
+function formatCurrency(value: string | number | bigint, unit?: string): string {
+  return currencyUnits.toMainUnit(value, unit || currencyUnits.baseUnit);
 }
 
 /**
- * Helper function to format Wei/Niku values to VBC
+ * Helper function to format base unit values to main unit
  */
 function formatValue(value: string | number | bigint): string {
-  return virBiCoinUnits.toVBC(value, 'niku');
+  return currencyUnits.toMainUnit(value, currencyUnits.baseUnit);
 }
 
 /**
  * Helper function to format gas price
  */
 function formatGasPrice(gasPrice: string | number | bigint): string {
-  return virBiCoinUnits.toGwei(gasPrice, 'niku');
+  return currencyUnits.toBaseUnit(gasPrice, currencyUnits.baseUnit);
 }
 
 export {
@@ -137,5 +152,6 @@ export {
   filterInternalTx,
   formatCurrency,
   formatValue,
-  formatGasPrice
+  formatGasPrice,
+  initializeCurrency
 }; 

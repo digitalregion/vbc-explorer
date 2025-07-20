@@ -2,8 +2,33 @@ import { NextRequest, NextResponse } from 'next/server';
 import { connectDB, Contract } from '../../../../models/index';
 import Web3 from 'web3';
 import solc from 'solc';
+import fs from 'fs';
+import path from 'path';
 
-const WEB3_PROVIDER_URL = process.env.WEB3_PROVIDER_URL || 'http://127.0.0.1:8329';
+// Function to read config
+const readConfig = () => {
+  try {
+    const configPath = path.join(process.cwd(), 'config.json');
+    const exampleConfigPath = path.join(process.cwd(), 'config.example.json');
+    
+    if (fs.existsSync(configPath)) {
+      return JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    } else if (fs.existsSync(exampleConfigPath)) {
+      return JSON.parse(fs.readFileSync(exampleConfigPath, 'utf8'));
+    }
+  } catch (error) {
+    console.error('Error reading config:', error);
+  }
+  
+  // Default configuration
+  return {
+    nodeAddr: 'localhost',
+    port: 8329
+  };
+};
+
+const config = readConfig();
+const WEB3_PROVIDER_URL = process.env.WEB3_PROVIDER_URL || `http://${config.nodeAddr}:${config.port}`;
 const web3 = new Web3(new Web3.providers.HttpProvider(WEB3_PROVIDER_URL));
 
 
@@ -31,8 +56,7 @@ export async function POST(request: NextRequest) {
   try {
     await connectDB();
     
-    // Debug Web3 connection
-    console.log('Web3 Provider URL:', WEB3_PROVIDER_URL);
+
     
     const body = await request.json();
     const { address, sourceCode, compilerVersion, contractName, optimization } = body;
@@ -52,7 +76,6 @@ export async function POST(request: NextRequest) {
         // Extract the last contract name (usually the main contract in flattened code)
         const lastContractMatch = contractMatches[contractMatches.length - 1];
         detectedContractName = lastContractMatch.replace(/contract\s+/, '');
-        console.log('🔍 Auto-detected contract name:', detectedContractName);
       } else {
         return NextResponse.json(
           { error: 'No contract found in source code. Please provide a contract name.' },
@@ -71,7 +94,6 @@ export async function POST(request: NextRequest) {
         const versionMatch = pragmaMatch.match(/pragma\s+solidity\s+([^;]+);/);
         if (versionMatch && versionMatch[1]) {
           detectedCompilerVersion = versionMatch[1].trim();
-          console.log('🔍 Auto-detected compiler version:', detectedCompilerVersion);
         }
       }
     }
@@ -82,7 +104,6 @@ export async function POST(request: NextRequest) {
     if (hasOldSyntax && detectedCompilerVersion === 'latest') {
       // Use an older compiler version for old syntax
       detectedCompilerVersion = '0.8.19';
-      console.log('⚠️ Detected old syntax, using compiler version:', detectedCompilerVersion);
     }
 
     // Get bytecode from blockchain
@@ -113,12 +134,9 @@ export async function POST(request: NextRequest) {
     
     // Check if this is a flattened contract (contains multiple contracts)
     const isFlattened = (cleanedSourceCode.match(/contract\s+[A-Za-z0-9_]+/g) || []).length > 1;
-    console.log('🔍 Detected flattened contract:', isFlattened);
-    console.log('🔍 Contract name to find:', detectedContractName);
     
     if (isFlattened) {
       // For flattened contracts, we need to extract the main contract and its dependencies
-      console.log('🔍 Processing flattened contract for:', detectedContractName);
       
       // First, find all contracts in the source code
       const allContracts = [];
@@ -130,8 +148,6 @@ export async function POST(request: NextRequest) {
         const contractCode = match[0];
         allContracts.push({ name: contractName, code: contractCode });
       }
-      
-      console.log('🔍 Found contracts:', allContracts.map(c => c.name));
       
       // Find the main contract
       const mainContract = allContracts.find(c => c.name === detectedContractName);
@@ -169,10 +185,7 @@ export async function POST(request: NextRequest) {
           ...dependencies,
           mainContract.code
         ].join('\n\n');
-        
-        console.log('✅ Extracted main contract with dependencies');
       } else {
-        console.log('⚠️ Could not find main contract, using last contract');
         // Use the last contract if main contract not found
         if (allContracts.length > 0) {
           const lastContract = allContracts[allContracts.length - 1];
@@ -209,68 +222,65 @@ export async function POST(request: NextRequest) {
             ...dependencies,
             lastContract.code
           ].join('\n\n');
-          
-          console.log('✅ Extracted last contract with dependencies');
         }
       }
       
       // If still no contract found, use the original source code
       if (!cleanedSourceCode || cleanedSourceCode.trim().length === 0) {
-        console.log('⚠️ No contract extracted, using original source code');
         cleanedSourceCode = sourceCode;
       }
     } else {
       // Original logic for single contracts
-      const lines = cleanedSourceCode.split('\n');
-      const cleanedLines = [];
-      let inContract = false;
-      let braceCount = 0;
-      let inCommentBlock = false;
+    const lines = cleanedSourceCode.split('\n');
+    const cleanedLines = [];
+    let inContract = false;
+    let braceCount = 0;
+    let inCommentBlock = false;
+    
+    for (const line of lines) {
+      const trimmedLine = line.trim();
       
-      for (const line of lines) {
-        const trimmedLine = line.trim();
-        
-        // Handle comment blocks
-        if (trimmedLine.startsWith('/**') || trimmedLine.startsWith('/*')) {
-          inCommentBlock = true;
-        }
-        if (inCommentBlock && trimmedLine.includes('*/')) {
-          inCommentBlock = false;
-          continue; // Skip the comment block entirely
-        }
-        if (inCommentBlock) {
-          continue; // Skip lines within comment blocks
-        }
-        
-        // Start of contract
-        if (trimmedLine.startsWith('contract ') || 
-            trimmedLine.startsWith('interface ') || 
-            trimmedLine.startsWith('library ') ||
-            trimmedLine.startsWith('abstract contract ')) {
-          inContract = true;
-        }
-        
-        if (inContract) {
-          // Count braces to track contract structure
-          braceCount += (trimmedLine.match(/{/g) || []).length;
-          braceCount -= (trimmedLine.match(/}/g) || []).length;
-          
-          cleanedLines.push(line);
-          
-          // End of contract when brace count reaches 0
-          if (braceCount === 0 && inContract) {
-            inContract = false;
-            break;
-          }
-        } else if (trimmedLine.startsWith('pragma ') || 
-                   trimmedLine.startsWith('import ') || 
-                   trimmedLine.startsWith('//') || 
-                   trimmedLine === '') {
-          cleanedLines.push(line);
-        }
+      // Handle comment blocks
+      if (trimmedLine.startsWith('/**') || trimmedLine.startsWith('/*')) {
+        inCommentBlock = true;
+      }
+      if (inCommentBlock && trimmedLine.includes('*/')) {
+        inCommentBlock = false;
+        continue; // Skip the comment block entirely
+      }
+      if (inCommentBlock) {
+        continue; // Skip lines within comment blocks
       }
       
-      cleanedSourceCode = cleanedLines.join('\n');
+      // Start of contract
+      if (trimmedLine.startsWith('contract ') || 
+          trimmedLine.startsWith('interface ') || 
+          trimmedLine.startsWith('library ') ||
+          trimmedLine.startsWith('abstract contract ')) {
+        inContract = true;
+      }
+      
+      if (inContract) {
+        // Count braces to track contract structure
+        braceCount += (trimmedLine.match(/{/g) || []).length;
+        braceCount -= (trimmedLine.match(/}/g) || []).length;
+        
+        cleanedLines.push(line);
+        
+        // End of contract when brace count reaches 0
+        if (braceCount === 0 && inContract) {
+          inContract = false;
+          break;
+        }
+      } else if (trimmedLine.startsWith('pragma ') || 
+                 trimmedLine.startsWith('import ') || 
+                 trimmedLine.startsWith('//') || 
+                 trimmedLine === '') {
+        cleanedLines.push(line);
+      }
+    }
+    
+    cleanedSourceCode = cleanedLines.join('\n');
     }
     
     // Additional cleanup: remove any remaining problematic content
@@ -311,18 +321,18 @@ export async function POST(request: NextRequest) {
       } else {
         // Try to load specific compiler version, fallback to latest if failed
         try {
-          const solcVersion = await new Promise<unknown>((resolve, reject) => {
+        const solcVersion = await new Promise<unknown>((resolve, reject) => {
             solc.loadRemoteVersion(detectedCompilerVersion, (err: Error | null, solcV: unknown) => {
-              if (err) reject(err);
-              else resolve(solcV);
-            });
+            if (err) reject(err);
+            else resolve(solcV);
           });
-          
-          // 型ガードでsolcVersionがcompileメソッドを持つかチェック
-          if (typeof solcVersion === 'object' && solcVersion !== null && 'compile' in solcVersion && typeof (solcVersion as { compile: unknown }).compile === 'function') {
-            compiledOutput = JSON.parse((solcVersion as { compile: (input: string) => string }).compile(JSON.stringify(input)));
-          } else {
-            throw new Error('Invalid solc version loaded');
+        });
+        
+        // 型ガードでsolcVersionがcompileメソッドを持つかチェック
+        if (typeof solcVersion === 'object' && solcVersion !== null && 'compile' in solcVersion && typeof (solcVersion as { compile: unknown }).compile === 'function') {
+          compiledOutput = JSON.parse((solcVersion as { compile: (input: string) => string }).compile(JSON.stringify(input)));
+        } else {
+          throw new Error('Invalid solc version loaded');
           }
         } catch (versionError) {
           console.log('⚠️ Failed to load specific compiler version, falling back to latest:', versionError);

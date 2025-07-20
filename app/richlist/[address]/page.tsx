@@ -1,4 +1,5 @@
 import Header from '../../components/Header';
+import { getCurrencySymbol } from '../../../lib/config';
 
 export default async function RichlistPage({ params }: { params: Promise<{ address: string }> }) {
   const { address } = await params;
@@ -27,7 +28,7 @@ export default async function RichlistPage({ params }: { params: Promise<{ addre
                 </div>
                 <div className='flex flex-col sm:flex-row sm:items-center gap-2'>
                   <span className='text-gray-400 font-medium min-w-[80px]'>Balance:</span>
-                  <span className='text-green-400 font-bold'>195,735.13950591 VBC</span>
+                  <span className='text-green-400 font-bold'>195,735.13950591 {getCurrencySymbol()}</span>
                 </div>
                 <div className='flex flex-col sm:flex-row sm:items-center gap-2'>
                   <span className='text-gray-400 font-medium min-w-[80px]'>Percent:</span>
@@ -82,7 +83,7 @@ export default async function RichlistPage({ params }: { params: Promise<{ addre
                     </td>
                     <td className='py-3 px-2 font-mono text-gray-300 text-sm'>0x...abcd</td>
                     <td className='py-3 px-2 font-mono text-gray-300 text-sm'>0x...efgh</td>
-                    <td className='py-3 px-2 text-green-400 font-medium'>{n * 1000} VBC</td>
+                    <td className='py-3 px-2 text-green-400 font-medium'>{n * 1000} {getCurrencySymbol()}</td>
                     <td className='py-3 px-2 text-gray-400 text-sm'>{n} hour ago</td>
                   </tr>
                 ))}

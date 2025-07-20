@@ -1,30 +1,59 @@
 /**
- * Utility functions for BigInt operations and Wei/VBC conversions
+ * Utility functions for BigInt operations and currency conversions
  */
 
-const WEI_TO_VBC = 1000000000000000000n; // 10^18
-const WEI_TO_GWEI = 1000000000n; // 10^9
+// Default conversion factors (will be overridden by config)
+let BASE_TO_CURRENCY = 1000000000000000000n; // 10^18
+let BASE_TO_GAS_UNIT = 1000000000n; // 10^9
+let CURRENCY_UNIT = 'ETH';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+let BASE_UNIT = 'wei';
+let GAS_UNIT = 'Gwei';
 
 /**
- * Convert Wei to VBC using BigInt
+ * Initialize conversion factors from config
  */
-export function weiToVBC(wei: string | bigint): string {
+export async function initializeCurrency() {
   try {
-    const weiBigInt = typeof wei === 'string' ? BigInt(wei) : wei;
+    const response = await fetch('/api/config/client');
+    if (response.ok) {
+      const config = await response.json();
+      const decimals = config.currency?.decimals || 18;
+      const unit = config.currency?.unit || 'wei';
+      const symbol = config.currency?.symbol || 'ETH';
+      const gasUnit = config.currency?.gasUnit || 'Gwei';
+      
+      BASE_TO_CURRENCY = BigInt(10) ** BigInt(decimals);
+      BASE_TO_GAS_UNIT = BigInt(10) ** BigInt(9);
+      CURRENCY_UNIT = symbol;
+      BASE_UNIT = unit;
+      GAS_UNIT = gasUnit;
+    }
+  } catch (error) {
+    console.error('Error loading currency config:', error);
+  }
+}
 
-    if (weiBigInt === 0n) return '0';
+/**
+ * Convert base unit to currency using BigInt
+ */
+export function baseToCurrency(base: string | bigint): string {
+  try {
+    const baseBigInt = typeof base === 'string' ? BigInt(base) : base;
 
-    const vbc = weiBigInt / WEI_TO_VBC;
-    const remainder = weiBigInt % WEI_TO_VBC;
+    if (baseBigInt === 0n) return '0';
+
+    const currency = baseBigInt / BASE_TO_CURRENCY;
+    const remainder = baseBigInt % BASE_TO_CURRENCY;
 
     if (remainder === 0n) {
-      return vbc.toString();
+      return currency.toString();
     }
 
     // Handle decimal places
-    const decimalPlaces = 18;
+    const decimalPlaces = Number(BASE_TO_CURRENCY.toString().length - 1);
     const factor = 10n ** BigInt(decimalPlaces);
-    const scaled = (weiBigInt * factor) / WEI_TO_VBC;
+    const scaled = (baseBigInt * factor) / BASE_TO_CURRENCY;
 
     let result = scaled.toString();
 
@@ -47,25 +76,25 @@ export function weiToVBC(wei: string | bigint): string {
 }
 
 /**
- * Convert Wei to Gwei using BigInt
+ * Convert base unit to gas unit using BigInt
  */
-export function weiToGwei(wei: string | bigint): string {
+export function baseToGasUnit(base: string | bigint): string {
   try {
-    const weiBigInt = typeof wei === 'string' ? BigInt(wei) : wei;
+    const baseBigInt = typeof base === 'string' ? BigInt(base) : base;
 
-    if (weiBigInt === 0n) return '0';
+    if (baseBigInt === 0n) return '0';
 
-    const gwei = weiBigInt / WEI_TO_GWEI;
-    const remainder = weiBigInt % WEI_TO_GWEI;
+    const gasUnit = baseBigInt / BASE_TO_GAS_UNIT;
+    const remainder = baseBigInt % BASE_TO_GAS_UNIT;
 
     if (remainder === 0n) {
-      return gwei.toString();
+      return gasUnit.toString();
     }
 
-    // Handle decimal places for Gwei (up to 9 decimal places)
+    // Handle decimal places for gas unit (up to 9 decimal places)
     const decimalPlaces = 9;
     const factor = 10n ** BigInt(decimalPlaces);
-    const scaled = (weiBigInt * factor) / WEI_TO_GWEI;
+    const scaled = (baseBigInt * factor) / BASE_TO_GAS_UNIT;
 
     let result = scaled.toString();
 
@@ -88,44 +117,65 @@ export function weiToGwei(wei: string | bigint): string {
 }
 
 /**
- * Format VBC value for display
+ * Format currency value for display
  */
-export function formatVBC(value: string): string {
+export function formatCurrency(value: string): string {
   try {
     const numValue = parseFloat(value);
 
-    if (numValue === 0) return '0 VBC';
+    if (numValue === 0) return `0 ${CURRENCY_UNIT}`;
 
     // For very small values
     if (numValue < 0.000001) {
-      return `${value} VBC`;
+      return `${value} ${CURRENCY_UNIT}`;
     }
 
     // For values less than 1
     if (numValue < 1) {
-      return `${parseFloat(value).toFixed(6).replace(/\.?0+$/, '')} VBC`;
+      return `${parseFloat(value).toFixed(6).replace(/\.?0+$/, '')} ${CURRENCY_UNIT}`;
     }
 
     // For values less than 1000
     if (numValue < 1000) {
-      return `${parseFloat(value).toFixed(4).replace(/\.?0+$/, '')} VBC`;
+      return `${parseFloat(value).toFixed(4).replace(/\.?0+$/, '')} ${CURRENCY_UNIT}`;
     }
 
     // For larger values
-    return `${parseFloat(value).toFixed(2).replace(/\.?0+$/, '')} VBC`;
+    return `${parseFloat(value).toFixed(2).replace(/\.?0+$/, '')} ${CURRENCY_UNIT}`;
   } catch {
-    return '0 VBC';
+    return `0 ${CURRENCY_UNIT}`;
   }
 }
 
 /**
- * Format Gwei value for display
+ * Format gas unit value for display
  */
-export function formatGwei(value: string): string {
+export function formatGasUnit(value: string): string {
   try {
     const numValue = parseFloat(value);
-    return `${numValue.toFixed(2)} Gwei`;
+    return `${Math.floor(numValue)} ${GAS_UNIT}`;
   } catch {
     return 'N/A';
   }
+}
+
+// Backward compatibility functions
+export function weiToVBC(wei: string | bigint): string {
+  return baseToCurrency(wei);
+}
+
+export function weiToGwei(wei: string | bigint): string {
+  return baseToGasUnit(wei);
+}
+
+export function formatVBC(value: string): string {
+  return formatCurrency(value);
+}
+
+export function formatGwei(value: string): string {
+  return formatGasUnit(value);
+}
+
+export function baseToGwei(base: string | bigint): string {
+  return baseToGasUnit(base);
 }

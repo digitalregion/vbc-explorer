@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import mongoose from 'mongoose';
-import { getChainStats } from '../../../../lib/stats'; // Import the new stats library function
-import { Contract } from '../../../../models/index';
+import { getChainStats } from '../../../../lib/stats';
+import { loadConfig } from '../../../../lib/config';
 import Web3 from 'web3';
 
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/explorerDB';
-const GVBC_RPC_URL = 'http://localhost:8329';
+// Load configuration
+const config = loadConfig();
+const MONGODB_URI = config.database.uri;
+const GVBC_RPC_URL = config.web3Provider.url;
 
 // Web3 instance for blockchain interaction
 const web3 = new Web3(GVBC_RPC_URL);
@@ -24,67 +26,29 @@ const ERC721_ABI = [
 // Function to fetch NFT metadata from tokenURI
 async function fetchNFTMetadata(tokenAddress: string, tokenId: number) {
   try {
+    // First try to get tokenURI from blockchain
     const contract = new web3.eth.Contract(ERC721_ABI, tokenAddress);
-    
-    // Get tokenURI from contract
     const tokenURI = await contract.methods.tokenURI(tokenId).call();
     
-    if (!tokenURI || typeof tokenURI !== 'string') {
-      return null;
-    }
-
-    // Handle different URI formats (HTTP, IPFS, data URLs)
-    let metadataUrl = tokenURI;
-    if (tokenURI.startsWith('ipfs://')) {
-      // Convert IPFS URI to HTTP gateway
-      metadataUrl = tokenURI.replace('ipfs://', 'https://ipfs.io/ipfs/');
-    } else if (tokenURI.startsWith('data:application/json;base64,')) {
-      // Handle base64 encoded JSON metadata
-      const base64Data = tokenURI.split(',')[1];
-      const jsonString = Buffer.from(base64Data, 'base64').toString('utf-8');
-      return JSON.parse(jsonString);
-    }
-
-    // Fetch metadata from URL with timeout
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000);
-
-    try {
-      const response = await fetch(metadataUrl, {
-        signal: controller.signal,
-        headers: {
-          'User-Agent': 'VirBiCoin-Explorer/1.0'
-        }
-      });
-
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        return null;
-      }
-
-      const metadata = await response.json();
-      
-      // Ensure image URL is properly formatted
-      if (metadata.image) {
-        if (metadata.image.startsWith('ipfs://')) {
-          metadata.image = metadata.image.replace('ipfs://', 'https://ipfs.io/ipfs/');
+    if (tokenURI && tokenURI !== '') {
+      // If it's an HTTP URL, fetch the metadata
+      if (tokenURI.startsWith('http://') || tokenURI.startsWith('https://')) {
+        const response = await fetch(tokenURI, {
+          headers: {
+            'User-Agent': 'VBC-Explorer/1.0'
+          }
+        });
+        
+        if (response.ok) {
+          const metadata = await response.json();
+          return metadata;
         }
       }
-
-      return {
-        name: metadata.name || `Token #${tokenId}`,
-        description: metadata.description || '',
-        image: metadata.image || '',
-        attributes: metadata.attributes || [],
-        tokenURI: tokenURI,
-        createdAt: metadata.createdAt || new Date().toISOString()
-      };
-    } catch (fetchError) {
-      clearTimeout(timeoutId);
-      throw fetchError;
     }
-  } catch {
+    
+    return null;
+  } catch (error) {
+    console.error('Error fetching NFT metadata:', error);
     return null;
   }
 }
@@ -107,8 +71,6 @@ async function connectDB() {
     throw error;
   }
 }
-
-
 
 // Format token amount with proper decimal handling
 const formatTokenAmount = (amount: string, decimals: number = 18, isNFT: boolean = false) => {
@@ -187,7 +149,6 @@ interface ApiToken {
   createdAt: Date;
   updatedAt: Date;
 }
-
 
 export async function GET(
   request: NextRequest,
@@ -298,8 +259,6 @@ export async function GET(
 
     // If token has current date as createdAt, try to find actual creation date from transfers
     if (token.createdAt && Math.abs(Date.now() - new Date(token.createdAt).getTime()) < 24 * 60 * 60 * 1000) {
-      console.log(`Token ${address} has current date as createdAt, looking for actual creation date`);
-      
       // Try to find the earliest transfer or mint transaction
       const firstTransfer = await TokenTransfer.findOne({
         tokenAddress: { $regex: new RegExp(`^${address}$`, 'i') }
@@ -325,7 +284,6 @@ export async function GET(
       
       if (earliestTimestamp) {
         token.createdAt = earliestTimestamp;
-        console.log(`Token ${address} updated createdAt to:`, token.createdAt);
       }
     }
 
@@ -377,14 +335,6 @@ export async function GET(
 
     // If still no transfers found, try a broader search
     if (transfers.length === 0) {
-      const allTransfers = await db.collection('tokentransfers').find({}).limit(10).toArray();
-      console.log('All transfers sample:', allTransfers.map(t => ({
-        tokenAddress: t.tokenAddress,
-        token: t.token,
-        contractAddress: t.contractAddress,
-        address: t.address
-      })));
-      
       // Try searching with the address in any field
       transfers = await db.collection('tokentransfers').find({
         $or: [
@@ -399,27 +349,12 @@ export async function GET(
         .toArray();
     }
 
-    // Debug: Log transfer data
-    console.log(`Token ${address} transfers found:`, transfers.length);
-    if (transfers.length > 0) {
-      console.log('Sample transfer:', transfers[0]);
-    } else {
-      // Try to find any transfers in the database to understand the structure
-      const sampleTransfers = await db.collection('tokentransfers').find({}).limit(1).toArray();
-      if (sampleTransfers.length > 0) {
-        console.log('Sample transfer structure:', Object.keys(sampleTransfers[0]));
-        console.log('Sample transfer data:', sampleTransfers[0]);
-      }
-    }
-
-
-
     // Calculate real statistics from database for non-native tokens
     let realHolders = 0;
     let realTransfers = 0;
     let realSupply = token.supply || '0';
     let mintCount = 0;
-    
+
     if (token.type !== 'Native') {
       // Get actual holder count
       realHolders = await db.collection('tokenholders').countDocuments({
@@ -435,7 +370,8 @@ export async function GET(
         ]
       });
 
-      console.log(`Real transfers count for ${address}:`, realTransfers);
+
+
       // For VRC-721 tokens, update the supply with actual mint count
       if (token.type === 'VRC-721') {
         try {
@@ -456,6 +392,8 @@ export async function GET(
           console.error('Error counting mints');
         }
       }
+
+      // Update the token with real holder count
       token.holders = realHolders;
     }
 
@@ -620,29 +558,28 @@ export async function GET(
     let contractInfo = null;
     if (token.type !== 'Native') {
       try {
-        const contract = await Contract.findOne({ address: address.toLowerCase() }).lean();
-        const contractDoc = Array.isArray(contract) ? contract[0] : contract;
-        verified = contractDoc?.verified || false;
+        const contract = await db.collection('Contract').findOne({ 
+          address: { $regex: new RegExp(`^${address}$`, 'i') }
+        });
+        verified = contract?.verified || false;
         
         // Add contract information to response
-        if (contractDoc) {
+        if (contract) {
           contractInfo = {
-            verified: contractDoc.verified || false,
-            compiler: contractDoc.compilerVersion || null,
+            verified: contract.verified || false,
+            compiler: contract.compilerVersion || null,
             language: 'Solidity',
-            name: contractDoc.contractName || 'Contract',
-            sourceCode: contractDoc.sourceCode || null,
-            bytecode: contractDoc.byteCode || null,
-            compilerVersion: contractDoc.compilerVersion,
-            metadataVersion: contractDoc.metadataVersion
+            name: contract.contractName || 'Contract',
+            sourceCode: contract.sourceCode || null,
+            bytecode: contract.byteCode || null,
+            compilerVersion: contract.compilerVersion,
+            metadataVersion: contract.metadataVersion
           };
         }
       } catch {
         console.error('Error fetching contract verification status');
       }
     }
-
-
 
     const response = {
       token: {

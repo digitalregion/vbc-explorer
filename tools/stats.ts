@@ -3,10 +3,36 @@
 Tool for calculating VirBiCoin block statistics
 */
 
-import Web3 from 'web3';
-import type { Block as Web3Block } from 'web3-types';
 import mongoose from 'mongoose';
+import Web3 from 'web3';
+import fs from 'fs';
+import path from 'path';
+import type { Block as Web3Block } from 'web3-types';
 import { connectDB, Block, BlockStat, IBlock, IBlockStat } from '../models/index';
+
+// Function to read config
+const readConfig = () => {
+  try {
+    const configPath = path.join(process.cwd(), 'config.json');
+    const exampleConfigPath = path.join(process.cwd(), 'config.example.json');
+    
+    if (fs.existsSync(configPath)) {
+      return JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    } else if (fs.existsSync(exampleConfigPath)) {
+      return JSON.parse(fs.readFileSync(exampleConfigPath, 'utf8'));
+    }
+  } catch (error) {
+    console.error('Error reading config:', error);
+  }
+  
+  // Default configuration
+  return {
+    nodeAddr: 'localhost',
+    port: 8329,
+    bulkSize: 50,
+    quiet: false
+  };
+};
 
 // Initialize database connection
 const initDB = async () => {
@@ -77,39 +103,7 @@ interface BlockStatData {
 }
 
 // Configuration
-const config: Config = {
-  nodeAddr: 'localhost',
-  port: 8329,
-  bulkSize: 50, // 100→50に削減
-  quiet: false
-};
-
-// Try to load config.json, fallback to config.example.json
-try {
-  const local = require('../config.json');
-  Object.assign(config, local);
-  console.log('📄 config.json found.');
-  
-  // Set MongoDB URI from config if available
-  if (local.database && local.database.uri) {
-    process.env.MONGODB_URI = local.database.uri;
-    console.log('📄 MongoDB URI set from config.json');
-  }
-} catch (error) {
-  try {
-    const local = require('../config.example.json');
-    Object.assign(config, local);
-    console.log('📄 config.example.json found (fallback).');
-    
-    // Set MongoDB URI from config if available
-    if (local.database && local.database.uri) {
-      process.env.MONGODB_URI = local.database.uri;
-      console.log('📄 MongoDB URI set from config.example.json');
-    }
-  } catch (fallbackError) {
-    console.log('📄 No config files found. Using default configuration...');
-  }
-}
+const config: Config = readConfig();
 
 // Initialize database connection after config is loaded
 initDB();

@@ -9,12 +9,27 @@ This file will scan the blockchain for new token contracts and update the databa
 
 import Web3 from 'web3';
 import mongoose from 'mongoose';
-import Token from '../models/Token.js'; // Using .js extension for Node ESM
 import humanStandardTokenAbi from 'human-standard-token-abi';
-
+import fs from 'fs';
+import path from 'path';
 
 // Import additional models for token transfers and holders
 import '../models/index'; // Ensure all models are loaded
+
+// Define Token schema inline since it's not exported from models/index
+const tokenSchema = new mongoose.Schema({
+  address: String,
+  name: String,
+  symbol: String,
+  decimals: { type: Number, default: 18 },
+  totalSupply: String,
+  holders: { type: Number, default: 0 },
+  type: String,
+  supply: String,
+  verified: { type: Boolean, default: false }
+}, { collection: 'tokens' });
+
+const Token = mongoose.models.Token || mongoose.model('Token', tokenSchema);
 
 // Basic VRC-721 (ERC721 Compatible) ABI for tokenURI and name
 const minimalErc721Abi = [
@@ -50,6 +65,28 @@ const minimalErc721Abi = [
 
 import { connectDB } from '../models/index';
 
+// Function to read config
+const readConfig = () => {
+  try {
+    const configPath = path.join(process.cwd(), 'config.json');
+    const exampleConfigPath = path.join(process.cwd(), 'config.example.json');
+    
+    if (fs.existsSync(configPath)) {
+      return JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    } else if (fs.existsSync(exampleConfigPath)) {
+      return JSON.parse(fs.readFileSync(exampleConfigPath, 'utf8'));
+    }
+  } catch (error) {
+    console.error('Error reading config:', error);
+  }
+  
+  // Default configuration
+  return {
+    nodeAddr: 'localhost',
+    port: 8329
+  };
+};
+
 // Initialize database connection
 const initDB = async () => {
   try {
@@ -81,7 +118,8 @@ async function disconnect() {
 }
 
 // --- Configuration ---
-const WEB3_PROVIDER_URL = 'http://localhost:8329'; // Gvbc/Geth RPC endpoint
+const config = readConfig();
+const WEB3_PROVIDER_URL = `http://${config.nodeAddr}:${config.port}`; // Generic RPC endpoint
 const START_BLOCK = 0; // Default start block if no sync state is found
 const BLOCKS_PER_BATCH = 10000; // Process blocks in batches
 const SCAN_INTERVAL_MS = 300000; // 5 minutes (1分→5分に延長)

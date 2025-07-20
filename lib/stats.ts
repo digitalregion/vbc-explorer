@@ -117,26 +117,28 @@ export async function getChainStats() {
     }
   }
 
-  // Calculate average transaction fee
+  // Calculate average gas price (excluding mining rewards)
   let avgTransactionFee = '0';
   try {
-    const recentTxs = await db?.collection('Transaction').find({ gasPrice: { $exists: true, $ne: null } })
+    const recentTxs = await db?.collection('Transaction').find({ 
+      gasPrice: { $exists: true, $ne: null },
+      from: { $ne: '0x0000000000000000000000000000000000000000' } // Exclude mining rewards
+    })
       .sort({ blockNumber: -1 })
       .limit(100)
-      .project({ gasPrice: 1, gasUsed: 1 })
+      .project({ gasPrice: 1 })
       .toArray();
     
     if (recentTxs && recentTxs.length > 0) {
-      let totalFees = 0;
+      let totalGasPrice = 0;
       let validTxs = 0;
       
       recentTxs.forEach(tx => {
-        if (tx.gasPrice && tx.gasUsed) {
+        if (tx.gasPrice) {
           try {
             const gasPrice = parseInt(tx.gasPrice);
-            const gasUsed = parseInt(tx.gasUsed);
-            if (!isNaN(gasPrice) && !isNaN(gasUsed)) {
-              totalFees += gasPrice * gasUsed;
+            if (!isNaN(gasPrice) && gasPrice > 0) {
+              totalGasPrice += gasPrice;
               validTxs++;
             }
           } catch {
@@ -146,13 +148,13 @@ export async function getChainStats() {
       });
       
       if (validTxs > 0) {
-        const avgFeeWei = totalFees / validTxs;
-        const avgFeeGwei = avgFeeWei / 1e9;
-        avgTransactionFee = avgFeeGwei.toFixed(0);
+            const avgGasPriceWei = totalGasPrice / validTxs;
+    const avgGasPriceGasUnit = avgGasPriceWei / 1e9;
+    avgTransactionFee = Math.floor(avgGasPriceGasUnit).toString();
       }
     }
   } catch (error) {
-    console.error('Error calculating average transaction fee:', error);
+    console.error('Error calculating average gas price:', error);
   }
 
   // Get actual wallet count by counting unique addresses

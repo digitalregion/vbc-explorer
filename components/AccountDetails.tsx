@@ -1,17 +1,23 @@
 'use client';
 
-import Header from '../app/components/Header';
-import Link from 'next/link';
 import { useState, useEffect } from 'react';
-import { ClipboardDocumentIcon, ClockIcon } from '@heroicons/react/24/outline';
+import Link from 'next/link';
+import {
+  UserIcon,
+  ClockIcon,
+  ArrowUpIcon,
+  CubeIcon
+} from '@heroicons/react/24/outline';
 
-// Dynamic config loading
-const config: Record<string, unknown> = {
-  miners: {
-    "0x950302976387b43E042aeA242AE8DAB8e5C204D1": "digitalregion.jp",
-    "0x6C0DB3Ea9EEd7ED145f36da461D84A8d02596B08": "coolpool.top"
-  }
-};
+interface Config {
+  miners: Record<string, string>;
+  explorer: {
+    name: string;
+    description: string;
+    version: string;
+    url: string;
+  };
+}
 
 interface AccountData {
   account: {
@@ -31,7 +37,7 @@ interface AccountData {
     symbol: string;
     type: string;
     decimals: number;
-    totalSupply: number;
+    totalSupply: string;
     verified: boolean;
     creationTransaction: string;
     blockNumber: number;
@@ -41,16 +47,10 @@ interface AccountData {
     from: string;
     to: string;
     value: string;
-    timestamp: Date;
-    timeAgo: string;
+    timestamp: number;
     blockNumber: number;
-    type?: 'native' | 'token' | 'mining_reward';
-    tokenAddress?: string;
-    details?: {
-      blockReward?: number;
-      gasFees?: string;
-      totalReward?: string;
-    };
+    gasUsed?: number;
+    status?: number;
   }>;
 }
 
@@ -58,39 +58,40 @@ interface AccountDetailsProps {
   address: string;
 }
 
-// 省略表示用関数
-const ellipsis = (str: string, start: number, end: number) =>
-  str && str.length > start + end ? `${str.slice(0, start)}...${str.slice(-end)}` : str;
-
-// ローカルタイムスタンプ表示関数
-const formatLocalTime = (timestamp: string | Date | number) => {
-  if (!timestamp) return '';
-  const ts = typeof timestamp === 'number'
-    ? timestamp
-    : typeof timestamp === 'string'
-      ? Number(timestamp)
-      : timestamp instanceof Date
-        ? Math.floor(timestamp.getTime() / 1000)
-        : 0;
-  return new Date(ts * 1000).toLocaleString(undefined, { timeZoneName: 'short' });
-};
-
-// プール名を取得する関数
-const getPoolName = (address: string) => {
-  if (!address || !config.miners) return null;
-  
-  const minerKey = Object.keys(config.miners).find(
-    key => key.toLowerCase() === address.toLowerCase()
-  );
-  
-  return minerKey ? (config.miners as Record<string, string>)[minerKey] : null;
-};
-
 export default function AccountDetails({ address }: AccountDetailsProps) {
   const [accountData, setAccountData] = useState<AccountData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [copiedAddress, setCopiedAddress] = useState(false);
+  const [config, setConfig] = useState<Config | null>(null);
+
+  // プール名を取得する関数
+  const getPoolName = (address: string) => {
+    if (!address || !config?.miners) return null;
+    
+    const minerKey = Object.keys(config.miners).find(
+      key => key.toLowerCase() === address.toLowerCase()
+    );
+    
+    return minerKey ? config.miners[minerKey] : null;
+  };
+
+  useEffect(() => {
+    // 設定を取得
+    const fetchConfig = async () => {
+      try {
+        const response = await fetch('/api/config');
+        if (response.ok) {
+          const configData = await response.json();
+          setConfig(configData);
+        }
+      } catch (err) {
+        console.error('Error fetching config:', err);
+      }
+    };
+
+    fetchConfig();
+  }, []);
 
   useEffect(() => {
     async function fetchAccountData() {
@@ -125,265 +126,240 @@ export default function AccountDetails({ address }: AccountDetailsProps) {
     }
   };
 
+  const formatValue = (value: string) => {
+    try {
+      const numValue = parseFloat(value);
+      if (numValue === 0) return '0 VBC';
+      if (numValue < 0.000001) return '<0.000001 VBC';
+      if (numValue < 1) return `${numValue.toFixed(6)} VBC`;
+      if (numValue < 1000) return `${numValue.toFixed(4)} VBC`;
+      return `${numValue.toLocaleString(undefined, { maximumFractionDigits: 4 })} VBC`;
+    } catch {
+      return `${value} VBC`;
+    }
+  };
+
+  const formatAddress = (address: string) => {
+    if (!address) return 'N/A';
+    return `${address.slice(0, 8)}...${address.slice(-6)}`;
+  };
+
+  const getTimeAgo = (timestamp: string) => {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diff = now.getTime() - date.getTime();
+    const seconds = Math.floor(diff / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+
+    if (days > 0) return `${days}d ago`;
+    if (hours > 0) return `${hours}h ago`;
+    if (minutes > 0) return `${minutes}m ago`;
+    return `${seconds}s ago`;
+  };
+
   if (loading) {
     return (
-      <>
-        <Header />
-        <div className='container mx-auto px-4 py-8'>
-          <div className='animate-pulse'>
-            <div className='h-8 bg-gray-700 rounded mb-4'></div>
-            <div className='h-64 bg-gray-700 rounded'></div>
-          </div>
-        </div>
-      </>
+      <div className='bg-gray-800 rounded-lg border border-gray-700 p-8 text-center'>
+        <div className='animate-spin w-8 h-8 border-4 border-blue-400 border-t-transparent rounded-full mx-auto mb-4'></div>
+        <p className='text-gray-400'>Loading account details...</p>
+      </div>
     );
   }
 
-  if (error) {
+  if (error || !accountData) {
     return (
-      <>
-        <Header />
-        <div className='container mx-auto px-4 py-8'>
-          <div className='text-red-400'>Error: {error}</div>
-        </div>
-      </>
+      <div className='bg-gray-800 rounded-lg border border-gray-700 p-8 text-center'>
+        <p className='text-red-400 mb-4'>{error || 'Account not found'}</p>
+        <Link
+          href='/'
+          className='inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded transition-colors'
+        >
+          <ArrowUpIcon className='w-4 h-4' />
+          Back to Explorer
+        </Link>
+      </div>
     );
   }
 
-  if (!accountData) {
-    return (
-      <>
-        <Header />
-        <div className='container mx-auto px-4 py-8'>
-          <div className='text-gray-400'>No account data found</div>
-        </div>
-      </>
-    );
-  }
+  const { account, contract, transactions } = accountData;
+  const poolName = getPoolName(account.address);
 
   return (
-    <>
-      <Header />
-
-      {/* Page Header */}
-      <div className='page-header-container'>
-        <div className='container mx-auto px-4 py-8'>
-          <h1 className='text-3xl font-bold mb-2 text-gray-100'>Account Detail</h1>
-          <p className='text-gray-400'>Account information and transaction history.</p>
-        </div>
-      </div>
-
-      <main className='container mx-auto px-4 py-8'>
-        {/* Account Info Card */}
-        <div className='bg-gray-800 rounded-lg border border-gray-700 p-6 mb-6'>
-          <div className='grid grid-cols-1 md:grid-cols-3 gap-6'>
-            <div className='md:col-span-2'>
-              <h3 className='text-lg font-semibold text-gray-100 mb-4'>Account Information</h3>
-              <div className='space-y-3'>
-                <div className='flex flex-col sm:flex-row sm:items-center gap-2'>
-                  <span className='text-gray-400 font-medium min-w-[80px]'>Address:</span>
-                  <div className='flex items-center gap-2'>
-                    <span className='font-mono text-gray-100 break-all'>{accountData.account.address}</span>
-                    <button
-                      onClick={copyAddressToClipboard}
-                      className='p-1 text-gray-400 hover:text-blue-400 transition-colors'
-                      title='Copy address to clipboard'
-                    >
-                      <ClipboardDocumentIcon className='w-4 h-4' />
-                    </button>
-                    {copiedAddress && (
-                      <span className='text-green-400 text-sm'>Copied!</span>
-                    )}
-                  </div>
-                </div>
-                
-                {/* Type表示（コントラクトの場合はコントラクト情報、通常の場合はWallet） */}
-                <div className='flex flex-col sm:flex-row sm:items-center gap-2'>
-                  <span className='text-gray-400 font-medium min-w-[80px]'>Type:</span>
-                  {accountData.contract ? (
-                    <span className='text-purple-400 font-medium'>
-                      {accountData.contract.type}
-                      {accountData.contract.verified && (
-                        <span className='ml-2 text-green-400 text-sm'>✓ Verified</span>
-                      )}
-                    </span>
-                  ) : (
-                    <span className='text-cyan-400 font-medium'>Wallet</span>
-                  )}
-                </div>
-                
-                {/* コントラクト情報の表示 */}
-                {accountData.contract && (
-                  <>
-                    <div className='flex flex-col sm:flex-row sm:items-center gap-2'>
-                      <span className='text-gray-400 font-medium min-w-[80px]'>Name:</span>
-                      <span className='text-orange-400 font-medium'>{accountData.contract.name}</span>
-                    </div>
-                    {accountData.contract.symbol && (
-                      <div className='flex flex-col sm:flex-row sm:items-center gap-2'>
-                        <span className='text-gray-400 font-medium min-w-[80px]'>Symbol:</span>
-                        <span className='text-cyan-400 font-medium'>{accountData.contract.symbol}</span>
-                      </div>
-                    )}
-                    {accountData.contract.decimals > 0 && (
-                      <div className='flex flex-col sm:flex-row sm:items-center gap-2'>
-                        <span className='text-gray-400 font-medium min-w-[80px]'>Decimals:</span>
-                        <span className='text-gray-300'>{accountData.contract.decimals}</span>
-                      </div>
-                    )}
-                    {accountData.contract.totalSupply > 0 && (
-                      <div className='flex flex-col sm:flex-row sm:items-center gap-2'>
-                        <span className='text-gray-400 font-medium min-w-[80px]'>Total Supply:</span>
-                        <span className='text-green-400'>{accountData.contract.totalSupply.toLocaleString()}</span>
-                      </div>
-                    )}
-                    {accountData.contract.creationTransaction && (
-                      <div className='flex flex-col sm:flex-row sm:items-center gap-2'>
-                        <span className='text-gray-400 font-medium min-w-[80px]'>Created:</span>
-                        <span className='text-gray-300'>Block #{accountData.contract.blockNumber}</span>
-                      </div>
-                    )}
-                  </>
-                )}
-                
-                {(() => {
-                  const poolName = getPoolName(accountData.account.address);
-                  return poolName ? (
-                    <div className='flex flex-col sm:flex-row sm:items-center gap-2'>
-                      <span className='text-gray-400 font-medium min-w-[80px]'>Name:</span>
-                      <span className='text-orange-400 font-medium'>{poolName}</span>
-                    </div>
-                  ) : null;
-                })()}
-                <div className='flex flex-col sm:flex-row sm:items-center gap-2'>
-                  <span className='text-gray-400 font-medium min-w-[80px]'>Balance:</span>
-                  <span className='text-green-400 font-bold'>{accountData.account.balance} VBC</span>
-                </div>
-                <div className='flex flex-col sm:flex-row sm:items-center gap-2'>
-                  <span className='text-gray-400 font-medium min-w-[80px]'>Percent:</span>
-                  <span className='text-yellow-400'>{accountData.account.percentage}%</span>
-                </div>
-                {accountData.account.rank && (
-                  <div className='flex flex-col sm:flex-row sm:items-center gap-2'>
-                    <span className='text-gray-400 font-medium min-w-[80px]'>Rank:</span>
-                    <span className='text-purple-400'>#{accountData.account.rank}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-            <div className='bg-gray-700/50 rounded-lg p-4 border border-gray-600/50'>
-              <h4 className='text-sm font-medium text-gray-300 mb-2'>Quick Stats</h4>
-              <div className='space-y-2 text-sm'>
-                <div className='flex justify-between'>
-                  <span className='text-gray-400'>Transactions:</span>
-                  <span className='text-gray-200'>{accountData.account.transactionCount.toLocaleString()}</span>
-                </div>
-                <div className='flex justify-between'>
-                  <span className='text-gray-400'>Blocks Mined:</span>
-                  <span className='text-gray-200'>{accountData.account.blocksMined.toLocaleString()}</span>
-                </div>
-                <div className='flex justify-between'>
-                  <span className='text-gray-400'>First Seen:</span>
-                  <span className='text-gray-200'>{accountData.account.firstSeen}</span>
-                </div>
-                <div className='flex justify-between'>
-                  <span className='text-gray-400'>Last Activity:</span>
-                  <span className='text-gray-200'>{accountData.account.lastActivity}</span>
-                </div>
-              </div>
-            </div>
-          </div>
+    <div className='space-y-8'>
+      {/* Account Overview */}
+      <section className='bg-gray-800 rounded-lg border border-gray-700 p-6'>
+        <div className='flex items-center justify-between mb-6'>
+          <h2 className='text-xl font-bold text-gray-100 flex items-center gap-2'>
+            <UserIcon className='w-6 h-6 text-blue-400' />
+            Account Information
+          </h2>
+          <button
+            onClick={copyAddressToClipboard}
+            className={`px-3 py-1 text-sm rounded transition-colors ${
+              copiedAddress 
+                ? 'bg-green-600 text-white' 
+                : 'bg-gray-600 text-gray-300 hover:bg-gray-500'
+            }`}
+          >
+            {copiedAddress ? 'Copied!' : 'Copy Address'}
+          </button>
         </div>
 
-        {/* Transactions */}
-        <div className='bg-gray-800 rounded-lg border border-gray-700 p-6'>
-          <div className='flex items-center justify-between mb-4'>
-            <h3 className='text-xl font-semibold text-gray-100'>Transactions</h3>
-            <span className='text-sm text-gray-400'>Latest {accountData.transactions.length} transactions</span>
+        <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6'>
+          <div className='space-y-2'>
+            <p className='text-sm text-gray-400'>Address</p>
+            <p className='font-mono text-sm text-blue-400 break-all'>{account.address}</p>
+            {poolName && (
+              <p className='text-xs text-green-400'>Pool: {poolName}</p>
+            )}
           </div>
-          {accountData.transactions.length > 0 ? (
-            <div className='overflow-x-auto'>
-              <table className='w-full'>
-                <thead>
-                  <tr className='border-b border-gray-700'>
-                    <th className='text-left py-3 px-2 text-sm font-medium text-gray-300 w-1/4'>TxHash</th>
-                    <th className='text-left py-3 px-2 text-sm font-medium text-gray-300 w-1/4'>From</th>
-                    <th className='text-left py-3 px-2 text-sm font-medium text-gray-300 w-1/4'>To</th>
-                    <th className='text-left py-3 px-2 text-sm font-medium text-gray-300 w-1/6'>Value</th>
-                    <th className='text-left py-3 px-2 text-sm font-medium text-gray-300 w-[260px] min-w-[220px]'>Time</th>
-                  </tr>
-                </thead>
-                <tbody className='divide-y divide-gray-700'>
-                  {accountData.transactions.map((tx) => (
-                    <tr key={tx.hash} className='hover:bg-gray-700/50 transition-colors'>
-                      <td className='py-3 px-2'>
-                        {tx.type === 'mining_reward' ? (
-                          <span className='font-mono text-yellow-400 text-sm'>
-                            Mining Reward
-                          </span>
-                        ) : (
-                          <Link
-                            href={`/tx/${tx.hash}`}
-                            className='font-mono text-blue-400 hover:text-blue-300 transition-colors text-sm'
-                          >
-                            {ellipsis(tx.hash, 8,8)}
-                          </Link>
-                        )}
-                      </td>
-                      <td className='py-3 px-2'>
-                        {tx.type === 'mining_reward' ? (
-                          <span className='font-mono text-gray-500 text-sm'>
-                            System
-                          </span>
-                        ) : (
-                          <Link
-                            href={`/address/${tx.from}`}
-                            className='font-mono text-gray-300 hover:text-blue-400 transition-colors text-sm'
-                          >
-                            {ellipsis(tx.from, 6, 6)}
-                          </Link>
-                        )}
-                      </td>
-                      <td className='py-3 px-2'>
-                        <Link
-                          href={`/address/${tx.to}`}
-                          className='font-mono text-gray-300 hover:text-blue-400 transition-colors text-sm'
-                        >
-                          {ellipsis(tx.to, 6, 6)}
-                        </Link>
-                      </td>
-                      <td className='py-3 px-2'>
-                        <span className='font-medium text-sm text-green-400'>
-                          {tx.value} {tx.type === 'token' ? 'Tokens' : 'VBC'}
-                        </span>
-                        {tx.type === 'mining_reward' && tx.details && (
-                          <div className='text-xs text-gray-500 mt-1'>
-                            <div className='text-green-400'>Block: {tx.details.blockReward} VBC</div>
-                            <div className='text-green-400'>Gas: {tx.details.gasFees} VBC</div>
-                          </div>
-                        )}
-                      </td>
-                      <td className='py-3 px-2 text-gray-400 text-sm w-[260px] min-w-[220px]'>
-                        <div className='flex items-center'>
-                          <ClockIcon className='w-4 h-4 text-gray-400 mr-2' />
-                          <div>
-                            <div className='text-sm text-gray-300'>{tx.timeAgo}</div>
-                            <div className='text-xs text-gray-500'>{formatLocalTime(tx.timestamp)}</div>
-                          </div>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <div className='text-center py-8'>
-              <div className='text-gray-400'>No transactions found for this account</div>
+
+          <div className='space-y-2'>
+            <p className='text-sm text-gray-400'>Balance</p>
+            <p className='text-lg font-mono text-green-400'>{formatValue(account.balance)}</p>
+          </div>
+
+          <div className='space-y-2'>
+            <p className='text-sm text-gray-400'>Percent</p>
+            <p className='text-lg font-mono text-yellow-400'>{account.percentage}%</p>
+          </div>
+
+          <div className='space-y-2'>
+            <p className='text-sm text-gray-400'>Transaction Count</p>
+            <p className='text-lg font-mono text-orange-400'>{account.transactionCount.toLocaleString()}</p>
+          </div>
+
+          {account.rank && (
+            <div className='space-y-2'>
+              <p className='text-sm text-gray-400'>Rank</p>
+              <p className='text-lg font-mono text-purple-400'>#{account.rank.toLocaleString()}</p>
             </div>
           )}
+
+          <div className='space-y-2'>
+            <p className='text-sm text-gray-400'>Blocks Mined</p>
+            <p className='text-lg font-mono text-green-400'>{account.blocksMined.toLocaleString()}</p>
+          </div>
+
+          <div className='space-y-2'>
+            <p className='text-sm text-gray-400'>First Seen</p>
+            <div className='flex items-center gap-2'>
+              <ClockIcon className='w-4 h-4 text-gray-400' />
+              <div>
+                <div className='text-sm text-gray-300'>{getTimeAgo(account.firstSeen)}</div>
+                <div className='text-xs text-gray-500'>{new Date(account.firstSeen).toLocaleString(undefined, { timeZoneName: 'short' })}</div>
+              </div>
+            </div>
+          </div>
+
+          <div className='space-y-2'>
+            <p className='text-sm text-gray-400'>Last Activity</p>
+            <div className='flex items-center gap-2'>
+              <ClockIcon className='w-4 h-4 text-gray-400' />
+              <div>
+                <div className='text-sm text-gray-300'>{getTimeAgo(account.lastActivity)}</div>
+                <div className='text-xs text-gray-500'>{new Date(account.lastActivity).toLocaleString(undefined, { timeZoneName: 'short' })}</div>
+              </div>
+            </div>
+          </div>
         </div>
-      </main>
-    </>
+      </section>
+
+      {/* Contract Information */}
+      {contract && (
+        <section className='bg-gray-800 rounded-lg border border-gray-700 p-6'>
+          <h2 className='text-xl font-bold text-gray-100 mb-6 flex items-center gap-2'>
+            <CubeIcon className='w-6 h-6 text-green-400' />
+            Contract Information
+          </h2>
+
+          <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6'>
+            <div className='space-y-2'>
+              <p className='text-sm text-gray-400'>Contract Address</p>
+              <p className='font-mono text-sm text-blue-400 break-all'>{contract.address}</p>
+            </div>
+
+            <div className='space-y-2'>
+              <p className='text-sm text-gray-400'>Name</p>
+              <p className='text-lg font-mono text-green-400'>{contract.name}</p>
+            </div>
+
+            <div className='space-y-2'>
+              <p className='text-sm text-gray-400'>Symbol</p>
+              <p className='text-lg font-mono text-orange-400'>{contract.symbol}</p>
+            </div>
+
+            <div className='space-y-2'>
+              <p className='text-sm text-gray-400'>Type</p>
+              <p className='text-sm text-gray-300'>{contract.type}</p>
+            </div>
+
+            <div className='space-y-2'>
+              <p className='text-sm text-gray-400'>Decimals</p>
+              <p className='text-lg font-mono text-purple-400'>{contract.decimals}</p>
+            </div>
+
+            <div className='space-y-2'>
+              <p className='text-sm text-gray-400'>Total Supply</p>
+              <p className='text-lg font-mono text-green-400'>{contract.totalSupply}</p>
+            </div>
+
+            <div className='space-y-2'>
+              <p className='text-sm text-gray-400'>Verified</p>
+              <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
+                contract.verified 
+                  ? 'bg-green-600/20 text-green-400 border border-green-600/50' 
+                  : 'bg-red-600/20 text-red-400 border border-red-600/50'
+              }`}>
+                {contract.verified ? 'Yes' : 'No'}
+              </span>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* Transactions */}
+      <section className='bg-gray-800 rounded-lg border border-gray-700 p-6'>
+        <h2 className='text-xl font-bold text-gray-100 mb-6'>
+          Recent Transactions ({transactions.length})
+        </h2>
+        
+        {transactions.length === 0 ? (
+          <div className='text-center py-8'>
+            <p className='text-gray-400'>No transactions found for this account.</p>
+          </div>
+        ) : (
+          <div className='space-y-3'>
+            {transactions.map((tx, index) => (
+              <div
+                key={tx.hash || index}
+                className='flex justify-between items-center p-3 bg-gray-700/50 rounded border border-gray-600/50 hover:bg-gray-700 transition-colors'
+              >
+                <div className='flex flex-col gap-1'>
+                  <Link
+                    href={`/tx/${tx.hash}`}
+                    className='text-blue-400 hover:text-blue-300 font-mono text-sm transition-colors break-all'
+                    title={tx.hash}
+                  >
+                    {tx.hash.slice(0, 16)}...{tx.hash.slice(-16)}
+                  </Link>
+                  <div className='text-xs text-gray-400'>
+                    From: {tx.from ? formatAddress(tx.from) : 'Unknown'} →
+                    To: {tx.to ? formatAddress(tx.to) : 'Unknown'}
+                  </div>
+                </div>
+                <div className='text-right'>
+                  <p className='text-sm text-green-400 font-bold'>
+                    {tx.value ? formatValue(tx.value) : '0 VBC'}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+    </div>
   );
 } 

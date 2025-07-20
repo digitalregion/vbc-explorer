@@ -3,37 +3,35 @@ import Web3 from 'web3';
 import { Transaction, Market } from '@/lib/models';
 import { connectToDatabase } from '@/lib/db';
 import { toEther, toGwei } from '@/lib/etherUnits';
+import fs from 'fs';
+import path from 'path';
 
-// Load config with fallback - using hardcoded defaults for CI compatibility
-const config: { nodeAddr: string; wsPort: number; settings?: { useFiat?: boolean }; miners: Record<string, string> } = {
-  nodeAddr: 'localhost',
-  wsPort: 8330,
-  miners: {
-    "0x950302976387b43E042aeA242AE8DAB8e5C204D1": "digitalregion.jp",
-    "0x6C0DB3Ea9EEd7ED145f36da461D84A8d02596B08": "coolpool.top"
+// Function to read config
+const readConfig = () => {
+  try {
+    const configPath = path.join(process.cwd(), 'config.json');
+    const exampleConfigPath = path.join(process.cwd(), 'config.example.json');
+    
+    if (fs.existsSync(configPath)) {
+      return JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    } else if (fs.existsSync(exampleConfigPath)) {
+      return JSON.parse(fs.readFileSync(exampleConfigPath, 'utf8'));
+    }
+  } catch (error) {
+    console.error('Error reading config:', error);
   }
+  
+  // Default configuration
+  return {
+    nodeAddr: 'localhost',
+    port: 8329,
+    wsPort: 8330,
+    miners: {}
+  };
 };
 
-// Try to load config files at runtime (only in development)
-if (process.env.NODE_ENV === 'development') {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const local = require('../../../config.json');
-    Object.assign(config, local);
-    console.log('config.json found.');
-  } catch {
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const local = require('../../../config.example.json');
-      Object.assign(config, local);
-      console.log('config.example.json found (fallback).');
-    } catch {
-      console.log('Using hardcoded default configuration');
-    }
-  }
-} else {
-  console.log('Using hardcoded default configuration for production');
-}
+// Load config with fallback
+const config = readConfig();
 
 // Create Web3 connection
 const web3 = new Web3(new Web3.providers.WebsocketProvider(`ws://${config.nodeAddr}:${config.wsPort}`));

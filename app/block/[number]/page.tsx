@@ -1,135 +1,153 @@
 'use client';
 
+import { useState, useEffect } from 'react';
+import { use } from 'react';
 import Header from '../../components/Header';
 import Link from 'next/link';
 import {
   CubeIcon,
-  ArrowLeftIcon,
-  FireIcon,
-  HashtagIcon,
-  UserIcon,
-  ClockIcon
+  ClockIcon,
+  ArrowUpIcon,
+  ArrowPathIcon,
+  BoltIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  ClipboardDocumentIcon
 } from '@heroicons/react/24/outline';
-import { useState, useEffect } from 'react';
-import { useParams } from 'next/navigation';
-import { weiToVBC, formatVBC } from '../../../lib/bigint-utils';
+import SummaryCard from '../../components/SummaryCard';
+import { getCurrencySymbol } from '../../../lib/config';
+import { initializeCurrency } from '../../../lib/bigint-utils';
 
-// Dynamic config loading
-const config: Record<string, unknown> = {
-  miners: {
-    "0x950302976387b43E042aeA242AE8DAB8e5C204D1": "digitalregion.jp",
-    "0x6C0DB3Ea9EEd7ED145f36da461D84A8d02596B08": "coolpool.top"
-  }
-};
+interface Config {
+  miners: Record<string, string>;
+  explorer: {
+    name: string;
+    description: string;
+    version: string;
+    url: string;
+  };
+}
 
-interface BlockData {
+interface Block {
   number: number;
   hash: string;
-  parentHash: string;
-  timestamp: number;
   miner: string;
+  timestamp: number;
+  transactions: number;
+  gasUsed: number;
+  gasLimit: number;
   difficulty: string;
   totalDifficulty: string;
   size: number;
-  gasLimit: number;
-  gasUsed: number;
   nonce: string;
-  transactionCount: number;
-  transactions: Array<{
-    hash: string;
-    from: string;
-    to: string;
-    value: string;
-    gasUsed: number;
-    gasPrice: string;
-    status: number;
-    transactionIndex: number;
-  }>;
-  blockReward?: string;
+  extraData: string;
+  parentHash: string;
+  stateRoot: string;
+  receiptsRoot: string;
+  transactionsRoot: string;
+  logsBloom: string;
+  sha3Uncles: string;
+  uncles: string[];
 }
 
-export default function BlockDetailsPage() {
-  const params = useParams();
-  const blockIdentifier = params?.number as string;
-  const [block, setBlock] = useState<BlockData | null>(null);
+interface Transaction {
+  hash: string;
+  from: string;
+  to: string;
+  value: string;
+  timestamp: number;
+  blockNumber: number;
+  gasUsed?: number;
+  status?: number | string;
+}
+
+export default function BlockDetailPage({ params }: { params: Promise<{ number: string }> }) {
+  const resolvedParams = use(params);
+  const [block, setBlock] = useState<Block | null>(null);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [config, setConfig] = useState<Config | null>(null);
+
+  const [copiedItem, setCopiedItem] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchBlockDetails = async () => {
-      if (!blockIdentifier) return;
+    // 設定を取得
+    const fetchConfig = async () => {
+      try {
+        // Initialize currency conversion factors
+        await initializeCurrency();
+        
+        const response = await fetch('/api/config');
+        if (response.ok) {
+          const configData = await response.json();
+          setConfig(configData);
+        }
+      } catch (err) {
+        console.error('Error fetching config:', err);
+      }
+    };
 
+    fetchConfig();
+  }, []);
+
+  useEffect(() => {
+    const fetchBlockData = async () => {
       try {
         setLoading(true);
-        const response = await fetch(`/api/blocks/${blockIdentifier}`);
+        setError(null);
+        
+        const response = await fetch(`/api/block/${resolvedParams.number}`);
 
         if (!response.ok) {
           throw new Error('Block not found');
         }
 
-        const blockData = await response.json();
-        setBlock(blockData);
+        const data = await response.json();
+        setBlock(data.block);
+        setTransactions(data.transactions || []);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to fetch block details');
+        setError(err instanceof Error ? err.message : 'Failed to fetch block data');
       } finally {
         setLoading(false);
       }
     };
 
-    fetchBlockDetails();
-  }, [blockIdentifier]);
+    if (resolvedParams.number) {
+      fetchBlockData();
+    }
+  }, [resolvedParams.number]);
 
-  if (loading) {
-    return (
-      <>
-        <Header />
-        <div className='bg-gray-800 border-b border-gray-700'>
-          <div className='container mx-auto px-4 py-8'>
-            <div className='flex items-center gap-3 mb-4'>
-              <CubeIcon className='w-8 h-8 text-blue-400' />
-              <h1 className='text-3xl font-bold text-gray-100'>Block Details</h1>
-            </div>
-            <p className='text-gray-400'>Loading block information...</p>
-          </div>
-        </div>
-        <main className='container mx-auto px-4 py-8'>
-          <div className='bg-gray-800 rounded-lg border border-gray-700 p-8 text-center'>
-            <div className='animate-spin w-8 h-8 border-4 border-blue-400 border-t-transparent rounded-full mx-auto mb-4'></div>
-            <p className='text-gray-400'>Loading block details...</p>
-          </div>
-        </main>
-      </>
-    );
-  }
 
-  if (error || !block) {
-    return (
-      <>
-        <Header />
-        <div className='bg-gray-800 border-b border-gray-700'>
-          <div className='container mx-auto px-4 py-8'>
-            <div className='flex items-center gap-3 mb-4'>
-              <CubeIcon className='w-8 h-8 text-red-400' />
-              <h1 className='text-3xl font-bold text-gray-100'>Block Not Found</h1>
-            </div>
-            <p className='text-gray-400'>The requested block could not be found.</p>
-          </div>
-        </div>
-        <main className='container mx-auto px-4 py-8'>
-          <div className='bg-gray-800 rounded-lg border border-gray-700 p-8 text-center'>
-            <p className='text-red-400 mb-4'>{error || 'Block not found'}</p>
-            <Link
-              href='/'
-              className='inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded transition-colors'
-            >
-              <ArrowLeftIcon className='w-4 h-4' />
-              Back to Explorer
-            </Link>
-          </div>
-        </main>
-      </>
-    );
-  }
+
+  const copyToClipboard = async (text: string) => {
+    try {
+      // モダンなブラウザでは Clipboard API を使用
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        // フォールバック: 古いブラウザや非セキュアコンテキスト用
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        textArea.style.top = '-999999px';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        document.execCommand('copy');
+        textArea.remove();
+      }
+      
+      // コピー成功時のフィードバック
+      setCopiedItem(text);
+      setTimeout(() => {
+        setCopiedItem(null);
+      }, 2000);
+    } catch (err) {
+      console.error('Failed to copy to clipboard:', err);
+    }
+  };
 
   const formatTimestamp = (timestamp: number) => {
     const date = new Date(timestamp * 1000);
@@ -146,39 +164,42 @@ export default function BlockDetailsPage() {
     return `${Math.floor(diff / 86400)}d ago`;
   };
 
-  const formatDifficulty = (difficulty: string | number) => {
-    if (!difficulty) return 'N/A';
-
-    const num = typeof difficulty === 'string' ? parseFloat(difficulty) : difficulty;
-    if (isNaN(num)) return difficulty.toString();
-
-    if (num >= 1e12) {
-      return `${(num / 1e12).toFixed(2)} TH`;
-    } else if (num >= 1e9) {
-      return `${(num / 1e9).toFixed(2)} GH`;
-    } else if (num >= 1e6) {
-      return `${(num / 1e6).toFixed(2)} MH`;
-    } else if (num >= 1e3) {
-      return `${(num / 1e3).toFixed(2)} KH`;
+  const formatValue = (value: string) => {
+    try {
+      const currencySymbol = getCurrencySymbol();
+      // WeiからVBCに変換（1 VBC = 10^18 Wei）
+      const weiValue = BigInt(value);
+      const vbcValue = Number(weiValue) / 1e18;
+      
+      if (vbcValue === 0) return `0 ${currencySymbol}`;
+      if (vbcValue < 0.000001) return `<0.000001 ${currencySymbol}`;
+      if (vbcValue < 1) return `${vbcValue.toFixed(6)} ${currencySymbol}`;
+      if (vbcValue < 1000) return `${vbcValue.toFixed(4)} ${currencySymbol}`;
+      return `${vbcValue.toLocaleString(undefined, { maximumFractionDigits: 4 })} ${currencySymbol}`;
+    } catch {
+      const currencySymbol = getCurrencySymbol();
+      return `${value} ${currencySymbol}`;
     }
-    return `${num.toFixed(2)} H`;
+  };
 
+  const formatAddress = (address: string) => {
+    if (!address) return 'N/A';
+    return `${address.slice(0, 8)}...${address.slice(-6)}`;
   };
 
   const getMinerDisplayInfo = (miner: string) => {
-    if (!miner) return { name: 'Unknown', isPool: false, address: null };
+    if (!miner || !config?.miners) return { name: 'Unknown', isPool: false, address: null };
 
-    if ((config as { miners?: Record<string, string> }).miners) {
-      const minerKey = Object.keys((config as { miners?: Record<string, string> }).miners || {}).find(
-        key => key.toLowerCase() === miner.toLowerCase()
-      );
-      if (minerKey) {
-        return {
-          name: (config as { miners?: Record<string, string> }).miners![minerKey],
-          isPool: true,
-          address: miner
-        };
-      }
+    const minerKey = Object.keys(config.miners).find(
+      key => key.toLowerCase() === miner.toLowerCase()
+    );
+    
+    if (minerKey) {
+      return {
+        name: config.miners[minerKey],
+        isPool: true,
+        address: miner
+      };
     }
 
     return {
@@ -188,232 +209,391 @@ export default function BlockDetailsPage() {
     };
   };
 
+  const formatDifficulty = (difficulty: string) => {
+    const diff = parseFloat(difficulty);
+    if (diff >= 1e12) return `${(diff / 1e12).toFixed(2)} TH`;
+    if (diff >= 1e9) return `${(diff / 1e9).toFixed(2)} GH`;
+    if (diff >= 1e6) return `${(diff / 1e6).toFixed(2)} MH`;
+    if (diff >= 1e3) return `${(diff / 1e3).toFixed(2)} KH`;
+    return diff.toLocaleString();
+  };
+
+  if (loading) {
+    return (
+      <div className='min-h-screen bg-gray-900 text-white'>
+        <Header />
+        <div className='container mx-auto px-4 py-8'>
+          <div className='flex justify-center items-center h-64'>
+            <div className='animate-spin rounded-full h-32 w-32 border-b-2 border-blue-500'></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !block) {
+    return (
+      <div className='min-h-screen bg-gray-900 text-white'>
+        <Header />
+        <div className='container mx-auto px-4 py-8'>
+          <div className='bg-red-800 border border-red-600 text-red-100 px-4 py-3 rounded mb-4'>
+            <strong className='font-bold'>Error:</strong>
+            <span className='block sm:inline'> {error || 'Block not found'}</span>
+          </div>
+          <Link href='/' className='inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded transition-colors'>
+            <ArrowUpIcon className='w-4 h-4' />
+            Back to Explorer
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  // サマリーカード
+  const summaryStats = [
+    {
+      title: 'Block Number',
+      value: block.number.toString(),
+      sub: 'Current block number',
+      icon: <CubeIcon className='w-5 h-5 text-green-400' />,
+      colorClass: 'text-green-400'
+    },
+    {
+      title: 'Transactions',
+      value: block.transactions.toString(),
+      sub: 'Transactions in block',
+      icon: <ArrowPathIcon className='w-5 h-5 text-blue-400' />,
+      colorClass: 'text-blue-400'
+    },
+    {
+      title: 'Gas Used',
+      value: `${block.gasUsed.toLocaleString()}`,
+      sub: `Limit: ${block.gasLimit.toLocaleString()}`,
+      icon: <BoltIcon className='w-5 h-5 text-orange-400' />,
+      colorClass: 'text-orange-400'
+    },
+    {
+      title: 'Timestamp',
+      value: block.number === 0 ? (
+        <div className='flex items-center gap-2'>
+          <span className='bg-yellow-600/20 text-yellow-400 text-xs font-bold px-2 py-1 rounded border border-yellow-600/50'>GENESIS</span>
+        </div>
+      ) : getTimeAgo(block.timestamp),
+      sub: block.number === 0 ? 'Genesis block' : formatTimestamp(block.timestamp),
+      icon: <ClockIcon className='w-5 h-5 text-yellow-400' />,
+      colorClass: 'text-yellow-400'
+    }
+  ];
+
   return (
-    <>
+    <div className='min-h-screen bg-gray-900 text-white'>
       <Header />
+
       {/* Page Header */}
       <div className='bg-gray-800 border-b border-gray-700'>
         <div className='container mx-auto px-4 py-8'>
           <div className='flex items-center gap-3 mb-4'>
-            <CubeIcon className='w-8 h-8 text-blue-400' />
+            <CubeIcon className='w-8 h-8 text-green-400' />
             <h1 className='text-3xl font-bold text-gray-100'>Block Details</h1>
           </div>
-          <div className='flex items-center gap-4'>
-            <Link
-              href='/'
-              className='inline-flex items-center gap-2 text-blue-400 hover:text-blue-300 transition-colors'
-            >
-              <ArrowLeftIcon className='w-4 h-4' />
-              Back to Explorer
-            </Link>
-            <span className='text-gray-400'>
-              Block #{block.number.toLocaleString()}
-            </span>
-          </div>
+          <p className='text-gray-400'>
+            {block.number === 0 ? (
+              'Genesis block information and transaction details.'
+            ) : (
+              `Block #${block.number} information and transaction details.`
+            )}
+          </p>
         </div>
       </div>
 
       <main className='container mx-auto px-4 py-8'>
-        {/* Block Overview */}
-        <section className='bg-gray-800 rounded-lg border border-gray-700 p-6 mb-8'>
-          <h2 className='text-xl font-bold text-gray-100 mb-6 flex items-center gap-2'>
-            <HashtagIcon className='w-6 h-6 text-blue-400' />
-            Block Overview
-          </h2>
+        {/* Summary Cards */}
+        <div className='grid grid-cols-1 md:grid-cols-4 gap-4 mb-8'>
+          {summaryStats.map((stat, idx) => (
+            <SummaryCard key={idx} {...stat} />
+          ))}
+        </div>
 
-          <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6'>
-            <div className='space-y-2'>
-              <p className='text-sm text-gray-400'>Block Number</p>
-              <Link
-                href={`/block/${block.number}`}
-                className='text-lg font-mono text-blue-400 hover:text-blue-300 hover:underline transition-colors'
-                title={`Block #${block.number}`}
-              >
-                #{block.number.toLocaleString()}
-              </Link>
-            </div>
-
-            <div className='space-y-2'>
-              <p className='text-sm text-gray-400'>Timestamp</p>
-              {block.number === 0 ? (
-                <span className='bg-yellow-600/20 text-yellow-400 text-xs font-bold px-2 py-1 rounded border border-yellow-600/50 inline-block'>
-                  GENESIS
-                </span>
-              ) : (
-                <div className='flex items-center'>
-                  <ClockIcon className='w-4 h-4 text-gray-400 mr-2' />
-                  <div>
-                    <div className='text-sm text-gray-300'>{getTimeAgo(block.timestamp)}</div>
-                    <div className='text-xs text-gray-500'>{formatTimestamp(block.timestamp)}</div>
+        {/* Block Information */}
+        <div className='bg-gray-800 rounded-lg border border-gray-700 p-6 mb-8'>
+          <h2 className='text-xl font-semibold text-gray-100 mb-4'>Block Information</h2>
+          <div className='grid grid-cols-1 lg:grid-cols-2 gap-6'>
+            <div className='space-y-4'>
+              <div>
+                <label className='block text-sm font-medium text-gray-400 mb-2'>Block Hash</label>
+                <div className='bg-gray-700 rounded p-3 flex items-center justify-between'>
+                  <span className='text-white font-mono text-sm break-all'>{block.hash}</span>
+                  <div className='flex items-center gap-2'>
+                    <button
+                      onClick={() => copyToClipboard(block.hash)}
+                      className='p-1 text-gray-400 hover:text-white hover:bg-gray-600 rounded transition-all duration-200'
+                      title='Copy to clipboard'
+                    >
+                      <ClipboardDocumentIcon className='w-4 h-4' />
+                    </button>
+                    {copiedItem === block.hash && (
+                      <span className='text-green-400 text-sm font-mono'>Copied!</span>
+                    )}
                   </div>
                 </div>
-              )}
-            </div>
-
-            <div className='space-y-2'>
-              <p className='text-sm text-gray-400'>Transactions</p>
-              <p className='text-lg font-mono text-green-400'>{block.transactionCount || block.transactions?.length || 0}</p>
-            </div>
-
-            <div className='space-y-2'>
-              <p className='text-sm text-gray-400'>Mined by</p>
-              <div className='text-sm text-gray-200 flex items-center gap-2'>
-                <UserIcon className='w-4 h-4 text-gray-400' />
-                {(() => {
-                  const minerInfo = getMinerDisplayInfo(block.miner);
-                  return (
-                    <Link
-                      href={`/address/${block.miner}`}
-                      className='text-green-400 hover:text-green-300 transition-colors hover:underline'
-                      title={`View account details for ${minerInfo.name} (${block.miner})`}
-                    >
-                      {minerInfo.name}
-                    </Link>
-                  );
-                })()}
               </div>
-            </div>
+              
+              <div className='grid grid-cols-2 gap-4'>
+                <div>
+                  <label className='block text-sm font-medium text-gray-400 mb-2'>Difficulty</label>
+                  <div className='text-white'>{formatDifficulty(block.difficulty)}</div>
+                </div>
+                <div>
+                  <label className='block text-sm font-medium text-gray-400 mb-2'>Total Difficulty</label>
+                  <div className='text-white'>{formatDifficulty(block.totalDifficulty)}</div>
+                </div>
+              </div>
 
-            <div className='space-y-2'>
-              <p className='text-sm text-gray-400'>Gas Used / Limit</p>
-              <p className='text-sm text-gray-200 flex items-center gap-2'>
-                <FireIcon className='w-4 h-4 text-orange-400' />
-                {block.gasUsed?.toLocaleString()} / {block.gasLimit?.toLocaleString()}
-                <span className='text-xs text-gray-400'>
-                  ({((block.gasUsed / block.gasLimit) * 100).toFixed(1)}%)
-                </span>
-              </p>
-            </div>
+              <div className='grid grid-cols-2 gap-4'>
+                <div>
+                  <label className='block text-sm font-medium text-gray-400 mb-2'>Gas Used</label>
+                  <div className='text-orange-400'>{block.gasUsed.toLocaleString()}</div>
+                </div>
+                <div>
+                  <label className='block text-sm font-medium text-gray-400 mb-2'>Gas Limit</label>
+                  <div className='text-white'>{block.gasLimit.toLocaleString()}</div>
+                </div>
+              </div>
 
-            <div className='space-y-2'>
-              <p className='text-sm text-gray-400'>Block Size</p>
-              <p className='text-lg font-mono text-yellow-400'>{block.size?.toLocaleString()} bytes</p>
-            </div>
-          </div>
-        </section>
+              <div className='grid grid-cols-2 gap-4'>
+                <div>
+                  <label className='block text-sm font-medium text-gray-400 mb-2'>Nonce</label>
+                  <div className='text-white font-mono text-sm'>{block.nonce}</div>
+                </div>
+                <div>
+                  <label className='block text-sm font-medium text-gray-400 mb-2'>Timestamp</label>
+                  <div className='text-white'>
+                    <div className='text-medium'>{formatTimestamp(block.timestamp)}</div>
+                    <div className='text-xs text-gray-400'>{getTimeAgo(block.timestamp)}</div>
+                  </div>
+                </div>
+              </div>
 
-        {/* Block Hash Information */}
-        <section className='bg-gray-800 rounded-lg border border-gray-700 p-6 mb-8'>
-          <h2 className='text-xl font-bold text-gray-100 mb-6'>Hash Information</h2>
-
-          <div className='space-y-4'>
-            <div>
-              <p className='text-sm text-gray-400 mb-2'>Block Hash</p>
-              <Link
-                href={`/block/${block.hash}`}
-                className='font-mono text-sm text-blue-400 hover:text-blue-300 break-all bg-gray-700/50 p-3 rounded border border-gray-600 block transition-colors hover:bg-gray-700'
-                title={`Block hash: ${block.hash}`}
-              >
-                {block.hash}
-              </Link>
-            </div>
-
-            <div>
-              <p className='text-sm text-gray-400 mb-2'>Parent Hash</p>
-              <Link
-                href={`/block/${block.parentHash}`}
-                className='font-mono text-sm text-blue-400 hover:text-blue-300 break-all bg-gray-700/50 p-3 rounded border border-gray-600 block transition-colors hover:bg-gray-700'
-                title={`Go to parent block: ${block.parentHash}`}
-              >
-                {block.parentHash}
-              </Link>
-            </div>
-
-            {block.nonce && (
               <div>
-                <p className='text-sm text-gray-400 mb-2'>Nonce</p>
-                <p className='font-mono text-sm text-green-400 bg-gray-700/50 p-3 rounded border border-gray-600'>
-                  {block.nonce}
-                </p>
+                <label className='block text-sm font-medium text-gray-400 mb-2'>Extra Data</label>
+                <div className='bg-gray-700 rounded p-3'>
+                  <span className='text-white font-mono text-sm break-all'>{block.extraData}</span>
+                </div>
               </div>
-            )}
-          </div>
-        </section>
-
-        {/* Difficulty Information */}
-        {(block.difficulty || block.totalDifficulty) && (
-          <section className='bg-gray-800 rounded-lg border border-gray-700 p-6 mb-8'>
-            <h2 className='text-xl font-bold text-gray-100 mb-6'>Mining Information</h2>
-
-            <div className='grid grid-cols-1 md:grid-cols-2 gap-6'>
-              {block.difficulty && (
-                <div className='space-y-2'>
-                  <p className='text-sm text-gray-400'>Difficulty</p>
-                  <p className='font-mono text-sm text-orange-400'>{formatDifficulty(block.difficulty)}</p>
-                </div>
-              )}
-
-              {block.totalDifficulty && (
-                <div className='space-y-2'>
-                  <p className='text-sm text-gray-400'>Total Difficulty</p>
-                  <p className='font-mono text-sm text-orange-400'>{formatDifficulty(block.totalDifficulty)}</p>
-                </div>
-              )}
             </div>
-          </section>
-        )}
+
+            <div className='space-y-4'>
+              <div>
+                <label className='block text-sm font-medium text-gray-400 mb-2'>Parent Hash</label>
+                <div className='bg-gray-700 rounded p-3 flex items-center justify-between'>
+                  <Link href={`/block/${block.parentHash}`} className='text-blue-400 hover:text-blue-300 font-mono text-sm break-all'>
+                    {block.parentHash}
+                  </Link>
+                  <div className='flex items-center gap-2'>
+                    <button
+                      onClick={() => copyToClipboard(block.parentHash)}
+                      className='p-1 text-gray-400 hover:text-white hover:bg-gray-600 rounded transition-all duration-200'
+                      title='Copy to clipboard'
+                    >
+                      <ClipboardDocumentIcon className='w-4 h-4' />
+                    </button>
+                    {copiedItem === block.parentHash && (
+                      <span className='text-green-400 text-sm font-mono'>Copied!</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className='block text-sm font-medium text-gray-400 mb-2'>Miner</label>
+                <div className='bg-gray-700 rounded p-3 flex items-center justify-between'>
+                  {(() => {
+                    const minerInfo = getMinerDisplayInfo(block.miner);
+                    return (
+                      <div className='text-white font-mono text-sm break-all'>
+                        {block.miner === '0x0000000000000000000000000000000000000000' ? 
+                          'System' : 
+                          (minerInfo.isPool ? (
+                            <Link
+                              href={`/address/${minerInfo.address || ''}`}
+                              className='text-green-400 hover:text-green-300 transition-colors hover:underline'
+                              title={minerInfo.address || ''}
+                            >
+                              {minerInfo.name}
+                            </Link>
+                          ) : (
+                            <Link
+                              href={`/address/${block.miner}`}
+                              className='text-green-400 hover:text-green-300 transition-colors hover:underline'
+                              title={block.miner}
+                            >
+                              {block.miner}
+                            </Link>
+                          ))
+                        }
+                      </div>
+                    );
+                  })()}
+                  {block.miner !== '0x0000000000000000000000000000000000000000' && (
+                    <div className='flex items-center gap-2'>
+                      <button
+                        onClick={() => {
+                          const minerInfo = getMinerDisplayInfo(block.miner);
+                          const addressToCopy = minerInfo.isPool ? minerInfo.address || block.miner : block.miner;
+                          copyToClipboard(addressToCopy);
+                        }}
+                        className='p-1 text-gray-400 hover:text-white hover:bg-gray-600 rounded transition-all duration-200'
+                        title='Copy to clipboard'
+                      >
+                        <ClipboardDocumentIcon className='w-4 h-4' />
+                      </button>
+                      {copiedItem === (getMinerDisplayInfo(block.miner).isPool ? getMinerDisplayInfo(block.miner).address || block.miner : block.miner) && (
+                        <span className='text-green-400 text-sm font-mono'>Copied!</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <label className='block text-sm font-medium text-gray-400 mb-2'>State Root</label>
+                <div className='text-white font-mono text-sm break-all'>{block.stateRoot}</div>
+              </div>
+
+              <div>
+                <label className='block text-sm font-medium text-gray-400 mb-2'>Receipts Root</label>
+                <div className='text-white font-mono text-sm break-all'>{block.receiptsRoot}</div>
+              </div>
+
+              <div>
+                <label className='block text-sm font-medium text-gray-400 mb-2'>Transactions Root</label>
+                <div className='text-white font-mono text-sm break-all'>{block.transactionsRoot}</div>
+              </div>
+
+              <div>
+                <label className='block text-sm font-medium text-gray-400 mb-2'>Size</label>
+                <div className='text-white'>{block.size} bytes</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Navigation */}
+        <div className='bg-gray-800 rounded-lg border border-gray-700 p-6 mb-8'>
+          <h2 className='text-xl font-semibold text-gray-100 mb-4'>Block Navigation</h2>
+          <div className='flex items-center justify-between'>
+            <Link
+              href={`/block/${block.number + 1}`}
+              className='flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl'
+            >
+              <ChevronLeftIcon className='w-4 h-4' />
+              Next Block
+            </Link>
+            
+            <div className='flex flex-col items-center'>
+              <div className='text-2xl font-bold text-white'>
+                Block #{block.number}
+              </div>
+              <div className='text-sm text-gray-300 mt-1'>
+                {block.number === 0 ? 'Genesis Block' : `${block.transactions} transactions`}
+              </div>
+            </div>
+            
+            <Link
+              href={`/block/${block.number - 1}`}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl ${
+                block.number === 0 ? 
+                  'text-gray-500 cursor-not-allowed bg-gray-700 opacity-50' : 
+                  'bg-blue-600 hover:bg-blue-700 text-white'
+              }`}
+              onClick={(e) => block.number === 0 && e.preventDefault()}
+            >
+              Previous Block
+              <ChevronRightIcon className='w-4 h-4' />
+            </Link>
+          </div>
+        </div>
 
         {/* Transactions */}
-        {block.transactions && block.transactions.length > 0 && (
-          <section className='bg-gray-800 rounded-lg border border-gray-700 p-6'>
-            <h2 className='text-xl font-bold text-gray-100 mb-6'>
-              Transactions ({block.transactions.length})
-            </h2>
-
-            <div className='space-y-3'>
-              {block.transactions.slice(0, 10).map((tx: {
-                hash: string;
-                from: string;
-                to: string;
-                value: string;
-                gasUsed: number;
-                gasPrice: string;
-                status: number;
-                transactionIndex: number;
-              }, index: number) => (
-                <div
-                  key={tx.hash || index}
-                  className='flex justify-between items-center p-3 bg-gray-700/50 rounded border border-gray-600/50 hover:bg-gray-700 transition-colors'
-                >
-                  <div className='flex flex-col gap-1'>
-                    <Link
-                      href={`/tx/${tx.hash}`}
-                      className='text-blue-400 hover:text-blue-300 font-mono text-sm transition-colors break-all'
-                      title={tx.hash}
-                    >
-                      {tx.hash.slice(0, 16)}...{tx.hash.slice(-16)}
-                    </Link>
-                    <div className='text-xs text-gray-400'>
-                      From: {tx.from ? `${tx.from.slice(0, 8)}...${tx.from.slice(-4)}` : 'Unknown'} →
-                      To: {tx.to ? `${tx.to.slice(0, 8)}...${tx.to.slice(-4)}` : 'Unknown'}
-                    </div>
-                  </div>
-                  <div className='text-right'>
-                    <p className='text-sm text-green-400 font-bold'>
-                      {tx.value ? (() => {
-                        try {
-                          const vbcValue = weiToVBC(tx.value);
-                          return formatVBC(vbcValue);
-                        } catch {
-                          return '0 VBC';
-                        }
-                      })() : '0 VBC'}
-                    </p>
-                  </div>
-                </div>
-              ))}
-
-              {block.transactions.length > 10 && (
-                <div className='text-center pt-4'>
-                  <p className='text-gray-400 text-sm'>
-                    Showing 10 of {block.transactions.length} transactions
-                  </p>
-                </div>
-              )}
+        <div className='bg-gray-800 rounded-lg border border-gray-700 p-6'>
+          <h2 className='text-xl font-semibold text-gray-100 mb-4'>Transactions</h2>
+          {transactions.length === 0 ? (
+            <p className='text-gray-400'>No transactions in this block.</p>
+          ) : (
+            <div className='overflow-x-auto'>
+              <table className='w-full'>
+                <thead>
+                  <tr className='border-b border-gray-600'>
+                    <th className='text-left py-3 px-4 text-sm font-medium text-gray-400'>Transaction Hash</th>
+                    <th className='text-left py-3 px-4 text-sm font-medium text-gray-400'>From</th>
+                    <th className='text-left py-3 px-4 text-sm font-medium text-gray-400'>To</th>
+                    <th className='text-left py-3 px-4 text-sm font-medium text-gray-400'>Value</th>
+                    <th className='text-left py-3 px-4 text-sm font-medium text-gray-400'>Status</th>
+                  </tr>
+                </thead>
+                <tbody className='divide-y divide-gray-600'>
+                  {transactions.map((tx) => (
+                    <tr key={tx.hash} className='hover:bg-gray-700/50 transition-colors'>
+                      <td className='py-3 px-4'>
+                        <Link
+                          href={`/tx/${tx.hash}`}
+                          className='text-blue-400 hover:text-blue-300 font-mono text-sm transition-colors'
+                          title={tx.hash}
+                        >
+                          {formatAddress(tx.hash)}
+                        </Link>
+                      </td>
+                      <td className='py-3 px-4'>
+                        <Link
+                          href={`/address/${tx.from}`}
+                          className='text-green-400 hover:text-green-300 font-mono text-sm transition-colors'
+                          title={tx.from}
+                        >
+                          {formatAddress(tx.from)}
+                        </Link>
+                      </td>
+                      <td className='py-3 px-4'>
+                        {tx.to ? (
+                          <Link
+                            href={`/address/${tx.to}`}
+                            className='text-red-400 hover:text-red-300 font-mono text-sm transition-colors'
+                            title={tx.to}
+                          >
+                            {formatAddress(tx.to)}
+                          </Link>
+                        ) : (
+                          <span className='text-gray-500 text-sm'>Contract Creation</span>
+                        )}
+                      </td>
+                      <td className='py-3 px-4'>
+                        <span className='text-green-400'>{formatValue(tx.value)}</span>
+                      </td>
+                      <td className='py-3 px-4'>
+                        {(() => {
+                          const isSuccess = 
+                            tx.status === 1 || 
+                            tx.status === '1' || 
+                            tx.status === 'true' ||
+                            tx.status === 'success' ||
+                            tx.status === 'Success' ||
+                            tx.status === 0x1 ||
+                            tx.status === '0x1';
+                          
+                          return isSuccess ? 
+                            <span className='text-green-400'>Success</span> : 
+                            <span className='text-red-400'>Failed</span>;
+                        })()}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          </section>
-        )}
+          )}
+        </div>
       </main>
-    </>
+
+
+    </div>
   );
 }

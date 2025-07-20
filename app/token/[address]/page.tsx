@@ -10,9 +10,9 @@ import {
   UsersIcon,
   ArrowPathIcon,
   CodeBracketIcon,
-  HashtagIcon,
   ClockIcon,
-  PlayIcon
+  PlayIcon,
+  PhotoIcon
 } from '@heroicons/react/24/outline';
 
 interface TokenData {
@@ -41,7 +41,7 @@ interface TokenData {
     compilerVersion?: string;
     metadataVersion?: string;
   };
-  statistics: {
+  statistics?: {
     holders: number;
     transfers: number;
     age: number;
@@ -49,7 +49,7 @@ interface TokenData {
     totalTransfers?: number;
     transfers24h?: number;
   };
-  holders: Array<{
+  holders?: Array<{
     rank: number;
     address: string;
     balance: string;
@@ -57,7 +57,7 @@ interface TokenData {
     percentage: string;
     tokenIds?: number[];
   }>;
-  transfers: Array<{
+  transfers?: Array<{
     hash: string;
     from: string;
     to: string;
@@ -111,6 +111,15 @@ export default function TokenDetailPage({ params }: { params: Promise<{ address:
   const [metadataLoading, setMetadataLoading] = useState<Record<number, boolean>>({});
   const [imageLoadState, setImageLoadState] = useState<ImageLoadState>({});
 
+  // Get transaction hash for a specific token ID
+  const getTransactionForTokenId = (tokenId: number) => {
+    if (!tokenData?.transfers) return null;
+    
+    // Find the transfer that created this token ID
+    const transfer = tokenData.transfers.find(tx => tx.tokenId === tokenId.toString());
+    return transfer?.hash || null;
+  };
+
 
   useEffect(() => {
     const getParams = async () => {
@@ -131,8 +140,8 @@ export default function TokenDetailPage({ params }: { params: Promise<{ address:
         // Use the unified tokens API
         const response = await fetch(`/api/tokens/${address}`);
         
-        if (!response.ok) {
-          throw new Error('Failed to fetch token/NFT data');
+          if (!response.ok) {
+            throw new Error('Failed to fetch token/NFT data');
         }
         
         const data = await response.json();
@@ -150,7 +159,7 @@ export default function TokenDetailPage({ params }: { params: Promise<{ address:
   // Copy address to clipboard handler
   const copyAddressToClipboard = async () => {
     try {
-      await navigator.clipboard.writeText(tokenData?.token.address || '');
+      await navigator.clipboard.writeText(tokenData?.token?.address || '');
       setCopiedAddress(true);
       setTimeout(() => setCopiedAddress(false), 2000);
     } catch (err) {
@@ -194,7 +203,7 @@ export default function TokenDetailPage({ params }: { params: Promise<{ address:
     setBalanceLoading(true);
     try {
       // Find balance for the address in holders data
-      const holder = tokenData.holders.find(h =>
+      const holder = tokenData.holders?.find(h =>
         h.address.toLowerCase() === balanceAddress.toLowerCase()
       );
 
@@ -256,15 +265,14 @@ export default function TokenDetailPage({ params }: { params: Promise<{ address:
   }, [activeTab]);
 
   // NFT固有の情報を表示するかどうかを判定
-  const isNFT = tokenData?.token.type === 'VRC-721' || tokenData?.token.type === 'VRC-1155';
-  const showNFTFeatures = isNFT && (tokenData?.token.floorPrice || tokenData?.token.volume24h || tokenData?.token.creator);
+  const isNFT = tokenData?.token?.isNFT || tokenData?.token?.type === 'VRC-721';
 
   const tabs = [
     { id: 'holders', label: 'Token Holders', icon: UsersIcon },
-    { id: 'transfers', label: 'Token Transfers', icon: ArrowPathIcon },
+    { id: 'transfers', label: 'Recent Transfers', icon: ArrowPathIcon },
     { id: 'balance', label: 'Get Balance', icon: UsersIcon },
     { id: 'source', label: 'Contract Source', icon: CodeBracketIcon },
-    ...(isNFT ? [{ id: 'tokenids', label: 'VRC-721 TokenIDs', icon: HashtagIcon }] : [])
+    ...(isNFT ? [{ id: 'tokenids', label: 'NFT Collections', icon: PhotoIcon }] : [])
   ];
 
   const renderTabContent = () => {
@@ -299,7 +307,7 @@ export default function TokenDetailPage({ params }: { params: Promise<{ address:
                   </div>
                   <div className='flex justify-between'>
                     <span className='text-gray-400'>Token Balance:</span>
-                    <span className='text-green-400 font-bold'>{balanceResult.balance} {tokenData?.token.symbol}</span>
+                    <span className='text-green-400 font-bold'>{balanceResult.balance} {tokenData?.token?.symbol || ''}</span>
                   </div>
                   <div className='flex justify-between'>
                     <span className='text-gray-400'>Percentage of Supply:</span>
@@ -320,7 +328,6 @@ export default function TokenDetailPage({ params }: { params: Promise<{ address:
       case 'transfers':
         return (
           <div className='space-y-4'>
-            <h4 className='text-lg font-semibold text-gray-100'>Recent Transfers</h4>
             {tokenData?.transfers && tokenData.transfers.length > 0 ? (
               <div className='overflow-x-auto'>
                 <table className='w-full'>
@@ -330,7 +337,7 @@ export default function TokenDetailPage({ params }: { params: Promise<{ address:
                       <th className='text-left py-2 text-gray-400'>From</th>
                       <th className='text-left py-2 text-gray-400'>To</th>
                       <th className='text-left py-2 text-gray-400'>Value</th>
-                      {tokenData.token.type === 'VRC-721' && (
+                      {isNFT && (
                         <th className='text-left py-2 text-gray-400'>Token ID</th>
                       )}
                       <th className='text-left py-2 text-gray-400'>Time</th>
@@ -369,12 +376,16 @@ export default function TokenDetailPage({ params }: { params: Promise<{ address:
                           )}
                         </td>
                         <td className='py-2 text-green-400 font-bold'>{transfer.value}</td>
-                        {tokenData.token.type === 'VRC-721' && (
-                          <td className='py-2 text-gray-300'>{transfer.tokenId || '-'}</td>
+                        {isNFT && (
+                          <td className='py-2 text-gray-300'>
+                            <Link href={`/tx/${transfer.hash}`} className='text-blue-400 hover:text-blue-300 font-mono text-sm'>
+                              {transfer.tokenId || '-'}
+                            </Link>
+                          </td>
                         )}
                         <td className='py-2 text-gray-400 text-sm'>
                           <div className='flex items-center'>
-                            <ClockIcon className='w-4 h-4 text-gray-400 mr-2' />
+                            <ClockIcon className='w-4 h-4 text-yellow-400 mr-2' />
                             <div>
                               <div className='text-sm text-gray-300'>{transfer.timeAgo}</div>
                               <div className='text-xs text-gray-500'>{new Date(transfer.timestamp).toLocaleString()}</div>
@@ -398,7 +409,6 @@ export default function TokenDetailPage({ params }: { params: Promise<{ address:
       case 'source':
         return (
           <div className='space-y-4'>
-            <h4 className='text-lg font-semibold text-gray-100'>Contract Source Code</h4>
             <div className='bg-gray-900 rounded-lg p-4 border border-gray-600'>
               <div className='flex items-center justify-between mb-4'>
                 <span className='text-gray-400'>Contract Address:</span>
@@ -558,10 +568,6 @@ export default function TokenDetailPage({ params }: { params: Promise<{ address:
               animation: 'fadeIn 0.6s ease-out'
             }}
           >
-            <h4 className='text-lg font-semibold text-gray-100'>VRC-721 Token IDs</h4>
-            
-
-            
             <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4'>
               {tokenData?.holders && tokenData.holders.length > 0 ? (
                 // Collect all token IDs and sort by token ID in descending order (newest first)
@@ -659,7 +665,25 @@ export default function TokenDetailPage({ params }: { params: Promise<{ address:
                             
                             {/* Metadata info */}
                             <div className='p-3'>
-                              <h5 className='font-semibold text-gray-200 mb-2'>{metadata.name || `Token #${tokenId}`}</h5>
+                              <h5 className='font-semibold text-gray-200 mb-2'>
+                                {(() => {
+                                  const txHash = getTransactionForTokenId(tokenId);
+                                  const title = metadata.name || `Token #${tokenId}`;
+                                  
+                                  if (txHash) {
+                                    return (
+                                      <Link 
+                                        href={`/tx/${txHash}`}
+                                        className='text-blue-400 hover:text-blue-300 transition-colors'
+                                        title='View transaction details'
+                                      >
+                                        {title}
+                                      </Link>
+                                    );
+                                  }
+                                  return title;
+                                })()}
+                              </h5>
                               {metadata.description && (
                                 <p className='text-sm text-gray-400 mb-2'>{metadata.description}</p>
                               )}
@@ -708,7 +732,6 @@ export default function TokenDetailPage({ params }: { params: Promise<{ address:
       default:
         return (
           <div className='space-y-4'>
-            <h4 className='text-lg font-semibold text-gray-100'>Token Holders</h4>
             {tokenData?.holders && tokenData.holders.length > 0 ? (
               <div className='overflow-x-auto'>
                 <table className='w-full'>
@@ -722,7 +745,7 @@ export default function TokenDetailPage({ params }: { params: Promise<{ address:
                   </thead>
                   <tbody className='divide-y divide-gray-700'>
                     {tokenData.holders.map((holder) => (
-                      <tr key={holder.rank} className='hover:bg-gray-700/50 transition-colors'>
+                      <tr key={`${holder.address}-${holder.rank}`} className='hover:bg-gray-700/50 transition-colors'>
                         <td className='py-3 px-4 text-gray-200 font-bold'>#{holder.rank}</td>
                         <td className='py-3 px-4'>
                           <Link
@@ -805,55 +828,54 @@ export default function TokenDetailPage({ params }: { params: Promise<{ address:
         <div className='container mx-auto px-4 py-8'>
           <h1 className='text-3xl font-bold mb-2 text-gray-100'>Token Details</h1>
           <p className='text-gray-400'>
-            Token information and holder statistics for {tokenData.token.name} ({tokenData.token.symbol})
+            Token information and holder statistics for {tokenData?.token?.name || 'N/A'} ({tokenData?.token?.symbol || 'N/A'})
           </p>
         </div>
       </div>
 
       <main className='container mx-auto px-4 py-8'>
+        {/* Stats Cards */}
+        <div className='grid grid-cols-1 md:grid-cols-4 gap-4 mb-8'>
+          <div className='bg-gray-700/50 rounded-lg p-4 border border-gray-600/50'>
+            <h3 className='text-sm font-medium text-gray-300 mb-2'>Unique Holders</h3>
+            <p className='text-2xl font-bold text-blue-400'>{(tokenData?.statistics?.holders || 0).toLocaleString()}</p>
+            <p className='text-xs text-gray-400'>Collection owners</p>
+          </div>
+
+          <div className='bg-gray-700/50 rounded-lg p-4 border border-gray-600/50'>
+            <h3 className='text-sm font-medium text-gray-300 mb-2'>Total Transfers</h3>
+            <p className='text-2xl font-bold text-purple-400'>{(tokenData?.statistics?.transfers || tokenData?.transfers?.length || 0).toLocaleString()}</p>
+            <p className='text-xs text-gray-400'>All time transfers</p>
+          </div>
+
+          <div className='bg-gray-700/50 rounded-lg p-4 border border-gray-600/50'>
+            <h3 className='text-sm font-medium text-gray-300 mb-2'>24h Transfers</h3>
+            <p className='text-2xl font-bold text-orange-400'>{(tokenData?.statistics?.transfers24h || 0).toLocaleString()}</p>
+            <p className='text-xs text-gray-400'>Token movements</p>
+          </div>
+
+          <div className='bg-gray-700/50 rounded-lg p-4 border border-gray-600/50'>
+            <h3 className='text-sm font-medium text-gray-300 mb-2'>Age</h3>
+            <p className='text-2xl font-bold text-yellow-400'>{tokenData?.statistics?.age || 0} days</p>
+            <p className='text-xs text-gray-400'>Since creation</p>
+          </div>
+        </div>
+
         {/* Token Info Card */}
         <div className='bg-gray-800 rounded-lg border border-gray-700 p-6 mb-8'>
           <div className='flex items-center justify-between mb-6'>
             <h2 className='text-xl font-semibold text-gray-100'>Token Information</h2>
-            {isNFT && (
-              <button
-                onClick={() => {
-                  setActiveTab('tokenids');
-                  
-                  // タブ切り替え後にスクロール
-                  setTimeout(() => {
-                    const tokenIdsSection = document.querySelector('[data-tab-content="tokenids"]');
-                    if (tokenIdsSection) {
-                      const element = tokenIdsSection as HTMLElement;
-                      const rect = element.getBoundingClientRect();
-                      const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-                      const targetY = scrollTop + rect.top - 120; // ヘッダー分のオフセット
-                      
-                      window.scrollTo({
-                        top: targetY,
-                        behavior: 'smooth'
-                      });
-                    }
-                  }, 300);
-                }}
-                className='px-4 py-2 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white text-base font-bold rounded-lg shadow-lg flex items-center gap-2 transition-all duration-300 transform hover:scale-105 hover:shadow-xl active:scale-95 min-h-[40px]'
-                style={{ minWidth: 'auto' }}
-              >
-                <svg className='w-5 h-5' fill='none' stroke='currentColor' strokeWidth='2' viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' d='M9 17v-2a4 4 0 014-4h2m4 0V7a2 2 0 00-2-2h-7a2 2 0 00-2 2v10a2 2 0 002 2h7a2 2 0 002-2v-4a2 2 0 00-2-2h-2a4 4 0 00-4 4v2'></path></svg>
-                View NFTs
-              </button>
-            )}
           </div>
-          <div className='grid grid-cols-1 md:grid-cols-3 gap-6'>
-            <div>
+          <div className='grid grid-cols-1 md:grid-cols-4 gap-6'>
+            <div className='md:col-span-2'>
               <div className='text-sm font-medium text-gray-300 mb-2'>Token Address</div>
-              <div className='flex items-center gap-2 font-mono text-blue-400 text-sm break-all'>
+              <div className='flex items-center gap-2 font-mono text-blue-400 text-sm break-all bg-white/10 rounded px-3 py-2'>
                 <Link
-                  href={`/address/${tokenData.token.address}`}
+                  href={`/address/${tokenData?.token?.address}`}
                   className='hover:text-blue-300 transition-colors'
                   title='View contract details'
                 >
-                  {tokenData.token.address}
+                  {tokenData?.token?.address}
                 </Link>
                 {/* Copy icon */}
                 <button
@@ -870,109 +892,126 @@ export default function TokenDetailPage({ params }: { params: Promise<{ address:
             </div>
             <div>
               <div className='text-sm font-medium text-gray-300 mb-2'>Token Name</div>
-              <div className='text-orange-400 text-lg font-semibold'>{tokenData.token.name}</div>
+              <div className='text-orange-400 text-lg font-semibold'>{tokenData?.token?.name}</div>
             </div>
             <div>
               <div className='text-sm font-medium text-gray-300 mb-2'>Symbol</div>
-              <div className='text-blue-400 text-lg font-bold'>{tokenData.token.symbol}</div>
+              <div className='text-green-400 text-lg font-bold'>{tokenData?.token?.symbol || 'N/A'}</div>
             </div>
             <div>
               <div className='text-sm font-medium text-gray-300 mb-2'>Type</div>
-              <span className={`px-2 py-1 rounded text-xs font-medium ${
-                tokenData.token.type === 'Native' ? 'bg-cyan-500/20 text-cyan-400' :
-                  tokenData.token.type === 'VRC-721' ? 'bg-purple-500/20 text-purple-400' :
-                    tokenData.token.type === 'VRC-1155' ? 'bg-orange-500/20 text-orange-400' :
-                      tokenData.token.type === 'VRC-20' ? 'bg-blue-500/20 text-blue-400' :
+              <span className={`px-3 py-1 rounded text-sm font-medium ${
+                tokenData?.token?.type === 'Native' ? 'bg-cyan-500/20 text-cyan-400' :
+                  tokenData?.token?.type === 'VRC-721' ? 'bg-purple-500/20 text-purple-400' :
+                    tokenData?.token?.type === 'VRC-1155' ? 'bg-orange-500/20 text-orange-400' :
+                      tokenData?.token?.type === 'VRC-20' ? 'bg-blue-500/20 text-blue-400' :
                         'bg-gray-500/20 text-gray-400'
               }`}>
-                {tokenData.token.type}
+                {tokenData?.token?.type}
               </span>
+            </div>
+            {tokenData?.token?.creator && (
+              <div>
+                <div className='text-sm font-medium text-gray-300 mb-2'>Creator</div>
+                <Link
+                  href={`/address/${tokenData.token.creator}`}
+                  className='font-mono text-blue-400 hover:text-blue-300 transition-colors break-all text-sm'
+                >
+                  {formatAddress(tokenData.token.creator)}
+                </Link>
+              </div>
+            )}
+            <div>
+              <div className='text-sm font-medium text-gray-300 mb-2'>Holders</div>
+              <div className='text-yellow-400 text-lg font-bold'>{(tokenData?.statistics?.holders || 0).toLocaleString()}</div>
             </div>
             <div>
               <div className='text-sm font-medium text-gray-300 mb-2'>Total Supply</div>
-              <div className='text-gray-100 text-lg font-semibold'>{tokenData.token.totalSupply}</div>
+              <div className='text-green-400 text-lg font-bold'>{tokenData?.token?.totalSupply || '0'} {tokenData?.token?.symbol || ''}</div>
             </div>
             <div>
-              <div className='text-sm font-medium text-gray-300 mb-2'>Verify</div>
-              {tokenData.token.verified ? (
-                <div className='flex items-center gap-1 px-2 py-1 bg-green-500/20 text-green-400 rounded text-sm font-medium w-fit'>
-                  <CheckCircleIcon className='w-5 h-5' />
+              <div className='text-sm font-medium text-gray-300 mb-2'>Transfers</div>
+              <div className='text-green-400 text-lg font-bold'>{(tokenData?.statistics?.transfers || tokenData?.transfers?.length || 0).toLocaleString()}</div>
+            </div>
+            <div>
+              <div className='text-sm font-medium text-gray-300 mb-2'>24h Transfers</div>
+              <div className='text-orange-400 text-lg font-bold'>{(tokenData?.statistics?.transfers24h || 0).toLocaleString()}</div>
+            </div>
+            {tokenData?.token?.floorPrice && (
+              <div>
+                <div className='text-sm font-medium text-gray-300 mb-2'>Floor Price</div>
+                <div className='text-green-400 text-lg font-bold'>{tokenData?.token?.floorPrice} VBC</div>
+              </div>
+            )}
+            {tokenData?.token?.volume24h && (
+              <div>
+                <div className='text-sm font-medium text-gray-300 mb-2'>24h Volume</div>
+                <div className='text-purple-400 text-lg font-bold'>{tokenData?.token?.volume24h} VBC</div>
+              </div>
+            )}
+            {tokenData?.contract?.verified && (
+              <div>
+                <div className='text-sm font-medium text-gray-300 mb-2'>Verification</div>
+                <div className='flex items-center gap-1 px-3 py-1 bg-green-500/20 text-green-400 rounded text-sm font-medium w-fit'>
+                  <CheckCircleIcon className='w-4 h-4' />
                   <span>Verified</span>
                 </div>
-              ) : (
-                <span className='text-gray-400 text-xs'>-</span>
-              )}
+              </div>
+            )}
+            <div>
+              <div className='text-sm font-medium text-gray-300 mb-2'>Market Cap</div>
+              <div className='text-gray-400 text-lg font-bold'>{tokenData?.statistics?.marketCap || 'N/A'}</div>
             </div>
-            {showNFTFeatures && (
-              <>
-                {tokenData.token.creator && (
-                  <div>
-                    <div className='text-sm font-medium text-gray-300 mb-2'>Creator</div>
-                    <Link
-                      href={`/address/${tokenData.token.creator}`}
-                      className='font-mono text-blue-400 hover:text-blue-300 transition-colors break-all text-sm'
-                    >
-                      {formatAddress(tokenData.token.creator)}
-                    </Link>
-                  </div>
-                )}
-                {tokenData.token.floorPrice && (
-                  <div>
-                    <div className='text-sm font-medium text-gray-300 mb-2'>Floor Price</div>
-                    <div className='text-pink-400 font-bold'>{tokenData.token.floorPrice} VBC</div>
-                  </div>
-                )}
-                {tokenData.token.volume24h && (
-                  <div>
-                    <div className='text-sm font-medium text-gray-300 mb-2'>24h Volume</div>
-                    <div className='text-green-400 font-bold'>{tokenData.token.volume24h} VBC</div>
-                  </div>
-                )}
-              </>
+            <div>
+              <div className='text-sm font-medium text-gray-300 mb-2'>Age</div>
+              <div className='text-yellow-400 text-lg font-bold'>{tokenData?.statistics?.age || 0} days</div>
+            </div>
+            {isNFT && (
+              <div>
+                <div className='text-sm font-medium text-gray-300 mb-2'>NFT Collection</div>
+                <button
+                  onClick={() => {
+                    setActiveTab('tokenids');
+                    
+                    // タブ切り替え後にスクロール
+                    setTimeout(() => {
+                      const tokenIdsSection = document.querySelector('[data-tab-content="tokenids"]');
+                      if (tokenIdsSection) {
+                        const element = tokenIdsSection as HTMLElement;
+                        const rect = element.getBoundingClientRect();
+                        const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+                        const targetY = scrollTop + rect.top - 120; // ヘッダー分のオフセット
+                        
+                        window.scrollTo({
+                          top: targetY,
+                          behavior: 'smooth'
+                        });
+                      }
+                    }, 300);
+                  }}
+                  className='px-4 py-2 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white text-base font-bold rounded-lg shadow-lg flex items-center gap-2 transition-all duration-300 transform hover:scale-105 hover:shadow-xl active:scale-95'
+                >
+                  <svg className='w-5 h-5' fill='none' stroke='currentColor' strokeWidth='2' viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' d='M9 17v-2a4 4 0 014-4h2m4 0V7a2 2 0 00-2-2h-7a2 2 0 00-2 2v10a2 2 0 002 2h7a2 2 0 002-2v-4a2 2 0 00-2-2h-2a4 4 0 00-4 4v2'></path></svg>
+                  View NFTs
+                </button>
+              </div>
             )}
           </div>
         </div>
 
-        {/* Stats Cards */}
-        <div className='mt-8 grid grid-cols-1 md:grid-cols-4 gap-4 mb-8'>
-          <div className='bg-gray-700/50 rounded-lg p-4 border border-gray-600/50'>
-            <h3 className='text-sm font-medium text-gray-300 mb-2'>Holders</h3>
-            <p className='text-2xl font-bold text-yellow-400'>{(tokenData.statistics.holders || 0).toLocaleString()}</p>
-            <p className='text-xs text-gray-400'>Unique addresses</p>
-          </div>
-
-          <div className='bg-gray-700/50 rounded-lg p-4 border border-gray-600/50'>
-            <h3 className='text-sm font-medium text-gray-300 mb-2'>Transfers</h3>
-            <p className='text-2xl font-bold text-green-400'>{(tokenData.statistics.totalTransfers || tokenData.statistics.transfers || 0).toLocaleString()}</p>
-            <p className='text-xs text-gray-400'>Total transactions</p>
-          </div>
-
-          <div className='bg-gray-700/50 rounded-lg p-4 border border-gray-600/50'>
-            <h3 className='text-sm font-medium text-gray-300 mb-2'>Market Cap</h3>
-            <p className='text-2xl font-bold text-yellow-400'>{tokenData.statistics.marketCap}</p>
-            <p className='text-xs text-gray-400'>Current valuation</p>
-          </div>
-
-          <div className='bg-gray-700/50 rounded-lg p-4 border border-gray-600/50'>
-            <h3 className='text-sm font-medium text-gray-300 mb-2'>Age</h3>
-            <p className='text-2xl font-bold text-purple-400'>{tokenData.statistics.age || 0} days</p>
-            <p className='text-xs text-gray-400'>Since creation</p>
-          </div>
-        </div>
-
-        {/* NFT Tools Section (NFTの場合のみ表示) */}
-        {isNFT && (
-          <div className='bg-gray-800 rounded-lg border border-gray-700 p-6 mb-6'>
-            <div className='flex items-center gap-2 mb-4'>
-              <UsersIcon className='w-5 h-5 text-cyan-400' />
-              <h3 className='text-lg font-semibold text-gray-100'>NFT Collection Tools</h3>
-            </div>
-            <p className='text-gray-400 mb-4'>Explore and interact with this NFT collection using the tools below</p>
-          </div>
-        )}
-
         {/* Tabs Section */}
         <div className='bg-gray-800 rounded-lg border border-gray-700 p-6'>
+          {isNFT && (
+            <div className='mb-6'>
+              <div className='flex items-center gap-2 mb-4'>
+                <UsersIcon className='w-5 h-5 text-cyan-400' />
+                <h3 className='text-lg font-semibold text-gray-100'>NFT Collection Tools</h3>
+              </div>
+              
+              <p className='text-gray-400'>Explore and interact with this NFT collection using the tools below</p>
+            </div>
+          )}
+
           <div className='flex flex-wrap gap-4 border-b border-gray-700 mb-6'>
             {tabs.map((tab) => {
               const Icon = tab.icon;
@@ -980,9 +1019,12 @@ export default function TokenDetailPage({ params }: { params: Promise<{ address:
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center gap-2 pb-3 px-2 transition-colors ${
+                  className={`flex items-center gap-2 pb-3 px-4 py-2 transition-colors rounded-lg ${
                     activeTab === tab.id ?
-                      'text-cyan-400 border-b-2 border-cyan-400' :
+                      (tab.id === 'tokenids' ? 
+                        'text-white bg-gradient-to-r from-purple-600 to-blue-600' :
+                        'text-white bg-blue-600'
+                      ) :
                       'text-gray-400 hover:text-gray-300'
                   }`}
                 >
@@ -998,27 +1040,6 @@ export default function TokenDetailPage({ params }: { params: Promise<{ address:
             {renderTabContent()}
           </div>
         </div>
-
-        {/* Activity Stats (NFTの場合のみ表示) */}
-        {isNFT && tokenData.statistics.transfers24h !== undefined && (
-          <div className='mt-8 grid grid-cols-1 md:grid-cols-3 gap-4'>
-            <div className='bg-gray-800 rounded-lg border border-gray-700 p-4'>
-              <h3 className='text-sm font-medium text-gray-300 mb-2'>24h Transfers</h3>
-              <p className='text-2xl font-bold text-green-400'>{tokenData.statistics.transfers24h || 0}</p>
-              <p className='text-xs text-gray-400'>Token movements</p>
-            </div>
-            <div className='bg-gray-800 rounded-lg border border-gray-700 p-4'>
-              <h3 className='text-sm font-medium text-gray-300 mb-2'>Total Transfers</h3>
-              <p className='text-2xl font-bold text-blue-400'>{(tokenData.statistics.totalTransfers || tokenData.statistics.transfers || 0).toLocaleString()}</p>
-              <p className='text-xs text-gray-400'>All time transfers</p>
-            </div>
-            <div className='bg-gray-800 rounded-lg border border-gray-700 p-4'>
-              <h3 className='text-sm font-medium text-gray-300 mb-2'>Unique Holders</h3>
-              <p className='text-2xl font-bold text-yellow-400'>{(tokenData.statistics.holders || 0).toLocaleString()}</p>
-              <p className='text-xs text-gray-400'>Collection owners</p>
-            </div>
-          </div>
-        )}
       </main>
     </>
   );

@@ -1,128 +1,47 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { loadConfig } from '../../../../lib/config';
 import Web3 from 'web3';
-
-const WEB3_PROVIDER_URL = 'http://localhost:8329';
-const web3 = new Web3(new Web3.providers.HttpProvider(WEB3_PROVIDER_URL));
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { 
-      contractAddress, 
-      abi, 
-      method, 
-      params = [], 
-      fromAddress, 
-      value = '0',
-      gasLimit = 3000000,
-      gasPrice = '20000000000' // 20 gwei
-    } = body;
+    const config = loadConfig();
+    const web3 = new Web3(config.web3Provider.url);
+    
+    const { contractAddress, abi, method, params, from } = await request.json();
 
     if (!contractAddress || !abi || !method) {
-      return NextResponse.json(
-        { error: 'Missing required fields: contractAddress, abi, method' },
-        { status: 400 }
-      );
+      return NextResponse.json({ 
+        error: 'Contract address, ABI, and method are required' 
+      }, { status: 400 });
     }
 
-    // Create contract instance
     const contract = new web3.eth.Contract(abi, contractAddress);
 
-    // Check if method exists in ABI
-    const methodAbi = abi.find((item: { name: string }) => item.name === method);
-    if (!methodAbi) {
-      return NextResponse.json(
-        { error: `Method '${method}' not found in contract ABI` },
-        { status: 400 }
-      );
-    }
-
-    // Determine if it's a read or write operation
-    const isReadOperation = methodAbi.stateMutability === 'view' || methodAbi.stateMutability === 'pure';
-
-    if (isReadOperation) {
-      // Read operation (call)
-      try {
-        const result = await contract.methods[method](...params).call();
-        return NextResponse.json({
-          success: true,
-          type: 'read',
-          method,
-          result,
-          gasUsed: null
-        });
-      } catch {
-        return NextResponse.json({
-          success: false,
-          type: 'read',
-          error: 'Read operation failed'
-        }, { status: 400 });
-      }
+    let result;
+    if (from) {
+      // Call with specific sender address
+      result = await contract.methods[method](...params).call({ from });
     } else {
-      // Write operation (send transaction)
-      if (!fromAddress) {
-        return NextResponse.json(
-          { error: 'fromAddress is required for write operations' },
-          { status: 400 }
-        );
-      }
-
-      try {
-        // Get nonce
-        const nonce = await web3.eth.getTransactionCount(fromAddress, 'pending');
-        
-        // Estimate gas
-        let estimatedGas;
-        try {
-          estimatedGas = await contract.methods[method](...params).estimateGas({
-            from: fromAddress,
-            value: value
-          });
-        } catch {
-          estimatedGas = gasLimit; // Use provided gas limit if estimation fails
-        }
-
-        // Build transaction
-        const tx = {
-          from: fromAddress,
-          to: contractAddress,
-          value: value,
-          gas: Math.min(estimatedGas, gasLimit),
-          gasPrice: gasPrice,
-          nonce: nonce,
-          data: contract.methods[method](...params).encodeABI()
-        };
-
-        return NextResponse.json({
-          success: true,
-          type: 'write',
-          method,
-          transaction: tx,
-          estimatedGas: estimatedGas.toString(),
-          message: 'Transaction prepared successfully. Use a wallet to sign and send this transaction.'
-        });
-
-      } catch {
-        return NextResponse.json({
-          success: false,
-          type: 'write',
-          error: 'Write operation failed'
-        }, { status: 400 });
-      }
+      // Call without specific sender
+      result = await contract.methods[method](...params).call();
     }
 
+    return NextResponse.json({ result });
   } catch (error) {
     console.error('Contract interaction error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ 
+      error: 'Contract interaction failed',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    }, { status: 500 });
   }
 }
 
 // GET endpoint to get contract ABI and available methods
 export async function GET(request: NextRequest) {
   try {
+    const config = loadConfig();
+    const web3 = new Web3(config.web3Provider.url);
+    
     const { searchParams } = new URL(request.url);
     const contractAddress = searchParams.get('address');
     const abiParam = searchParams.get('abi');

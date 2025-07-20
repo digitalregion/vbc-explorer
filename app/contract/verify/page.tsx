@@ -109,10 +109,10 @@ export default function ContractVerifyPage() {
         
         // Only update if no contract name is set or if it's different
         if (!formData.contractName || formData.contractName !== detectedName) {
-          setFormData(prev => ({
-            ...prev,
+        setFormData(prev => ({
+          ...prev,
             contractName: detectedName
-          }));
+        }));
         }
       }
     }

@@ -1,6 +1,6 @@
 // Richlist API for VirBiCoin Explorer
 import { NextRequest, NextResponse } from 'next/server';
-import { Account } from '@/lib/models';
+import { Account, Contract } from '@/lib/models';
 import { connectToDatabase } from '@/lib/db';
 
 // Cache for totalSupply
@@ -37,9 +37,16 @@ export async function GET(request: NextRequest) {
     }
 
     // Get total count of accounts with balance > 0
-    const totalAccounts = await Account.countDocuments({ balance: { $gt: 0 } });
-    const contractAccounts = await Account.countDocuments({ type: 1, balance: { $gt: 0 } });
-    const walletAccounts = await Account.countDocuments({ type: 0, balance: { $gt: 0 } });
+    const totalAccounts = await Account.countDocuments({ balance: { $gt: "0" } });
+    
+    // Get contract addresses from Contract table
+    const contractAddresses = await Contract.find({}, 'address').lean();
+    const contractAddressList = contractAddresses.map(c => c.address);
+    
+    // Total contract addresses (from Contract table)
+    const contractAccounts = contractAddresses.length;
+    
+    const walletAccounts = totalAccounts - contractAccounts;
 
     // Get richlist data using aggregation for proper numeric sorting of string balances
     let accounts;
@@ -77,7 +84,7 @@ export async function GET(request: NextRequest) {
           minimumFractionDigits: 2, 
           maximumFractionDigits: 2 
         })} VBC`,
-        type: account.type === 1 ? 'Contract' : 'Wallet',
+        type: contractAddressList.includes(account.address) ? 'Contract' : 'Wallet',
         percentage: percentage.toFixed(4),
         lastUpdated: account.blockNumber
       };

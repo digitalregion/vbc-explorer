@@ -14,6 +14,10 @@
     "noEmit": false,
     "outDir": "./dist"
   },
-  "include": ["tools/**/*.ts"],
-  "exclude": ["node_modules"]
-} 
+  "include": [
+    "tools/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
+}

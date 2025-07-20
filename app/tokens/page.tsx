@@ -3,6 +3,8 @@ import Header from '../components/Header';
 import Link from 'next/link';
 import { CubeTransparentIcon, CheckCircleIcon, PhotoIcon } from '@heroicons/react/24/outline';
 import { useEffect, useState } from 'react';
+import { getCurrencyName, getCurrencySymbol } from '../../lib/config';
+import { initializeCurrency } from '../../lib/bigint-utils';
 
 type Token = {
   symbol: string;
@@ -17,12 +19,46 @@ type Token = {
 export default function TokensPage() {
   const [tokens, setTokens] = useState<Token[]>([]);
   const [loading, setLoading] = useState(true);
-  const [blockHeight, setBlockHeight] = useState<number | null>(null);
+  const [currencyName, setCurrencyName] = useState<string>('');
+  const [currencySymbol, setCurrencySymbol] = useState<string>('');
+
   const [activeTab, setActiveTab] = useState<'all' | 'nft'>('all');
+  const [vbcSupply, setVbcSupply] = useState<string>('0');
+
+  // Fetch VBC total supply from richlist API
+  const fetchVBCSupply = async () => {
+    try {
+      const res = await fetch('/api/richlist?page=1&limit=1');
+      if (res.ok) {
+        const data = await res.json();
+        const totalSupply = data.statistics?.totalSupply || 0;
+        // Convert from Wei to VBC and format
+        const vbcSupply = (totalSupply / 1e18).toLocaleString(undefined, {
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 0
+        });
+        setVbcSupply(vbcSupply);
+      }
+    } catch (error) {
+      console.error('Error fetching VBC supply:', error);
+      setVbcSupply('0');
+    }
+  };
 
   useEffect(() => {
     async function fetchTokens() {
       try {
+        // Initialize currency conversion factors
+        await initializeCurrency();
+        
+        // Load config values
+        const [name, symbol] = await Promise.all([
+          getCurrencyName(),
+          getCurrencySymbol()
+        ]);
+        setCurrencyName(name);
+        setCurrencySymbol(symbol);
+        
         const res = await fetch('/api/tokens');
         if (!res.ok) throw new Error('Failed to fetch tokens');
         const data = await res.json();
@@ -43,18 +79,9 @@ export default function TokensPage() {
       }
     }
     fetchTokens();
-
-    // ブロック高をAPIから取得
-    async function fetchBlockHeight() {
-      try {
-        const res = await fetch('/api/blockheight');
-        if (res.ok) {
-          const data = await res.json();
-          setBlockHeight(data.height);
-        }
-      } catch {}
-    }
-    fetchBlockHeight();
+    
+    // VBC supplyをリッチリストAPIから取得
+    fetchVBCSupply();
   }, []);
 
   // Filter tokens based on active tab
@@ -73,11 +100,35 @@ export default function TokensPage() {
             <CubeTransparentIcon className='w-8 h-8 text-purple-400' />
             <h1 className='text-3xl font-bold text-gray-100'>Tokens & NFTs</h1>
           </div>
-          <p className='text-gray-400'>Explore tokens and NFT collections on the VirBiCoin network</p>
+          <p className='text-gray-400'>Explore tokens and NFT collections on the {currencyName} network</p>
         </div>
       </div>
 
       <main className='container mx-auto px-4 py-8'>
+        {/* Summary Stats */}
+        <div className='grid grid-cols-1 md:grid-cols-4 gap-4 mb-6'>
+          <div className='bg-gray-700/50 rounded-lg p-4 border border-gray-600/50'>
+            <h3 className='text-sm font-medium text-gray-300 mb-2'>Total Tokens</h3>
+            <p className='text-2xl font-bold text-blue-400'>{loading ? '-' : tokens.length}</p>
+            <p className='text-xs text-gray-400'>Contracts deployed</p>
+          </div>
+          <div className='bg-gray-700/50 rounded-lg p-4 border border-gray-600/50'>
+            <h3 className='text-sm font-medium text-gray-300 mb-2'>NFT Collections</h3>
+            <p className='text-2xl font-bold text-purple-400'>{loading ? '-' : tokens.filter(t => t.type === 'VRC-721' || t.type === 'VRC-1155').length}</p>
+            <p className='text-xs text-gray-400'>NFT contracts</p>
+          </div>
+          <div className='bg-gray-700/50 rounded-lg p-4 border border-gray-600/50'>
+            <h3 className='text-sm font-medium text-gray-300 mb-2'>Total Holders</h3>
+            <p className='text-2xl font-bold text-yellow-400'>{loading ? '-' : tokens.reduce((sum, token) => sum + (token.holders || 0), 0).toLocaleString()}</p>
+            <p className='text-xs text-gray-400'>Unique addresses</p>
+          </div>
+          <div className='bg-gray-700/50 rounded-lg p-4 border border-gray-600/50'>
+            <h3 className='text-sm font-medium text-gray-300 mb-2'>Contract Types</h3>
+            <p className='text-2xl font-bold text-orange-400'>{loading ? '-' : new Set(tokens.map(t => t.type)).size}</p>
+            <p className='text-xs text-gray-400'>Different standards</p>
+          </div>
+        </div>
+
         {/* Tab Navigation */}
         <div className='bg-gray-800 rounded-lg border border-gray-700 p-6 mb-6'>
           <div className='flex items-center gap-4 mb-6'>
@@ -85,7 +136,7 @@ export default function TokensPage() {
               onClick={() => setActiveTab('all')}
               className={`px-4 py-2 rounded-lg font-medium transition-colors ${
                 activeTab === 'all'
-                  ? 'bg-blue-500 text-white'
+                  ? 'bg-blue-600 text-white'
                   : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
               }`}
             >
@@ -95,7 +146,7 @@ export default function TokensPage() {
               onClick={() => setActiveTab('nft')}
               className={`px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 ${
                 activeTab === 'nft'
-                  ? 'bg-purple-500 text-white'
+                  ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white'
                   : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
               }`}
             >
@@ -119,7 +170,11 @@ export default function TokensPage() {
               <tbody className='divide-y divide-gray-700'>
                 {loading ? (
                   <tr>
-                    <td colSpan={6} className='py-6 text-center text-gray-400'>Loading...</td>
+                    <td colSpan={6} className='py-12'>
+                      <div className='flex justify-center items-center'>
+                        <div className='animate-spin rounded-full h-32 w-32 border-b-2 border-blue-500'></div>
+                      </div>
+                    </td>
                   </tr>
                 ) : filteredTokens.length === 0 ? (
                   <tr>
@@ -137,7 +192,7 @@ export default function TokensPage() {
                         </div>
                       </td>
                       <td className='py-3 px-4'>
-                        <span className={`px-2 py-1 rounded text-xs font-medium ${
+                        <span className={`px-3 py-1 rounded text-sm font-medium ${
                           token.type === 'Native' ?
                             'bg-cyan-500/20 text-cyan-400' :
                             token.type === 'VRC-20' ?
@@ -169,7 +224,7 @@ export default function TokensPage() {
                       </td>
                       <td className='py-3 px-4 w-32'>
                         {token.type !== 'Native' && token.verified ? (
-                          <span className='flex items-center gap-0.5 px-2 py-0.5 bg-green-500/20 text-green-400 rounded text-base font-medium w-fit'>
+                          <span className='flex items-center gap-1 px-3 py-1 bg-green-500/20 text-green-400 rounded text-sm font-medium w-fit'>
                             <CheckCircleIcon className='w-4 h-4' />
                             <span>Verified</span>
                           </span>
@@ -178,11 +233,11 @@ export default function TokensPage() {
                         )}
                       </td>
                       <td className='py-3 px-4'>
-                        <span className='text-yellow-400 font-medium'>{token.holders?.toLocaleString?.() ?? '-'}</span>
+                        <span className='text-yellow-400 text-lg font-bold'>{token.holders?.toLocaleString?.() ?? '-'}</span>
                       </td>
                       <td className='py-3 px-4'>
-                        <span className='text-green-400 font-bold'>
-                          {token.type === 'Native' ? (blockHeight ?? '-') : (token.supply ?? '-')}
+                        <span className='text-green-400 text-lg font-bold'>
+                          {token.type === 'Native' ? `${vbcSupply} ${currencySymbol}` : (token.supply ? `${token.supply} ${token.symbol}` : '-')}
                         </span>
                       </td>
                     </tr>
@@ -190,30 +245,6 @@ export default function TokensPage() {
                 )}
               </tbody>
             </table>
-          </div>
-        </div>
-
-        {/* Summary Stats */}
-        <div className='grid grid-cols-1 md:grid-cols-4 gap-4'>
-          <div className='bg-gray-700/50 rounded-lg p-4 border border-gray-600/50'>
-            <h3 className='text-sm font-medium text-gray-300 mb-2'>Total Tokens</h3>
-            <p className='text-2xl font-bold text-blue-400'>{loading ? '-' : tokens.length}</p>
-            <p className='text-xs text-gray-400'>Contracts deployed</p>
-          </div>
-          <div className='bg-gray-700/50 rounded-lg p-4 border border-gray-600/50'>
-            <h3 className='text-sm font-medium text-gray-300 mb-2'>NFT Collections</h3>
-            <p className='text-2xl font-bold text-purple-400'>{loading ? '-' : tokens.filter(t => t.type === 'VRC-721' || t.type === 'VRC-1155').length}</p>
-            <p className='text-xs text-gray-400'>NFT contracts</p>
-          </div>
-          <div className='bg-gray-700/50 rounded-lg p-4 border border-gray-600/50'>
-            <h3 className='text-sm font-medium text-gray-300 mb-2'>Total Holders</h3>
-            <p className='text-2xl font-bold text-yellow-400'>{loading ? '-' : tokens.reduce((sum, token) => sum + (token.holders || 0), 0).toLocaleString()}</p>
-            <p className='text-xs text-gray-400'>Unique addresses</p>
-          </div>
-          <div className='bg-gray-700/50 rounded-lg p-4 border border-gray-600/50'>
-            <h3 className='text-sm font-medium text-gray-300 mb-2'>Contract Types</h3>
-            <p className='text-2xl font-bold text-orange-400'>{loading ? '-' : new Set(tokens.map(t => t.type)).size}</p>
-            <p className='text-xs text-gray-400'>Different standards</p>
           </div>
         </div>
       </main>

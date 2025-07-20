@@ -3,9 +3,34 @@
 Tool for calculating VirBiCoin richlist
 */
 
-import Web3 from 'web3';
 import mongoose from 'mongoose';
+import Web3 from 'web3';
+import fs from 'fs';
+import path from 'path';
 import { connectDB, Block, Transaction, Account, IBlock, ITransaction, IAccount } from '../models/index';
+
+// Function to read config
+const readConfig = () => {
+  try {
+    const configPath = path.join(process.cwd(), 'config.json');
+    const exampleConfigPath = path.join(process.cwd(), 'config.example.json');
+    
+    if (fs.existsSync(configPath)) {
+      return JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    } else if (fs.existsSync(exampleConfigPath)) {
+      return JSON.parse(fs.readFileSync(exampleConfigPath, 'utf8'));
+    }
+  } catch (error) {
+    console.error('Error reading config:', error);
+  }
+  
+  // Default configuration
+  return {
+    nodeAddr: 'localhost',
+    port: 8329,
+    quiet: false
+  };
+};
 
 // Initialize database connection
 const initDB = async () => {
@@ -52,26 +77,7 @@ interface MakeRichListFunction {
 type UpdateCallback = (accounts: { [address: string]: AccountData }, blockNumber: number) => void;
 
 // Configuration
-const config: Config = {
-  nodeAddr: 'localhost',
-  port: 8329,
-  quiet: false
-};
-
-// Try to load config.json, fallback to config.example.json
-try {
-  const local = require('../config.json');
-  Object.assign(config, local);
-  console.log('📄 config.json found.');
-} catch (error) {
-  try {
-    const local = require('../config.example.json');
-    Object.assign(config, local);
-    console.log('📄 config.example.json found (fallback).');
-  } catch (fallbackError) {
-    console.log('📄 No config files found. Using default configuration...');
-  }
-}
+const config: Config = readConfig();
 
 console.log(`🔌 Connecting to VirBiCoin node ${config.nodeAddr}:${config.port}...`);
 
@@ -95,7 +101,7 @@ try {
       console.log('📄 MongoDB URI set from config.example.json');
     }
   } catch (fallbackError) {
-    process.env.MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost/explorerDB';
+  process.env.MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost/explorerDB';
   }
 }
 

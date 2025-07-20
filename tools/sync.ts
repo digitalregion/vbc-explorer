@@ -1,19 +1,48 @@
 #!/usr/bin/env node
 /*
 Name: VirBiCoin Blockchain syncer
-Version: 1.0.0
-This file will start syncing the blockchain from the VirBiCoin node
+Description: This file will start syncing the blockchain from the VirBiCoin node
 */
 
-import Web3 from 'web3';
 import mongoose from 'mongoose';
+import Web3 from 'web3';
+import fs from 'fs';
+import path from 'path';
 import { connectDB, Block, Transaction } from '../models/index';
 import { main as statsMain } from './stats';
 import { main as richlistMain } from './richlist';
 import { main as tokensMain } from './tokens';
 import { main as priceMain } from './price';
-import fs from 'fs';
-import path from 'path';
+
+// Function to read config
+const readConfig = () => {
+  try {
+    const configPath = path.join(process.cwd(), 'config.json');
+    const exampleConfigPath = path.join(process.cwd(), 'config.example.json');
+    
+    if (fs.existsSync(configPath)) {
+      return JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    } else if (fs.existsSync(exampleConfigPath)) {
+      return JSON.parse(fs.readFileSync(exampleConfigPath, 'utf8'));
+    }
+  } catch (error) {
+    console.error('Error reading config:', error);
+  }
+  
+  // Default configuration
+  return {
+    nodeAddr: 'localhost',
+    port: 8329,
+    wsPort: 8330,
+    bulkSize: 50,
+    syncAll: false,
+    patch: false,
+    quiet: false,
+    useRichList: true,
+    startBlock: 0,
+    endBlock: null
+  };
+};
 
 // Initialize database connection
 const initDB = async () => {
@@ -123,19 +152,8 @@ interface BlockDocument {
   uncles: string[];
 }
 
-// VirBiCoin Configuration
-const config: Config = {
-  nodeAddr: 'localhost',
-  port: 8329,
-  wsPort: 8330,
-  bulkSize: 50, // 100→50に削減
-  syncAll: false,
-  patch: false,
-  quiet: false,
-  useRichList: true,
-  startBlock: 0,
-  endBlock: null
-};
+// Generic Configuration
+const config: Config = readConfig();
 
 // Parse command line arguments
 const args = process.argv.slice(2);
@@ -577,8 +595,8 @@ const main = async (): Promise<void> => {
         console.log('📄 config.json found.');
         if (configData.database && configData.database.uri) {
           process.env.MONGODB_URI = configData.database.uri;
-          console.log('📄 MongoDB URI set from config.json');
-        }
+    console.log('📄 MongoDB URI set from config.json');
+  }
       } else {
         // Fallback to config.example.json
         const exampleConfigPath = path.join(__dirname, '..', 'config.example.json');

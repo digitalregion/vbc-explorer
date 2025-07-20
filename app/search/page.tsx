@@ -1,104 +1,119 @@
 'use client';
 
-import { useSearchParams } from 'next/navigation';
-import { useEffect, useState, Suspense } from 'react';
-import { useRouter } from 'next/navigation';
-import Header from '../components/Header';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { MagnifyingGlassIcon, ArrowLeftIcon, HashtagIcon, UserIcon } from '@heroicons/react/24/outline';
+import Header from '../components/Header';
+import { 
+  MagnifyingGlassIcon, 
+  ArrowPathIcon,
+  ExclamationTriangleIcon,
+  CubeIcon,
+  ClockIcon,
+  UserIcon,
+  CurrencyDollarIcon
+} from '@heroicons/react/24/outline';
+import { getCurrencySymbol } from '../../lib/config';
 
-// Dynamic config loading
-const config: Record<string, unknown> = {
-  miners: {
-    "0x950302976387b43E042aeA242AE8DAB8e5C204D1": "digitalregion.jp",
-    "0x6C0DB3Ea9EEd7ED145f36da461D84A8d02596B08": "coolpool.top"
-  }
-};
-
-interface SearchResult {
-  type: 'block' | 'transaction' | 'address' | 'token';
-  data: Record<string, unknown>;
+interface Config {
+  miners: Record<string, string>;
+  explorer: {
+    name: string;
+    description: string;
+    version: string;
+    url: string;
+  };
 }
 
-function SearchPageContent() {
-  const searchParams = useSearchParams();
-  const router = useRouter();
-  const query = searchParams?.get('q') || '';
+interface SearchResult {
+  type: 'block' | 'transaction' | 'address';
+  data: {
+    number?: number;
+    hash?: string;
+    timestamp?: Date;
+    miner?: string;
+    from?: string;
+    to?: string;
+    value?: string;
+    address?: string;
+    balance?: string;
+  };
+}
+
+export default function SearchPage() {
+  const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
-  const [searchInput, setSearchInput] = useState(query);
-
-  const getMinerDisplayInfo = (miner: string) => {
-    if (!miner) return { name: 'Unknown', isPool: false, address: null };
-
-    if ((config as { miners: Record<string, string> }).miners) {
-      const minerKey = Object.keys((config as { miners: Record<string, string> }).miners).find(
-        key => key.toLowerCase() === miner.toLowerCase()
-      );
-      if (minerKey) {
-        return {
-          name: (config as { miners: Record<string, string> }).miners[minerKey],
-          isPool: true,
-          address: miner
-        };
-      }
-    }
-
-    return {
-      name: `${miner.slice(0, 12)}...${miner.slice(-12)}`,
-      isPool: false,
-      address: miner
-    };
-  };
+  const [error, setError] = useState<string | null>(null);
+  const [config, setConfig] = useState<Config | null>(null);
 
   useEffect(() => {
-    if (query) {
-      performSearch(query);
-    }
-  }, [query]);
+    // 設定を取得
+    const fetchConfig = async () => {
+      try {
+        const response = await fetch('/api/config');
+        if (response.ok) {
+          const configData = await response.json();
+          setConfig(configData);
+      }
+      } catch (err) {
+        console.error('Error fetching config:', err);
+      }
+    };
 
-  const performSearch = async (searchQuery: string) => {
-    if (!searchQuery.trim()) return;
+    fetchConfig();
+  }, []);
+
+  const handleSearch = async (searchQuery: string) => {
+    if (!searchQuery.trim()) {
+      setResults([]);
+      return;
+    }
 
     setLoading(true);
+    setError(null);
+
     try {
-      // For miner addresses, redirect to blocks filtered by that miner
-      if (searchQuery.startsWith('0x') && searchQuery.length === 42) {
-        // It's likely an address - search for blocks mined by this address
-        const response = await fetch(`/api/search/blocks-by-miner?miner=${encodeURIComponent(searchQuery)}`);
-        if (response.ok) {
-          const blocks = await response.json();
-          setResults(blocks.map((block: Record<string, unknown>) => ({ type: 'block' as const, data: block })));
-        } else {
-          setResults([]);
+      const response = await fetch(`/api/search?q=${encodeURIComponent(searchQuery)}`);
+      
+      if (!response.ok) {
+        throw new Error('Search failed');
         }
-      } else {
-        // Try to find by block number or hash
-        try {
-          const blockResponse = await fetch(`/api/blocks/${searchQuery}`);
-          if (blockResponse.ok) {
-            const block = await blockResponse.json();
-            setResults([{ type: 'block', data: block }]);
-          } else {
-            setResults([]);
-          }
-        } catch {
-          setResults([]);
-        }
-      }
-    } catch (error) {
-      console.error('Search error:', error);
+      
+      const data = await response.json();
+      setResults(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Search failed');
       setResults([]);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSearch = (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (searchInput.trim()) {
-      router.push(`/search?q=${encodeURIComponent(searchInput.trim())}`);
+    handleSearch(query);
+  };
+
+  const getMinerDisplayInfo = (miner: string) => {
+    if (!miner || !config?.miners) return { name: 'Unknown', isPool: false, address: null };
+
+    const minerKey = Object.keys(config.miners).find(
+      key => key.toLowerCase() === miner.toLowerCase()
+    );
+    
+    if (minerKey) {
+      return {
+        name: config.miners[minerKey],
+        isPool: true,
+        address: miner
+      };
     }
+
+    return {
+      name: miner,
+      isPool: false,
+      address: miner
+    };
   };
 
   return (
@@ -117,7 +132,7 @@ function SearchPageContent() {
               href='/'
               className='inline-flex items-center gap-2 text-blue-400 hover:text-blue-300 transition-colors'
             >
-              <ArrowLeftIcon className='w-4 h-4' />
+              <ArrowPathIcon className='w-4 h-4' />
               Back to Explorer
             </Link>
             {query && (
@@ -132,11 +147,11 @@ function SearchPageContent() {
       <main className='container mx-auto px-4 py-8'>
         {/* Search Form */}
         <div className='bg-gray-800 rounded-lg border border-gray-700 p-6 mb-8'>
-          <form onSubmit={handleSearch} className='flex gap-4'>
+          <form onSubmit={handleSubmit} className='flex gap-4'>
             <input
               type='text'
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
               placeholder='Search by block number, block hash, or miner address...'
               className='flex-1 bg-gray-700 border border-gray-600 text-gray-200 rounded px-4 py-2 focus:border-blue-500 focus:outline-none'
             />
@@ -157,6 +172,14 @@ function SearchPageContent() {
               <div className='animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-4'></div>
               <p className='text-gray-400'>Searching...</p>
             </div>
+          ) : error ? (
+            <div className='text-center py-8'>
+              <ExclamationTriangleIcon className='w-16 h-16 text-red-500 mx-auto mb-4' />
+              <p className='text-gray-400 text-lg mb-2'>Error: {error}</p>
+              <p className='text-gray-500 text-sm'>
+                Try searching with a different block number, hash, or address.
+              </p>
+            </div>
           ) : results.length > 0 ? (
             <div className='space-y-4'>
               <h2 className='text-xl font-bold text-gray-100 mb-4'>
@@ -176,7 +199,7 @@ function SearchPageContent() {
                         </Link>
                       </div>
                       <h3 className='text-lg font-bold text-gray-100 mb-2 flex items-center gap-2'>
-                        <HashtagIcon className='w-5 h-5 text-blue-400 mr-2' />
+                        <CubeIcon className='w-5 h-5 text-blue-400 mr-2' />
                         <Link
                           href={`/block/${result.data.number}`}
                           className='text-blue-400 hover:text-blue-300 transition-colors hover:underline'
@@ -202,77 +225,120 @@ function SearchPageContent() {
                         </div>
                         <div className='flex items-center'>
                           <span className='text-gray-400'>Miner:</span>
-                          <UserIcon className='w-4 h-4 text-green-400 ml-2 mr-1' />
+                          <div className='ml-2'>
                           {(() => {
-                            const minerInfo = getMinerDisplayInfo(String(result.data.miner));
-                            if (minerInfo.isPool) {
+                              const minerInfo = getMinerDisplayInfo(result.data.miner || '');
                               return (
                                 <Link
-                                  href={`/search?q=${encodeURIComponent(String(result.data.miner))}`}
-                                  className='text-green-400 hover:text-green-300 font-mono text-sm transition-colors hover:underline'
-                                  title={`Search blocks mined by ${minerInfo.name} (${String(result.data.miner)})`}
+                                  href={`/address/${minerInfo.address}`}
+                                  className='text-blue-400 hover:text-blue-300 transition-colors hover:underline'
                                 >
                                   {minerInfo.name}
                                 </Link>
                               );
-                            }
-                            return (
-                              <Link
-                                href={`/search?q=${encodeURIComponent(String(result.data.miner))}`}
-                                className='text-green-400 hover:text-green-300 font-mono text-sm transition-colors hover:underline'
-                                title={`Search for address ${String(result.data.miner)}`}
-                              >
-                                {minerInfo.name}
-                              </Link>
-                            );
-
                           })()}
+                          </div>
                         </div>
-                        <div>
-                          <span className='text-gray-400'>Transactions:</span>
-                          <span className='text-gray-200 ml-2'>
-                            {String(result.data.transactionCount || (Array.isArray(result.data.transactions) ? result.data.transactions.length : 0) || 0)}
+                        <div className='flex items-center'>
+                          <ClockIcon className='w-4 h-4 text-gray-400 mr-2' />
+                          <span className='text-gray-400'>
+                            {result.data.timestamp ? new Date(result.data.timestamp).toLocaleString() : 'N/A'}
                           </span>
                         </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {result.type === 'transaction' && (
+                    <div>
+                      <div className='flex items-center justify-between mb-2'>
+                        <span className='text-sm text-green-400 font-medium'>Transaction</span>
+                        <Link
+                          href={`/tx/${result.data.hash}`}
+                          className='text-blue-400 hover:text-blue-300 text-sm transition-colors'
+                        >
+                          View Details →
+                        </Link>
+                      </div>
+                      <h3 className='text-lg font-bold text-gray-100 mb-2'>
+                        <Link
+                          href={`/tx/${result.data.hash}`}
+                          className='font-mono text-green-400 hover:text-green-300 transition-colors hover:underline'
+                          title={String(result.data.hash)}
+                        >
+                          {String(result.data.hash).slice(0, 16)}...{String(result.data.hash).slice(-16)}
+                        </Link>
+                      </h3>
+                      <div className='grid grid-cols-1 md:grid-cols-2 gap-4 text-sm'>
                         <div>
-                          <span className='text-gray-400'>Timestamp:</span>
-                          <span className='text-gray-200 ml-2'>
-                            {result.data.timestamp ?
-                              new Date(Number(result.data.timestamp) * 1000).toLocaleString(undefined, { timeZoneName: 'short' }) :
-                              'Unknown'
-                            }
+                          <span className='text-gray-400'>From:</span>
+                          <Link
+                            href={`/address/${result.data.from}`}
+                            className='font-mono text-blue-400 hover:text-blue-300 ml-2 transition-colors hover:underline'
+                          >
+                            {String(result.data.from)}
+                          </Link>
+                        </div>
+                        <div>
+                          <span className='text-gray-400'>To:</span>
+                          <Link
+                            href={`/address/${result.data.to}`}
+                            className='font-mono text-blue-400 hover:text-blue-300 ml-2 transition-colors hover:underline'
+                          >
+                            {String(result.data.to)}
+                          </Link>
+                        </div>
+                        <div className='flex items-center'>
+                          <CurrencyDollarIcon className='w-4 h-4 text-gray-400 mr-2' />
+                          <span className='text-gray-400'>
+                            Value: <span className='text-green-400'>{result.data.value || '0'} {getCurrencySymbol()}</span>
                           </span>
                         </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {result.type === 'address' && (
+                    <div>
+                      <div className='flex items-center justify-between mb-2'>
+                        <span className='text-sm text-purple-400 font-medium'>Address</span>
+                        <Link
+                          href={`/address/${result.data.address}`}
+                          className='text-blue-400 hover:text-blue-300 text-sm transition-colors'
+                        >
+                          View Details →
+                        </Link>
+                      </div>
+                      <h3 className='text-lg font-bold text-gray-100 mb-2 flex items-center gap-2'>
+                        <UserIcon className='w-5 h-5 text-purple-400 mr-2' />
+                        <Link
+                          href={`/address/${result.data.address}`}
+                          className='font-mono text-purple-400 hover:text-purple-300 transition-colors hover:underline'
+                          title={String(result.data.address)}
+                        >
+                          {String(result.data.address)}
+                        </Link>
+                      </h3>
+                      <div className='text-sm'>
+                        <span className='text-gray-400'>Balance:</span>
+                        <span className='text-green-400 ml-2'>{result.data.balance || '0'} {getCurrencySymbol()}</span>
                       </div>
                     </div>
                   )}
                 </div>
               ))}
             </div>
-          ) : query ? (
+          ) : query && !loading ? (
             <div className='text-center py-8'>
-              <MagnifyingGlassIcon className='w-16 h-16 text-gray-600 mx-auto mb-4' />
+              <MagnifyingGlassIcon className='w-16 h-16 text-gray-500 mx-auto mb-4' />
               <p className='text-gray-400 text-lg mb-2'>No results found</p>
               <p className='text-gray-500 text-sm'>
                 Try searching with a different block number, hash, or address.
               </p>
             </div>
-          ) : (
-            <div className='text-center py-8'>
-              <MagnifyingGlassIcon className='w-16 h-16 text-gray-600 mx-auto mb-4' />
-              <p className='text-gray-400 text-lg'>Enter a search term to get started</p>
-            </div>
-          )}
+          ) : null}
         </div>
       </main>
     </div>
-  );
-}
-
-export default function SearchPage() {
-  return (
-    <Suspense fallback={<div>Loading...</div>}>
-      <SearchPageContent />
-    </Suspense>
   );
 }

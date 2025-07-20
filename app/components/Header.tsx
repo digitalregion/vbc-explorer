@@ -3,10 +3,10 @@ import {
   HomeIcon,
   CubeTransparentIcon,
   CubeIcon,
-  CurrencyDollarIcon,
-  UsersIcon,
+  ArrowPathIcon,
   GlobeAltIcon,
-  CodeBracketIcon
+  CodeBracketIcon,
+  TrophyIcon
 } from '@heroicons/react/24/outline';
 
 const Header = () => {
@@ -31,13 +31,13 @@ const Header = () => {
           </li>
           <li>
             <Link href='/transactions' className='nav-link text-gray-200 flex items-center gap-1'>
-              <CurrencyDollarIcon className='w-5 h-5' />
+              <ArrowPathIcon className='w-5 h-5' />
               <span className='hidden sm:inline'>Transactions</span>
             </Link>
           </li>
           <li>
             <Link href='/richlist' className='nav-link text-gray-200 flex items-center gap-1'>
-              <UsersIcon className='w-5 h-5' />
+              <TrophyIcon className='w-5 h-5' />
               <span className='hidden sm:inline'>Richlist</span>
             </Link>
           </li>

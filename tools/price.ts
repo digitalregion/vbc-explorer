@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /*
-Tool for fetching and updating VirBiCoin price data
+Tool for fetching and updating cryptocurrency price data
 */
 
 import { Market } from '../models/index';
@@ -30,6 +30,22 @@ interface Config {
   port: number;
   quiet: boolean;
   priceUpdateInterval: number;
+  currency?: {
+    name: string;
+    symbol: string;
+    unit: string;
+    decimals: number;
+    priceApi?: {
+      coingecko?: {
+        enabled: boolean;
+        id: string;
+      };
+      coinpaprika?: {
+        enabled: boolean;
+        id: string;
+      };
+    };
+  };
 }
 
 interface PriceData {
@@ -44,7 +60,23 @@ const config: Config = {
   nodeAddr: 'localhost',
   port: 8329,
   quiet: false,
-  priceUpdateInterval: 15 * 60 * 1000 // 15 minutes (5分→15分に延長)
+  priceUpdateInterval: 15 * 60 * 1000, // 15 minutes
+  currency: {
+    name: 'VirBiCoin',
+    symbol: 'VBC',
+    unit: 'niku',
+    decimals: 18,
+    priceApi: {
+      coingecko: {
+        enabled: true,
+        id: 'virbicoin'
+      },
+      coinpaprika: {
+        enabled: true,
+        id: 'vbc-virbicoin'
+      }
+    }
+  }
 };
 
 // Try to load config.json, fallback to config.example.json
@@ -72,16 +104,42 @@ if (config.quiet) {
 }
 
 /**
- * Fetch current VBC price from external API
+ * Fetch current cryptocurrency price from external API
  */
-const fetchVBCPrice = async (): Promise<PriceData | null> => {
+const fetchCryptoPrice = async (): Promise<PriceData | null> => {
   try {
-    // Try multiple price sources
-    const priceSources = [
-      'https://api.coingecko.com/api/v3/simple/price?ids=virbicoin&vs_currencies=btc,usd',
-      'https://api.coinpaprika.com/v1/tickers/vbc-virbicoin',
-      // Add more price sources as needed
-    ];
+    const currency = config.currency;
+    if (!currency) {
+      console.error('❌ Currency configuration not found');
+      return null;
+    }
+
+    const priceSources: string[] = [];
+
+    // Add CoinGecko API if enabled
+    if (currency.priceApi?.coingecko?.enabled) {
+      priceSources.push(
+        `https://api.coingecko.com/api/v3/simple/price?ids=${currency.priceApi.coingecko.id}&vs_currencies=btc,usd`
+      );
+    }
+
+    // Add CoinPaprika API if enabled
+    if (currency.priceApi?.coinpaprika?.enabled) {
+      priceSources.push(
+        `https://api.coinpaprika.com/v1/tickers/${currency.priceApi.coinpaprika.id}`
+      );
+    }
+
+    // If no price APIs are configured, use fallback
+    if (priceSources.length === 0) {
+      console.log('⚠️ No price APIs configured, using fallback data');
+      return {
+        symbol: currency.symbol,
+        timestamp: Date.now(),
+        quoteBTC: 0.000001, // Mock BTC price
+        quoteUSD: 0.05 // Mock USD price
+      };
+    }
 
     for (const source of priceSources) {
       try {
@@ -95,9 +153,10 @@ const fetchVBCPrice = async (): Promise<PriceData | null> => {
         let quoteUSD = 0;
 
         if (source.includes('coingecko')) {
-          if (data.virbicoin) {
-            quoteBTC = data.virbicoin.btc || 0;
-            quoteUSD = data.virbicoin.usd || 0;
+          const coinId = currency.priceApi?.coingecko?.id;
+          if (data[coinId!]) {
+            quoteBTC = data[coinId!].btc || 0;
+            quoteUSD = data[coinId!].usd || 0;
           }
         } else if (source.includes('coinpaprika')) {
           quoteBTC = data.quotes?.BTC?.price || 0;
@@ -106,7 +165,7 @@ const fetchVBCPrice = async (): Promise<PriceData | null> => {
 
         if (quoteUSD > 0 || quoteBTC > 0) {
           return {
-            symbol: 'VBC',
+            symbol: currency.symbol,
             timestamp: Date.now(),
             quoteBTC,
             quoteUSD
@@ -121,14 +180,14 @@ const fetchVBCPrice = async (): Promise<PriceData | null> => {
     // Fallback: use mock data if no external API works
     console.log('🔄 Using fallback price data');
     return {
-      symbol: 'VBC',
+      symbol: currency.symbol,
       timestamp: Date.now(),
       quoteBTC: 0.000001, // Mock BTC price
       quoteUSD: 0.05 // Mock USD price
     };
 
   } catch (error) {
-    console.error('❌ Error fetching VBC price:', error);
+    console.error(`❌ Error fetching ${config.currency?.symbol || 'crypto'} price:`, error);
     return null;
   }
 };
@@ -142,7 +201,7 @@ const updatePriceData = async (priceData: PriceData): Promise<void> => {
     await market.save();
 
     if (!config.quiet) {
-      console.log(`💰 Price data updated: VBC = $${priceData.quoteUSD} (${priceData.quoteBTC} BTC)`);
+      console.log(`💰 Price data updated: ${priceData.symbol} = $${priceData.quoteUSD} (${priceData.quoteBTC} BTC)`);
     }
   } catch (error) {
     console.error('❌ Error updating price data:', error);
@@ -190,7 +249,7 @@ const updatePrice = async (): Promise<void> => {
       return;
     }
 
-    const priceData = await fetchVBCPrice();
+    const priceData = await fetchCryptoPrice();
     if (priceData) {
       await updatePriceData(priceData);
     } else {
@@ -205,7 +264,8 @@ const updatePrice = async (): Promise<void> => {
  * Continuous price monitoring
  */
 const startPriceMonitoring = async (): Promise<void> => {
-  console.log('💰 Starting VBC price monitoring...');
+  const currencySymbol = config.currency?.symbol || 'CRYPTO';
+  console.log(`💰 Starting ${currencySymbol} price monitoring...`);
   console.log(`⏰ Update interval: ${config.priceUpdateInterval / 1000} seconds`);
   
   // Initial update
@@ -232,7 +292,7 @@ const runOnce = async (): Promise<void> => {
 const showCurrentPrice = async (): Promise<void> => {
   const latestPrice = await getLatestPrice();
   if (latestPrice) {
-    console.log(`💰 Current VBC price: $${latestPrice.quoteUSD} (${latestPrice.quoteBTC} BTC)`);
+    console.log(`💰 Current ${latestPrice.symbol} price: $${latestPrice.quoteUSD} (${latestPrice.quoteBTC} BTC)`);
     console.log(`🕐 Last updated: ${new Date(latestPrice.timestamp).toLocaleString()}`);
   } else {
     console.log('❌ No price data available');
@@ -249,8 +309,9 @@ const main = async (): Promise<void> => {
   } else if (args.includes('--show') || args.includes('-s')) {
     await showCurrentPrice();
   } else if (args.includes('--help') || args.includes('-h')) {
+    const currencySymbol = config.currency?.symbol || 'CRYPTO';
     console.log(`
-💰 VBC Price Tool
+💰 ${currencySymbol} Price Tool
 
 Usage:
   npm run price                    # Start continuous monitoring

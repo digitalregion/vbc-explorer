@@ -2,6 +2,30 @@ import { NextRequest, NextResponse } from 'next/server';
 import mongoose from 'mongoose';
 import Web3 from 'web3';
 import { connectDB } from '../../../../models/index';
+import fs from 'fs';
+import path from 'path';
+
+// Function to read config
+const readConfig = () => {
+  try {
+    const configPath = path.join(process.cwd(), 'config.json');
+    const exampleConfigPath = path.join(process.cwd(), 'config.example.json');
+    
+    if (fs.existsSync(configPath)) {
+      return JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    } else if (fs.existsSync(exampleConfigPath)) {
+      return JSON.parse(fs.readFileSync(exampleConfigPath, 'utf8'));
+    }
+  } catch (error) {
+    console.error('Error reading config:', error);
+  }
+  
+  // Default configuration
+  return {
+    nodeAddr: 'localhost',
+    port: 8329
+  };
+};
 
 // Account schema
 const accountSchema = new mongoose.Schema({
@@ -72,8 +96,8 @@ const TokenTransfer = mongoose.models.TokenTransfer || mongoose.model('TokenTran
 const Contract = mongoose.models.Contract || mongoose.model('Contract', contractSchema);
 const Block = mongoose.models.Block || mongoose.model('Block', blockSchema);
 
-const web3 = new Web3(new Web3.providers.HttpProvider('http://localhost:8329'));
-
+const config = readConfig();
+const web3 = new Web3(new Web3.providers.HttpProvider(`http://${config.nodeAddr}:${config.port}`));
 
 
 export async function GET(
@@ -127,17 +151,40 @@ export async function GET(
     rank = account?.rank ?? null;
   }
 
-  // トランザクション情報を取得
-  const transactions = await Transaction.find({
+  // トランザクション情報を取得（より多くのトランザクションを取得して分類）
+  const allTransactions = await Transaction.find({
     $or: [
       { from: { $regex: new RegExp(`^${address}$`, 'i') } },
       { to: { $regex: new RegExp(`^${address}$`, 'i') } }
     ]
   })
     .sort({ timestamp: -1 })
-    .limit(10);
+    .limit(50); // より多くのトランザクションを取得
 
-  // トランザクション数を取得
+  // 通常のトランザクションとマイニング報酬を分類
+  const regularTransactions = allTransactions.filter(tx => 
+    tx.from !== '0x0000000000000000000000000000000000000000' && 
+    tx.to !== '0x0000000000000000000000000000000000000000'
+  );
+
+
+
+  // 表示用のトランザクション（通常のトランザクションのみ、最大10件）
+  const displayTransactions = regularTransactions.slice(0, 10);
+
+  // 通常のトランザクション数を取得（システムアドレス以外）
+  const regularTransactionCount = await Transaction.countDocuments({
+    $or: [
+      { from: { $regex: new RegExp(`^${address}$`, 'i') } },
+      { to: { $regex: new RegExp(`^${address}$`, 'i') } }
+    ],
+    $and: [
+      { from: { $ne: '0x0000000000000000000000000000000000000000' } },
+      { to: { $ne: '0x0000000000000000000000000000000000000000' } }
+    ]
+  });
+
+  // 全トランザクション数を取得
   const transactionCount = await Transaction.countDocuments({
     $or: [
       { from: { $regex: new RegExp(`^${address}$`, 'i') } },
@@ -178,6 +225,22 @@ export async function GET(
     if (hours > 0) return `${hours} hour${hours > 1 ? 's' : ''} ago`;
     if (minutes > 0) return `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
     return 'just now';
+  };
+
+  // 日付フォーマット関数
+  const formatDate = (timestamp: Date | number | null): string => {
+    if (!timestamp) return 'Unknown';
+    
+    let targetTime: Date;
+    if (typeof timestamp === 'number') {
+      targetTime = new Date(timestamp * 1000);
+    } else if (timestamp instanceof Date) {
+      targetTime = timestamp;
+    } else {
+      targetTime = new Date(timestamp);
+    }
+    
+    return targetTime.toLocaleString(undefined, { timeZoneName: 'short' });
   };
 
   // マイニング報酬を計算（ブロック報酬 + ガス料金）
@@ -236,7 +299,7 @@ export async function GET(
         }
       
       return {
-        hash: `mining-${block.hash}`,
+        hash: block.hash,
         from: '0x0000000000000000000000000000000000000000',
         to: address,
         value: actualReward.toFixed(8),
@@ -244,6 +307,7 @@ export async function GET(
         timeAgo: getTimeAgo(block.timestamp),
         blockNumber: block.number,
         type: 'mining_reward',
+        status: 'success',
         details: {
           blockReward: blockReward,
           gasFees: totalGasFees.toFixed(8),
@@ -253,7 +317,7 @@ export async function GET(
     } catch {
       // フォールバック: 固定報酬を使用
       return {
-        hash: `mining-${block.hash}`,
+        hash: block.hash,
         from: '0x0000000000000000000000000000000000000000',
         to: address,
         value: '8.00000000', // 固定報酬
@@ -261,6 +325,7 @@ export async function GET(
         timeAgo: getTimeAgo(block.timestamp),
         blockNumber: block.number,
         type: 'mining_reward',
+        status: 'success',
         details: {
           blockReward: 8,
           gasFees: '0.00000000',
@@ -318,6 +383,16 @@ export async function GET(
     ]
   }).sort({ timestamp: -1 }).limit(10);
 
+  // トークン転送数を取得
+  const tokenTransferCount = await TokenTransfer.countDocuments({
+    $or: [
+      { from: { $regex: new RegExp(`^${address}$`, 'i') } },
+      { to: { $regex: new RegExp(`^${address}$`, 'i') } }
+    ]
+  });
+
+
+
   // バランスフォーマット関数（WeiからVBCに変換）
   const formatBalance = (balance: string) => {
     try {
@@ -355,7 +430,7 @@ export async function GET(
 
   // Transaction、TokenTransfer、MiningRewardsをマージ
   const allTxs = [
-    ...transactions.map(tx => ({
+    ...displayTransactions.map(tx => ({
       hash: tx.hash,
       from: tx.from,
       to: tx.to,
@@ -363,7 +438,8 @@ export async function GET(
       timestamp: tx.timestamp,
       timeAgo: getTimeAgo(tx.timestamp),
       blockNumber: tx.blockNumber,
-      type: 'native'
+      type: 'native',
+      status: 'success'
     })),
     ...tokenTransfers.map(tx => ({
       hash: tx.transactionHash,
@@ -374,9 +450,10 @@ export async function GET(
       timeAgo: getTimeAgo(tx.timestamp),
       blockNumber: tx.blockNumber,
       type: 'token',
-      tokenAddress: tx.tokenAddress
+      tokenAddress: tx.tokenAddress,
+      status: 'success'
     })),
-    ...miningRewards.map(tx => ({
+    ...miningRewards.slice(0, 10).map(tx => ({
       hash: tx.hash,
       from: tx.from,
       to: tx.to,
@@ -384,9 +461,10 @@ export async function GET(
       timestamp: tx.timestamp,
       timeAgo: tx.timeAgo,
       blockNumber: tx.blockNumber,
-      type: 'mining_reward'
+      type: 'mining_reward',
+      status: tx.status || 'success'
     }))
-  ].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).slice(0, 10);
+  ].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
   // contractが配列の場合は最初の要素を使う
   const contractObj = Array.isArray(contract) ? contract[0] : contract;
@@ -400,8 +478,9 @@ export async function GET(
       rank,       // DB値そのまま
       transactionCount: transactionCount || 0,
       blocksMined: blocksMined || 0,
-      firstSeen: getTimeAgo(firstActivity),
-      lastActivity: getTimeAgo(lastActivity)
+      tokenTransferCount: tokenTransferCount || 0,
+      firstSeen: firstActivity ? `${formatDate(firstActivity)} (${getTimeAgo(firstActivity)})` : 'Unknown',
+      lastActivity: lastActivity ? `${formatDate(lastActivity)} (${getTimeAgo(lastActivity)})` : 'Unknown'
     },
     contract: contractObj ? {
       address: contractObj.address,
@@ -414,6 +493,12 @@ export async function GET(
       creationTransaction: contractObj.creationTransaction || '',
       blockNumber: contractObj.blockNumber || 0
     } : null,
-    transactions: allTxs
+    transactions: allTxs,
+    // 分類情報を追加
+    transactionStats: {
+      regularCount: regularTransactionCount || 0, // 実際の通常トランザクション数を使用
+      miningCount: blocksMined || 0, // 実際のマイニングブロック数を使用
+      totalCount: (regularTransactionCount || 0) + (blocksMined || 0)
+    }
   });
 } 

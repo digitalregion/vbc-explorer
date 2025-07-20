@@ -1,178 +1,76 @@
 'use client';
 
-import Header from '../app/components/Header';
 import Link from 'next/link';
-import {
-  ArrowPathIcon,
-  ClockIcon,
-  ArrowLeftIcon,
-  FireIcon,
-  HashtagIcon,
+import Header from '../app/components/Header';
+import { 
+  ArrowUpIcon,
   UserIcon,
   CurrencyDollarIcon,
-  CheckCircleIcon,
-  ExclamationCircleIcon
+  CheckCircleIcon, 
+  ArrowDownIcon,
+  ClockIcon,
+  CodeBracketIcon,
+  HashtagIcon,
+  ArrowPathIcon
 } from '@heroicons/react/24/outline';
-import { useState, useEffect } from 'react';
-import { weiToVBC, weiToGwei, formatVBC, formatGwei } from '../lib/bigint-utils';
-// Dynamic config loading
-const config: Record<string, unknown> = {
-  miners: {
-    "0x950302976387b43E042aeA242AE8DAB8e5C204D1": "digitalregion.jp",
-    "0x6C0DB3Ea9EEd7ED145f36da461D84A8d02596B08": "coolpool.top"
-  }
-};
+import { weiToVBC } from '../lib/bigint-utils';
 
 interface TransactionData {
   hash: string;
+  blockNumber: number;
+  timestamp: string;
+  timeAgo: string;
   from: string;
   to: string;
   value: string;
-  blockNumber: number;
-  blockHash: string;
-  transactionIndex: number;
-  gas: number;
+  valueRaw: string;
+  gasUsed: string;
   gasPrice: string;
-  gasUsed?: number;
-  timestamp: number;
-  status?: string | number;
-  nonce?: number;
-  input?: string;
-  block?: {
-    number: number;
-    hash: string;
-    timestamp: number;
-    miner: string;
+  gasLimit: string;
+  nonce: number;
+  status: 'success' | 'failed';
+  isContractCreation: boolean;
+  contractAddress?: string;
+  input: string;
+  logs: Array<{
+    address: string;
+    topics: string[];
+    data: string;
+  }>;
+  internalTransactions?: Array<{
+    type: string;
+    from: string;
+    to: string;
+    value: string;
+    gasUsed: string;
+  }>;
+}
+
+export default function TransactionDetails({ transaction }: { transaction: TransactionData }) {
+const formatAddress = (address: string) => {
+  if (!address) return 'N/A';
+  return `${address.slice(0, 8)}...${address.slice(-6)}`;
+};
+
+const formatNumber = (value: string | number) => {
+  const num = typeof value === 'string' ? parseFloat(value) : value;
+  if (isNaN(num)) return '0';
+    return num.toLocaleString();
   };
-}
-
-interface TransactionDetailsProps {
-  hash: string;
-}
-
-export default function TransactionDetails({ hash }: TransactionDetailsProps) {
-  const [transaction, setTransaction] = useState<TransactionData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const fetchTransactionDetails = async () => {
-      try {
-        setLoading(true);
-        const response = await fetch(`/api/tx/${hash}`);
-
-        if (!response.ok) {
-          throw new Error('Transaction not found');
-        }
-
-        const transactionData = await response.json();
-        setTransaction(transactionData);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to fetch transaction details');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchTransactionDetails();
-  }, [hash]);
-
-  if (loading) {
-    return (
-      <>
-        <Header />
-        <div className='bg-gray-800 border-b border-gray-700'>
-          <div className='container mx-auto px-4 py-8'>
-            <div className='flex items-center gap-3 mb-4'>
-              <ArrowPathIcon className='w-8 h-8 text-green-400' />
-              <h1 className='text-3xl font-bold text-gray-100'>Transaction Details</h1>
-            </div>
-            <p className='text-gray-400'>Loading transaction information...</p>
-          </div>
-        </div>
-        <main className='container mx-auto px-4 py-8'>
-          <div className='bg-gray-800 rounded-lg border border-gray-700 p-8 text-center'>
-            <div className='animate-spin w-8 h-8 border-4 border-green-400 border-t-transparent rounded-full mx-auto mb-4'></div>
-            <p className='text-gray-400'>Loading transaction details...</p>
-          </div>
-        </main>
-      </>
-    );
-  }
-
-  if (error || !transaction) {
-    return (
-      <>
-        <Header />
-        <div className='bg-gray-800 border-b border-gray-700'>
-          <div className='container mx-auto px-4 py-8'>
-            <div className='flex items-center gap-3 mb-4'>
-              <ArrowPathIcon className='w-8 h-8 text-red-400' />
-              <h1 className='text-3xl font-bold text-gray-100'>Transaction Not Found</h1>
-            </div>
-            <p className='text-gray-400'>The requested transaction could not be found.</p>
-          </div>
-        </div>
-        <main className='container mx-auto px-4 py-8'>
-          <div className='bg-gray-800 rounded-lg border border-gray-700 p-8 text-center'>
-            <p className='text-red-400 mb-4'>{error || 'Transaction not found'}</p>
-            <Link
-              href='/'
-              className='inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded transition-colors'
-            >
-              <ArrowLeftIcon className='w-4 h-4' />
-              Back to Explorer
-            </Link>
-          </div>
-        </main>
-      </>
-    );
-  }
 
   const formatTimestamp = (timestamp: number) => {
     const date = new Date(timestamp * 1000);
     return date.toLocaleString(undefined, { timeZoneName: 'short' });
   };
 
-  const getTimeAgo = (timestamp: number) => {
-    const now = Math.floor(Date.now() / 1000);
-    const diff = now - timestamp;
-
-    if (diff < 60) return `${diff}s ago`;
-    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-    return `${Math.floor(diff / 86400)}d ago`;
-  };
-
-  const formatValue = (value: string) => {
-    try {
-      const vbcValue = weiToVBC(value);
-      return formatVBC(vbcValue);
-    } catch {
-      return '0 VBC';
-    }
-  };
-
   const formatGasPrice = (gasPrice: string) => {
-    try {
-      const gwei = weiToGwei(gasPrice);
-      return formatGwei(gwei);
-    } catch {
-      return 'N/A';
-    }
-  };
-
-  const formatMiner = (miner: string) => {
-    if (!miner) return 'Unknown';
-    if ((config as { miners: Record<string, string> }).miners) {
-      const minerKey = Object.keys((config as { miners: Record<string, string> }).miners).find(
-        key => key.toLowerCase() === miner.toLowerCase()
-      );
-      if (minerKey) {
-        return (config as { miners: Record<string, string> }).miners[minerKey];
-      }
-    }
-    return `${miner.slice(0, 12)}...${miner.slice(-12)}`;
+    const num = parseFloat(gasPrice);
+    if (isNaN(num)) return gasPrice;
+    if (num >= 1e12) return `${(num / 1e12).toFixed(2)} TH`;
+    if (num >= 1e9) return `${(num / 1e9).toFixed(2)} GH`;
+    if (num >= 1e6) return `${(num / 1e6).toFixed(2)} MH`;
+    if (num >= 1e3) return `${(num / 1e3).toFixed(2)} KH`;
+    return `${num.toFixed(2)} H`;
   };
 
   return (
@@ -190,7 +88,7 @@ export default function TransactionDetails({ hash }: TransactionDetailsProps) {
               href='/'
               className='inline-flex items-center gap-2 text-blue-400 hover:text-blue-300 transition-colors'
             >
-              <ArrowLeftIcon className='w-4 h-4' />
+              <ArrowUpIcon className='w-4 h-4' />
               Back to Explorer
             </Link>
             <span className='text-gray-400'>
@@ -223,15 +121,15 @@ export default function TransactionDetails({ hash }: TransactionDetailsProps) {
             <div className='space-y-2'>
               <p className='text-sm text-gray-400'>Status</p>
               <div className='flex items-center gap-2'>
-                {transaction.status === 'success' || transaction.status === 1 || transaction.status === '1' ? (
+                {transaction.status === 'success' ? (
                   <CheckCircleIcon className='w-5 h-5 text-green-400' />
                 ) : (
-                  <ExclamationCircleIcon className='w-5 h-5 text-red-400' />
+                  <ArrowDownIcon className='w-5 h-5 text-red-400' />
                 )}
                 <span className={`text-sm font-medium ${
-                  transaction.status === 'success' || transaction.status === 1 || transaction.status === '1' ? 'text-green-400' : 'text-red-400'
+                  transaction.status === 'success' ? 'text-green-400' : 'text-red-400'
                 }`}>
-                  {transaction.status === 'success' || transaction.status === 1 || transaction.status === '1' ? 'Success' : 'Failed'}
+                  {transaction.status === 'success' ? 'Success' : 'Failed'}
                 </span>
               </div>
             </div>
@@ -251,8 +149,8 @@ export default function TransactionDetails({ hash }: TransactionDetailsProps) {
               <div className='flex items-center'>
                 <ClockIcon className='w-4 h-4 text-gray-400 mr-2' />
                 <div>
-                  <div className='text-sm text-gray-300'>{getTimeAgo(transaction.timestamp)}</div>
-                  <div className='text-xs text-gray-500'>{formatTimestamp(transaction.timestamp)}</div>
+                  <div className='text-sm text-gray-300'>{transaction.timeAgo}</div>
+                  <div className='text-xs text-gray-500'>{formatTimestamp(parseInt(transaction.timestamp))}</div>
                 </div>
               </div>
             </div>
@@ -261,13 +159,13 @@ export default function TransactionDetails({ hash }: TransactionDetailsProps) {
               <p className='text-sm text-gray-400'>Value</p>
               <div className='flex items-center gap-2'>
                 <CurrencyDollarIcon className='w-5 h-5 text-green-400' />
-                <span className='text-lg font-mono text-green-400'>{formatValue(transaction.value)}</span>
+                <span className='text-lg font-mono text-green-400'>{formatNumber(weiToVBC(transaction.value))}</span>
               </div>
             </div>
 
             <div className='space-y-2'>
               <p className='text-sm text-gray-400'>Transaction Index</p>
-              <p className='text-lg font-mono text-purple-400'>{transaction.transactionIndex}</p>
+              <p className='text-lg font-mono text-purple-400'>{transaction.nonce}</p>
             </div>
           </div>
         </section>
@@ -287,7 +185,7 @@ export default function TransactionDetails({ hash }: TransactionDetailsProps) {
                 className='font-mono text-sm text-blue-400 hover:text-blue-300 break-all bg-gray-700/50 p-3 rounded border border-gray-600 block transition-colors hover:bg-gray-700'
                 title={`View account: ${transaction.from}`}
               >
-                {transaction.from}
+                {formatAddress(transaction.from)}
               </Link>
             </div>
 
@@ -298,7 +196,7 @@ export default function TransactionDetails({ hash }: TransactionDetailsProps) {
                 className='font-mono text-sm text-blue-400 hover:text-blue-300 break-all bg-gray-700/50 p-3 rounded border border-gray-600 block transition-colors hover:bg-gray-700'
                 title={`View account: ${transaction.to}`}
               >
-                {transaction.to}
+                {formatAddress(transaction.to)}
               </Link>
             </div>
           </div>
@@ -307,23 +205,23 @@ export default function TransactionDetails({ hash }: TransactionDetailsProps) {
         {/* Gas Information */}
         <section className='bg-gray-800 rounded-lg border border-gray-700 p-6 mb-8'>
           <h2 className='text-xl font-bold text-gray-100 mb-6 flex items-center gap-2'>
-            <FireIcon className='w-6 h-6 text-orange-400' />
+            <CodeBracketIcon className='w-6 h-6 text-orange-400' />
             Gas Information
           </h2>
 
           <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6'>
             <div className='space-y-2'>
               <p className='text-sm text-gray-400'>Gas Limit</p>
-              <p className='font-mono text-sm text-orange-400'>{transaction.gas.toLocaleString()}</p>
+              <p className='font-mono text-sm text-orange-400'>{formatNumber(transaction.gasLimit)}</p>
             </div>
 
             {transaction.gasUsed && (
               <div className='space-y-2'>
                 <p className='text-sm text-gray-400'>Gas Used</p>
                 <p className='font-mono text-sm text-orange-400'>
-                  {transaction.gasUsed.toLocaleString()}
+                  {formatNumber(transaction.gasUsed)}
                   <span className='text-xs text-gray-400 ml-2'>
-                    ({((transaction.gasUsed / transaction.gas) * 100).toFixed(1)}%)
+                    ({((parseInt(transaction.gasUsed) / parseInt(transaction.gasLimit)) * 100).toFixed(1)}%)
                   </span>
                 </p>
               </div>
@@ -344,7 +242,7 @@ export default function TransactionDetails({ hash }: TransactionDetailsProps) {
         </section>
 
         {/* Block Information */}
-        {transaction.block && (
+        {transaction.blockNumber && (
           <section className='bg-gray-800 rounded-lg border border-gray-700 p-6 mb-8'>
             <h2 className='text-xl font-bold text-gray-100 mb-6'>Block Information</h2>
 
@@ -352,22 +250,24 @@ export default function TransactionDetails({ hash }: TransactionDetailsProps) {
               <div className='space-y-2'>
                 <p className='text-sm text-gray-400'>Block Hash</p>
                 <Link
-                  href={`/block/${transaction.block.hash}`}
+                  href={`/block/${transaction.blockNumber}`}
                   className='font-mono text-sm text-blue-400 hover:text-blue-300 break-all bg-gray-700/50 p-3 rounded border border-gray-600 block transition-colors hover:bg-gray-700'
-                  title={`View block: ${transaction.block.hash}`}
+                  title={`View block: ${transaction.blockNumber}`}
                 >
-                  {transaction.block.hash}
+                  {transaction.blockNumber}
                 </Link>
               </div>
 
               <div className='space-y-2'>
                 <p className='text-sm text-gray-400'>Mined by</p>
                 <Link
-                  href={`/address/${transaction.block.miner}`}
+                  href={`/address/${transaction.blockNumber}`}
                   className='text-green-400 hover:text-green-300 transition-colors hover:underline'
-                  title={`View miner account: ${transaction.block.miner}`}
+                  title={`View miner account: ${transaction.blockNumber}`}
                 >
-                  {formatMiner(transaction.block.miner)}
+                  {/* This function is no longer used as config is removed. */}
+                  {/* Keeping it for now as it might be re-introduced or removed later. */}
+                  Unknown
                 </Link>
               </div>
             </div>

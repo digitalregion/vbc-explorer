@@ -4,6 +4,8 @@ import Header from '../components/Header';
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import { TrophyIcon } from '@heroicons/react/24/outline';
+import { getCurrencySymbol } from '../../lib/config';
+import { initializeCurrency } from '../../lib/bigint-utils';
 
 interface RichlistAccount {
   rank: number;
@@ -53,13 +55,22 @@ export default function RichlistPage() {
   });
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
+  const [currencySymbol, setCurrencySymbol] = useState<string>('');
 
   useEffect(() => {
     const fetchRichlist = async () => {
       try {
+        // Initialize currency conversion factors
+        await initializeCurrency();
+        
+        // Load config values
+        const symbol = await getCurrencySymbol();
+        setCurrencySymbol(symbol);
+        
         setLoading(true);
         const response = await fetch(`/api/richlist?page=${currentPage}&limit=50`);
         const data = await response.json();
+        
         setRichlistData(data);
       } catch (error) {
         console.error('Error fetching richlist:', error);
@@ -89,40 +100,70 @@ export default function RichlistPage() {
             <h1 className='text-3xl font-bold text-gray-100'>Rich List</h1>
           </div>
           <p className='text-gray-400'>
-            Top VBC holders by balance. Total supply: {
+            Top {currencySymbol} holders by balance. Total supply: {
               // Convert Wei to VBC for display
               (richlistData.statistics.totalSupply / 1e18).toLocaleString()
-            } VBC
+            } {currencySymbol}
           </p>
         </div>
       </div>
 
       <main className='container mx-auto px-4 py-8'>
+        {/* Summary Stats - テーブルの上に移動 */}
+        <div className='grid grid-cols-1 md:grid-cols-4 gap-4 mb-8'>
+          <div className='bg-gray-700/50 rounded-lg p-4 border border-gray-600/50'>
+            <h3 className='text-sm font-medium text-gray-300 mb-2'>Total Addresses</h3>
+            <p className='text-2xl font-bold text-blue-400'>{richlistData.statistics.totalAccounts.toLocaleString()}</p>
+            <p className='text-xs text-gray-400'>Active holders</p>
+          </div>
+          <div className='bg-gray-700/50 rounded-lg p-4 border border-gray-600/50'>
+            <h3 className='text-sm font-medium text-gray-300 mb-2'>Contract Addresses</h3>
+            <p className='text-2xl font-bold text-purple-400'>{richlistData.statistics.contractAccounts.toLocaleString()}</p>
+            <p className='text-xs text-gray-400'>Smart contracts</p>
+          </div>
+          <div className='bg-gray-700/50 rounded-lg p-4 border border-gray-600/50'>
+            <h3 className='text-sm font-medium text-gray-300 mb-2'>Wallet Addresses</h3>
+            <p className='text-2xl font-bold text-green-400'>{richlistData.statistics.walletAccounts.toLocaleString()}</p>
+            <p className='text-xs text-gray-400'>User wallets</p>
+          </div>
+          <div className='bg-gray-700/50 rounded-lg p-4 border border-gray-600/50'>
+            <h3 className='text-sm font-medium text-gray-300 mb-2'>Top 10 Holdings</h3>
+            <p className='text-2xl font-bold text-yellow-400'>
+              {richlistData.richlist.length > 0 ?
+                richlistData.richlist.slice(0, Math.min(10, richlistData.richlist.length))
+                  .reduce((sum: number, acc: RichlistAccount) => sum + parseFloat(acc.percentage), 0)
+                  .toFixed(2) :
+                '0.00'
+              }%
+            </p>
+            <p className='text-xs text-gray-400'>Of total supply</p>
+          </div>
+        </div>
+
         <div className='bg-gray-800 rounded-lg border border-gray-700 p-6'>
           <div className='flex items-center justify-between mb-6'>
-            <h2 className='text-xl font-semibold text-gray-100'>Top VBC Holders</h2>
+            <h2 className='text-xl font-semibold text-gray-100'>Top {currencySymbol} Holders</h2>
             <div className='text-sm text-gray-400'>
               Showing {richlistData.richlist.length} of {richlistData.statistics.totalAccounts} accounts
             </div>
           </div>
 
           {loading ? (
-            <div className='text-center py-8'>
-              <div className='inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-400'></div>
-              <p className='text-gray-400 mt-2'>Loading richlist...</p>
+            <div className='flex justify-center items-center h-64'>
+              <div className='animate-spin rounded-full h-32 w-32 border-b-2 border-blue-500'></div>
             </div>
           ) : (
             <>
               <div className='overflow-x-auto'>
                 <table className='w-full'>
                   <thead>
-                    <tr className='border-b border-gray-700'>
-                      <th className='text-left py-3 px-4 text-sm font-medium text-gray-300'>Rank</th>
-                      <th className='text-left py-3 px-4 text-sm font-medium text-gray-300'>Address</th>
-                      <th className='text-left py-3 px-4 text-sm font-medium text-gray-300'>Type</th>
-                      <th className='text-left py-3 px-4 text-sm font-medium text-gray-300'>Balance</th>
-                      <th className='text-left py-3 px-4 text-sm font-medium text-gray-300'>Percentage</th>
-                      <th className='text-left py-3 px-4 text-sm font-medium text-gray-300'>Share</th>
+                    <tr className='border-b border-gray-600'>
+                      <th className='text-left py-3 px-4 text-sm font-medium text-gray-400'>Rank</th>
+                      <th className='text-left py-3 px-4 text-sm font-medium text-gray-400'>Address</th>
+                      <th className='text-left py-3 px-4 text-sm font-medium text-gray-400'>Type</th>
+                      <th className='text-left py-3 px-4 text-sm font-medium text-gray-400'>Balance</th>
+                      <th className='text-left py-3 px-4 text-sm font-medium text-gray-400'>Percentage</th>
+                      <th className='text-left py-3 px-4 text-sm font-medium text-gray-400'>Share</th>
                     </tr>
                   </thead>
                   <tbody className='divide-y divide-gray-700'>
@@ -184,61 +225,114 @@ export default function RichlistPage() {
                 </table>
               </div>
 
-              {/* Pagination */}
+              {/* Pagination - トランザクション形式に変更 */}
               {richlistData.pagination.totalPages > 1 && (
-                <div className='flex justify-center items-center gap-4 mt-6'>
+                <div className='flex justify-center items-center gap-2 mt-6'>
                   <button
                     onClick={() => handlePageChange(currentPage - 1)}
                     disabled={!richlistData.pagination.hasPrev}
-                    className='px-4 py-2 bg-gray-700 text-gray-300 rounded hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed'
+                    className='px-4 py-2 bg-gray-700 text-gray-300 rounded hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors'
                   >
                     Previous
                   </button>
-                  <span className='text-gray-400'>
-                    Page {richlistData.pagination.page} of {richlistData.pagination.totalPages}
-                  </span>
+                  
+                  <div className='flex gap-1'>
+                    {/* 最初のページ */}
+                    <button
+                      onClick={() => handlePageChange(1)}
+                      className={`px-3 py-2 rounded transition-colors ${
+                        1 === currentPage
+                          ? 'bg-blue-600 text-white'
+                          : 'text-gray-300 hover:bg-gray-700'
+                      }`}
+                    >
+                      1
+                    </button>
+                    
+                    {/* 現在のページ周辺のページ番号 */}
+                    {(() => {
+                      const pages = [];
+                      const totalPages = richlistData.pagination.totalPages;
+                      
+                      // 最後のページが選択されている場合の処理
+                      if (currentPage === totalPages && totalPages > 1) {
+                        // 最後のページが選択されている場合、最後の数ページを表示
+                        const startPage = Math.max(2, totalPages - 2);
+                        for (let i = startPage; i < totalPages; i++) {
+                          pages.push(
+                            <button
+                              key={i}
+                              onClick={() => handlePageChange(i)}
+                              className='px-3 py-2 rounded transition-colors text-gray-300 hover:bg-gray-700'
+                            >
+                              {i}
+                            </button>
+                          );
+                        }
+                        return pages;
+                      }
+                      
+                      // 通常のページネーション
+                      const startPage = 2;
+                      const endPage = Math.min(totalPages - 1, Math.max(4, currentPage + 1));
+                      
+                      // 連続したページ番号を生成（2から始まる）
+                      for (let i = startPage; i <= Math.min(endPage, totalPages - 1); i++) {
+                        pages.push(
+                          <button
+                            key={i}
+                            onClick={() => handlePageChange(i)}
+                            className={`px-3 py-2 rounded transition-colors ${
+                              i === currentPage
+                                ? 'bg-blue-600 text-white'
+                                : 'text-gray-300 hover:bg-gray-700'
+                            }`}
+                          >
+                            {i}
+                          </button>
+                        );
+                        
+                        // 最初の数ページを表示した後に省略記号を入れる
+                        if (i === 3 && totalPages > 5 && currentPage < totalPages - 2) {
+                          pages.push(<span key="ellipsis" className='text-gray-500 px-2'>...</span>);
+                          break;
+                        }
+                      }
+                      
+                      return pages;
+                    })()}
+                    
+                    {/* 最後のページ */}
+                    {richlistData.pagination.totalPages > 1 && (
+                      <button
+                        onClick={() => handlePageChange(richlistData.pagination.totalPages)}
+                        className={`px-3 py-2 rounded transition-colors ${
+                          richlistData.pagination.totalPages === currentPage
+                            ? 'bg-blue-600 text-white'
+                            : 'text-gray-300 hover:bg-gray-700'
+                        }`}
+                      >
+                        {richlistData.pagination.totalPages}
+                      </button>
+                    )}
+                  </div>
+                  
                   <button
                     onClick={() => handlePageChange(currentPage + 1)}
                     disabled={!richlistData.pagination.hasNext}
-                    className='px-4 py-2 bg-gray-700 text-gray-300 rounded hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed'
+                    className='px-4 py-2 bg-gray-700 text-gray-300 rounded hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors'
                   >
                     Next
                   </button>
                 </div>
               )}
+
+              {/* ページ情報 */}
+              <div className='text-center mt-4 text-gray-400 text-sm'>
+                Showing accounts {((currentPage - 1) * 50) + 1} to {Math.min(currentPage * 50, richlistData.pagination.total)} of {richlistData.pagination.total.toLocaleString()} total accounts
+              </div>
             </>
           )}
-
-          {/* Summary Stats */}
-          <div className='mt-8 grid grid-cols-1 md:grid-cols-4 gap-4'>
-            <div className='bg-gray-700/50 rounded-lg p-4 border border-gray-600/50'>
-              <h3 className='text-sm font-medium text-gray-300 mb-2'>Total Addresses</h3>
-              <p className='text-2xl font-bold text-blue-400'>{richlistData.statistics.totalAccounts.toLocaleString()}</p>
-              <p className='text-xs text-gray-400'>Active holders</p>
-            </div>
-            <div className='bg-gray-700/50 rounded-lg p-4 border border-gray-600/50'>
-              <h3 className='text-sm font-medium text-gray-300 mb-2'>Contract Addresses</h3>
-              <p className='text-2xl font-bold text-purple-400'>{richlistData.statistics.contractAccounts.toLocaleString()}</p>
-              <p className='text-xs text-gray-400'>Smart contracts</p>
-            </div>
-            <div className='bg-gray-700/50 rounded-lg p-4 border border-gray-600/50'>
-              <h3 className='text-sm font-medium text-gray-300 mb-2'>Wallet Addresses</h3>
-              <p className='text-2xl font-bold text-green-400'>{richlistData.statistics.walletAccounts.toLocaleString()}</p>
-              <p className='text-xs text-gray-400'>User wallets</p>
-            </div>
-            <div className='bg-gray-700/50 rounded-lg p-4 border border-gray-600/50'>
-              <h3 className='text-sm font-medium text-gray-300 mb-2'>Top 10 Holdings</h3>
-              <p className='text-2xl font-bold text-yellow-400'>
-                {richlistData.richlist.length > 0 ?
-                  richlistData.richlist.slice(0, Math.min(10, richlistData.richlist.length))
-                    .reduce((sum: number, acc: RichlistAccount) => sum + parseFloat(acc.percentage), 0)
-                    .toFixed(2) :
-                  '0.00'
-                }%
-              </p>
-              <p className='text-xs text-gray-400'>Of total supply</p>
-            </div>
-          </div>
         </div>
       </main>
     </div>
