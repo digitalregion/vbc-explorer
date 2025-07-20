@@ -6,8 +6,8 @@ import Web3 from 'web3';
 
 // Load configuration
 const config = loadConfig();
-const MONGODB_URI = config.database.uri;
-const GVBC_RPC_URL = config.web3Provider.url;
+const MONGODB_URI = config.database?.uri || 'mongodb://localhost:27017/vbc-explorer';
+const GVBC_RPC_URL = config.web3Provider?.url || 'http://localhost:8545';
 
 // Web3 instance for blockchain interaction
 const web3 = new Web3(GVBC_RPC_URL);
@@ -26,6 +26,12 @@ const ERC721_ABI = [
 // Function to fetch NFT metadata from tokenURI
 async function fetchNFTMetadata(tokenAddress: string, tokenId: number) {
   try {
+    // Check if web3 is properly initialized
+    if (!web3 || !web3.eth) {
+      console.error('Web3 not properly initialized');
+      return null;
+    }
+
     // First try to get tokenURI from blockchain
     const contract = new web3.eth.Contract(ERC721_ABI, tokenAddress);
     const tokenURI = await contract.methods.tokenURI(tokenId).call();
