@@ -238,25 +238,48 @@ export const connectDB = async (): Promise<void> => {
       mongoose.set('strictQuery', false);
 
       if (mongoose.connection.readyState === 0) {
-        const uri = process.env.MONGODB_URI || 'mongodb://localhost/explorerDB';
-        const connectionOptions: any = {
-          maxPoolSize: 10, // Reduced from 20 to prevent too many connections
-          serverSelectionTimeoutMS: 10000, // Reduced from 15000
-          socketTimeoutMS: 30000, // Reduced from 60000
-          connectTimeoutMS: 10000, // Reduced from 15000
+        // Try to load config.json for database URI
+        let uri = process.env.MONGODB_URI || 'mongodb://localhost/explorerDB';
+        
+        try {
+          const fs = await import('fs');
+          const path = await import('path');
+          const configPath = path.default.join(process.cwd(), 'config.json');
+          if (fs.default.existsSync(configPath)) {
+            const config = JSON.parse(fs.default.readFileSync(configPath, 'utf8'));
+            if (config.database && config.database.uri) {
+              uri = config.database.uri;
+              console.log('📄 Using MongoDB URI from config.json');
+              
+              // Validate URI format
+              if (!uri.includes('mongodb://')) {
+                throw new Error('Invalid MongoDB URI format');
+              }
+            }
+          }
+        } catch (configError) {
+          console.log('📄 Using default MongoDB URI');
+        }
+
+        const connectionOptions: mongoose.ConnectOptions = {
+          maxPoolSize: 10,
+          serverSelectionTimeoutMS: 15000,
+          socketTimeoutMS: 45000,
+          connectTimeoutMS: 15000,
           retryWrites: true,
           retryReads: true,
           bufferCommands: true,
           autoIndex: false,
-          // Add heartbeat frequency to detect connection issues faster
           heartbeatFrequencyMS: 10000,
-          // Add connection timeout
           maxIdleTimeMS: 30000,
         };
+        
+        console.log('🔗 Connecting to MongoDB...');
         await mongoose.connect(uri, connectionOptions);
+        console.log('✅ MongoDB connected successfully');
       }
     } catch (error) {
-      if ((mongoose.connection.readyState as any) === 1) {
+      if (mongoose.connection.readyState === 1) {
         return;
       }
       console.error('❌ MongoDB connection error:', error);

@@ -15,18 +15,35 @@ async function connectDB() {
 }
 
 export async function getChainStats() {
-  await connectDB();
+  try {
+    await connectDB();
+  } catch (error) {
+    console.error('Error connecting to database:', error);
+    throw new Error('Database connection failed');
+  }
 
   const db = mongoose.connection.db;
+  if (!db) {
+    throw new Error('Database connection not available');
+  }
   
   // Get latest block information
-  const latestBlockDoc = await db?.collection('Block').findOne({}, { sort: { number: -1 } });
-  const latestBlock = latestBlockDoc ? latestBlockDoc.number : 0;
+  let latestBlockDoc = null;
+  let latestBlock = 0;
+  
+  try {
+    latestBlockDoc = await db.collection('Block').findOne({}, { sort: { number: -1 } });
+    latestBlock = latestBlockDoc ? latestBlockDoc.number : 0;
+    console.log('[Stats] Latest block found:', latestBlock);
+  } catch (error) {
+    console.error('[Stats] Error getting latest block:', error);
+    latestBlock = 0;
+  }
   
   // Calculate average block time from last 100 blocks
   let avgBlockTime = '13.00';
   try {
-    const recentBlocks = await db?.collection('Block').find({})
+    const recentBlocks = await db.collection('Block').find({})
       .sort({ number: -1 })
       .limit(100)
       .project({ timestamp: 1, number: 1, blockTime: 1 })
@@ -184,7 +201,14 @@ export async function getChainStats() {
   }
 
   const totalSupply = "unlimited"; // VBC has unlimited supply
-  const totalTransactions = await db?.collection('Transaction').countDocuments() || 0;
+  let totalTransactions = 0;
+  try {
+    totalTransactions = await db.collection('Transaction').countDocuments();
+    console.log('[Stats] Total transactions found:', totalTransactions);
+  } catch (error) {
+    console.error('[Stats] Error getting total transactions:', error);
+    totalTransactions = 0;
+  }
   
   // Calculate time since last block
   let lastBlockTime = 'Unknown';
