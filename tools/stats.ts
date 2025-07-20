@@ -121,6 +121,12 @@ if (config.quiet) {
  * Update statistics for a range of blocks
  */
 const updateStats = async (range: number, interval: number, rescan: boolean): Promise<void> => {
+  // Ensure database is connected before proceeding
+  if (mongoose.connection.readyState !== 1) {
+    console.log('⌛ Waiting for database connection...');
+    await connectDB();
+  }
+
   let latestBlockBigInt = await web3.eth.getBlockNumber();
   let latestBlock = toNumber(latestBlockBigInt);
 
@@ -296,6 +302,9 @@ if (process.env.RESCAN) {
  */
 const main = async (): Promise<void> => {
   try {
+    // Initialize database connection first
+    await initDB();
+    
     // Test connection
     const isListening = await web3.eth.net.isListening();
     if (!isListening) {

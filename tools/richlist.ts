@@ -116,6 +116,16 @@ const makeRichList: MakeRichListFunction = function (
   blocks: number,
   updateCallback: UpdateCallback
 ): void {
+  // Ensure database is connected before proceeding
+  if (mongoose.connection.readyState !== 1) {
+    console.log('⌛ Waiting for database connection...');
+    connectDB().then(() => {
+      // Retry the operation after connection
+      makeRichList(toBlock, blocks, updateCallback);
+    });
+    return;
+  }
+
   const self = makeRichList;
   if (!self.cached) {
     self.cached = {};
@@ -395,6 +405,12 @@ const bulkInsert = function (bulk: AccountData[]): void {
  */
 async function startSync(): Promise<void> {
   try {
+    // Ensure database is connected before proceeding
+    if (mongoose.connection.readyState !== 1) {
+      console.log('⌛ Waiting for database connection...');
+      await connectDB();
+    }
+
     const latestBlock = await web3.eth.getBlockNumber();
     console.log(`📊 latestBlock = ${latestBlock}`);
 
@@ -413,6 +429,12 @@ async function startSync(): Promise<void> {
 
 // percentage計算・保存ロジック
 async function updatePercentages() {
+  // Ensure database is connected before proceeding
+  if (mongoose.connection.readyState !== 1) {
+    console.log('⌛ Waiting for database connection...');
+    await connectDB();
+  }
+
   const accounts = await Account.find({});
   
   // Ether小数値で合計（floatのまま扱う）
@@ -483,6 +505,9 @@ async function updatePercentages() {
  */
 const main = async (): Promise<void> => {
   try {
+    // Initialize database connection first
+    await initDB();
+    
     // Test connection
     const isListening = await web3.eth.net.isListening();
     if (!isListening) {

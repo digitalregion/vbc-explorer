@@ -261,18 +261,37 @@ export const connectDB = async (): Promise<void> => {
           console.log('📄 Using default MongoDB URI');
         }
 
-        const connectionOptions: mongoose.ConnectOptions = {
-          maxPoolSize: 10,
-          serverSelectionTimeoutMS: 15000,
-          socketTimeoutMS: 45000,
-          connectTimeoutMS: 15000,
+        // Load config.json for database options
+        let dbOptions = {
+          maxPoolSize: 20,
+          serverSelectionTimeoutMS: 30000,
+          socketTimeoutMS: 60000,
+          connectTimeoutMS: 30000,
           retryWrites: true,
           retryReads: true,
-          bufferCommands: true,
-          autoIndex: false,
+          bufferCommands: true, // Changed to true to avoid connection issues
+          autoIndex: true,
+          autoCreate: true,
           heartbeatFrequencyMS: 10000,
           maxIdleTimeMS: 30000,
         };
+
+        try {
+          const fs = await import('fs');
+          const path = await import('path');
+          const configPath = path.default.join(process.cwd(), 'config.json');
+          if (fs.default.existsSync(configPath)) {
+            const config = JSON.parse(fs.default.readFileSync(configPath, 'utf8'));
+            if (config.database && config.database.options) {
+              dbOptions = { ...dbOptions, ...config.database.options };
+              console.log('📄 Using database options from config.json');
+            }
+          }
+        } catch (configError) {
+          console.log('📄 Using default database options');
+        }
+
+        const connectionOptions: mongoose.ConnectOptions = dbOptions;
         
         console.log('🔗 Connecting to MongoDB...');
         await mongoose.connect(uri, connectionOptions);
@@ -283,7 +302,8 @@ export const connectDB = async (): Promise<void> => {
         return;
       }
       console.error('❌ MongoDB connection error:', error);
-      throw error;
+      // Don't throw error, just log it and continue
+      console.log('⚠️ Continuing without database connection...');
     } finally {
       // Clear the promise after connection attempt
       connectionPromise = null;

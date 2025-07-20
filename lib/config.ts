@@ -331,5 +331,56 @@ export async function getGasUnit(): Promise<string> {
     return fallbackConfig.currency.gasUnit || 'Gwei';
   }
 }
+
+// Get database URI from config
+export function getDatabaseURI(): string {
+  try {
+    const config = loadConfig();
+    return config.database.uri;
+  } catch (error) {
+    console.warn('Error getting database URI from config.json, trying config.example.json:', error);
+    try {
+      const exampleConfigPath = path.join(process.cwd(), 'config.example.json');
+      if (fs.existsSync(exampleConfigPath)) {
+        const exampleConfig = JSON.parse(fs.readFileSync(exampleConfigPath, 'utf8'));
+        return exampleConfig.database.uri;
+      }
+    } catch (fallbackError) {
+      console.warn('Error getting database URI from config.example.json:', fallbackError);
+    }
+    return 'mongodb://localhost/explorerDB';
+  }
+}
+
+// Get database options from config
+export function getDatabaseOptions() {
+  try {
+    const config = loadConfig();
+    return config.database.options;
+  } catch (error) {
+    console.warn('Error getting database options from config.json, trying config.example.json:', error);
+    try {
+      const exampleConfigPath = path.join(process.cwd(), 'config.example.json');
+      if (fs.existsSync(exampleConfigPath)) {
+        const exampleConfig = JSON.parse(fs.readFileSync(exampleConfigPath, 'utf8'));
+        return exampleConfig.database.options;
+      }
+    } catch (fallbackError) {
+      console.warn('Error getting database options from config.example.json:', fallbackError);
+    }
+    return {
+      maxPoolSize: 20,
+      serverSelectionTimeoutMS: 30000,
+      socketTimeoutMS: 60000,
+      connectTimeoutMS: 30000,
+      bufferCommands: false,
+      autoIndex: false,
+      autoCreate: false,
+      heartbeatFrequencyMS: 10000,
+      maxIdleTimeMS: 30000,
+    };
+  }
+}
+
 // Note: Synchronous functions are removed to ensure config.json is always used
 // Use async functions instead: getCurrencySymbol(), getCurrencyName(), getGasUnit(), etc. 

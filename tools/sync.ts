@@ -12,7 +12,6 @@ import { connectDB, Block, Transaction } from '../models/index';
 import { main as statsMain } from './stats';
 import { main as richlistMain } from './richlist';
 import { main as tokensMain } from './tokens';
-import { main as priceMain } from './price';
 
 // Function to read config
 const readConfig = () => {
@@ -661,8 +660,7 @@ const runAll = async () => {
     main(),         // sync
     statsMain(),    // stats
     richlistMain(), // richlist
-    tokensMain(),   // tokens
-    priceMain()     // price
+    tokensMain()    // tokens
   ]);
 };
 
@@ -682,14 +680,11 @@ if (require.main === module) {
       case 'tokens':
         await tokensMain();
         break;
-      case 'price':
-        await priceMain();
-        break;
       case 'all':
         await runAll();
         break;
       default:
-        console.log('📖 Usage: node tools/sync.js [sync|stats|richlist|tokens|price|all]');
+        console.log('📖 Usage: node tools/sync.js [sync|stats|richlist|tokens|all]');
         process.exit(1);
     }
   })();

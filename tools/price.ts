@@ -15,7 +15,7 @@ const initDB = async () => {
       console.log('🔗 Database already connected');
       return;
     }
-    
+
     await connectDB();
     console.log('🔗 Database connection initialized successfully');
   } catch (error) {
@@ -147,7 +147,7 @@ const fetchCryptoPrice = async (): Promise<PriceData | null> => {
         if (!response.ok) continue;
 
         const data = await response.json() as any;
-        
+
         // Parse different API formats
         let quoteBTC = 0;
         let quoteUSD = 0;
@@ -267,10 +267,10 @@ const startPriceMonitoring = async (): Promise<void> => {
   const currencySymbol = config.currency?.symbol || 'CRYPTO';
   console.log(`💰 Starting ${currencySymbol} price monitoring...`);
   console.log(`⏰ Update interval: ${config.priceUpdateInterval / 1000} seconds`);
-  
+
   // Initial update
   await updatePrice();
-  
+
   // Set up periodic updates
   setInterval(async () => {
     await updatePrice();
@@ -302,15 +302,19 @@ const showCurrentPrice = async (): Promise<void> => {
 
 // Main execution
 const main = async (): Promise<void> => {
-  const args = process.argv.slice(2);
-  
-  if (args.includes('--once') || args.includes('-o')) {
-    await runOnce();
-  } else if (args.includes('--show') || args.includes('-s')) {
-    await showCurrentPrice();
-  } else if (args.includes('--help') || args.includes('-h')) {
-    const currencySymbol = config.currency?.symbol || 'CRYPTO';
-    console.log(`
+  try {
+    // Initialize database connection first
+    await initDB();
+
+    const args = process.argv.slice(2);
+
+    if (args.includes('--once') || args.includes('-o')) {
+      await runOnce();
+    } else if (args.includes('--show') || args.includes('-s')) {
+      await showCurrentPrice();
+    } else if (args.includes('--help') || args.includes('-h')) {
+      const currencySymbol = config.currency?.symbol || 'CRYPTO';
+      console.log(`
 💰 ${currencySymbol} Price Tool
 
 Usage:
@@ -324,9 +328,14 @@ Options:
   --show, -s    Show current price from database
   --help, -h    Show this help message
     `);
-    process.exit(0);
-  } else {
-    await startPriceMonitoring();
+      process.exit(0);
+    } else {
+      await startPriceMonitoring();
+    }
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.log(`💥 Fatal error: ${errorMessage}`);
+    process.exit(1);
   }
 };
 
@@ -345,4 +354,4 @@ process.on('SIGINT', () => {
 process.on('SIGTERM', () => {
   console.log('\n🛑 Price monitoring stopped');
   process.exit(0);
-}); 
+});
