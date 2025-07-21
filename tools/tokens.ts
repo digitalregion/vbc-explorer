@@ -578,6 +578,9 @@ export { updateTokenWithRealData, updateOsatoTokenData };
 
 async function main() {
   try {
+    // Initialize database connection first
+    await initDB();
+    
     // Check command line arguments
     const args = process.argv.slice(2);
     

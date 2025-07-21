@@ -1,19 +1,7 @@
 import { NextResponse } from 'next/server';
 import mongoose from 'mongoose';
 import { weiToVBC } from '../../../lib/bigint-utils';
-
-// Database connection function
-async function connectDB() {
-  if (mongoose.connection.readyState < 1) {
-    const uri = process.env.MONGODB_URI || 'mongodb://localhost/explorerDB';
-    try {
-      await mongoose.connect(uri);
-    } catch (error) {
-      console.error('[Transactions API] Connection failed:', error);
-      throw error;
-    }
-  }
-}
+import { connectDB } from '../../../models/index';
 
 export async function GET(request: Request) {
   try {

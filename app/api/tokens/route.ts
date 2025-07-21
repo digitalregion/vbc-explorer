@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import mongoose from 'mongoose';
 import { getChainStats } from '../../../lib/stats'; // Import the stats function
-import { Contract } from '../../../models/index';
+import { Contract, connectDB } from '../../../models/index';
 
 // Define Token schema inline since it's not exported from models/index
 const tokenSchema = new mongoose.Schema({
@@ -31,19 +31,7 @@ interface IToken {
   verified?: boolean;
 }
 
-// Database connection function
-async function connectDB() {
-  if (mongoose.connection.readyState >= 1) {
-    return;
-  }
-  try {
-    const uri = process.env.MONGODB_URI || process.env.MONGO_URI || 'mongodb://localhost/explorerDB';
-    await mongoose.connect(uri);
-  } catch (error) {
-    console.error('DB connection error:', error);
-    throw error;
-  }
-}
+
 
 export async function GET() {
   await connectDB();

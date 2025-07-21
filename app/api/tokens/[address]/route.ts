@@ -2,11 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import mongoose from 'mongoose';
 import { getChainStats } from '../../../../lib/stats';
 import { loadConfig } from '../../../../lib/config';
+import { connectDB } from '../../../../models/index';
 import Web3 from 'web3';
 
 // Load configuration
 const config = loadConfig();
-const MONGODB_URI = config.database?.uri || 'mongodb://localhost:27017/vbc-explorer';
 const GVBC_RPC_URL = config.web3Provider?.url || 'http://localhost:8545';
 
 // Web3 instance for blockchain interaction
@@ -59,24 +59,7 @@ async function fetchNFTMetadata(tokenAddress: string, tokenId: number) {
   }
 }
 
-// Connect to MongoDB
-async function connectDB() {
-  if (mongoose.connection.readyState >= 1) {
-    return;
-  }
 
-  try {
-    await mongoose.connect(MONGODB_URI, {
-      bufferCommands: false,
-      maxPoolSize: 10,
-      serverSelectionTimeoutMS: 5000,
-      socketTimeoutMS: 45000,
-    });
-  } catch (error) {
-    console.error('MongoDB connection error:', error);
-    throw error;
-  }
-}
 
 // Format token amount with proper decimal handling
 const formatTokenAmount = (amount: string, decimals: number = 18, isNFT: boolean = false) => {

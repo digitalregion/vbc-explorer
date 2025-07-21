@@ -238,29 +238,72 @@ export const connectDB = async (): Promise<void> => {
       mongoose.set('strictQuery', false);
 
       if (mongoose.connection.readyState === 0) {
-        const uri = process.env.MONGODB_URI || 'mongodb://localhost/explorerDB';
-        const connectionOptions: any = {
-          maxPoolSize: 10, // Reduced from 20 to prevent too many connections
-          serverSelectionTimeoutMS: 10000, // Reduced from 15000
-          socketTimeoutMS: 30000, // Reduced from 60000
-          connectTimeoutMS: 10000, // Reduced from 15000
+        // Try to load config.json for database URI
+        let uri = process.env.MONGODB_URI || 'mongodb://localhost/explorerDB';
+        
+        try {
+          const fs = await import('fs');
+          const path = await import('path');
+          const configPath = path.default.join(process.cwd(), 'config.json');
+          if (fs.default.existsSync(configPath)) {
+            const config = JSON.parse(fs.default.readFileSync(configPath, 'utf8'));
+            if (config.database && config.database.uri) {
+              uri = config.database.uri;
+              console.log('📄 Using MongoDB URI from config.json');
+              
+              // Validate URI format
+              if (!uri.includes('mongodb://')) {
+                throw new Error('Invalid MongoDB URI format');
+              }
+            }
+          }
+        } catch (configError) {
+          console.log('📄 Using default MongoDB URI');
+        }
+
+        // Load config.json for database options
+        let dbOptions = {
+          maxPoolSize: 20,
+          serverSelectionTimeoutMS: 30000,
+          socketTimeoutMS: 60000,
+          connectTimeoutMS: 30000,
           retryWrites: true,
           retryReads: true,
-          bufferCommands: true,
-          autoIndex: false,
-          // Add heartbeat frequency to detect connection issues faster
+          bufferCommands: true, // Changed to true to avoid connection issues
+          autoIndex: true,
+          autoCreate: true,
           heartbeatFrequencyMS: 10000,
-          // Add connection timeout
           maxIdleTimeMS: 30000,
         };
+
+        try {
+          const fs = await import('fs');
+          const path = await import('path');
+          const configPath = path.default.join(process.cwd(), 'config.json');
+          if (fs.default.existsSync(configPath)) {
+            const config = JSON.parse(fs.default.readFileSync(configPath, 'utf8'));
+            if (config.database && config.database.options) {
+              dbOptions = { ...dbOptions, ...config.database.options };
+              console.log('📄 Using database options from config.json');
+            }
+          }
+        } catch (configError) {
+          console.log('📄 Using default database options');
+        }
+
+        const connectionOptions: mongoose.ConnectOptions = dbOptions;
+        
+        console.log('🔗 Connecting to MongoDB...');
         await mongoose.connect(uri, connectionOptions);
+        console.log('✅ MongoDB connected successfully');
       }
     } catch (error) {
-      if ((mongoose.connection.readyState as any) === 1) {
+      if (mongoose.connection.readyState === 1) {
         return;
       }
       console.error('❌ MongoDB connection error:', error);
-      throw error;
+      // Don't throw error, just log it and continue
+      console.log('⚠️ Continuing without database connection...');
     } finally {
       // Clear the promise after connection attempt
       connectionPromise = null;

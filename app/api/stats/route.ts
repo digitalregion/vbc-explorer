@@ -9,7 +9,9 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const enhanced = searchParams.get('enhanced') === 'true';
     
+    console.log('[Stats] Starting stats calculation...');
     const stats = await getChainStats();
+    console.log('[Stats] Stats calculation completed:', { latestBlock: stats.latestBlock, totalTransactions: stats.totalTransactions });
     
     // Return basic stats if enhanced is not requested
     if (!enhanced) {
@@ -60,6 +62,11 @@ export async function GET(request: Request) {
     return NextResponse.json(enhancedStats);
   } catch (error) {
     console.error('[Stats] API error:', error);
+    console.error('[Stats] Error details:', {
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined
+    });
+    
     const gasUnit = getGasUnitServer();
     return NextResponse.json({
       latestBlock: 0,
@@ -71,7 +78,7 @@ export async function GET(request: Request) {
       avgGasPrice: '0',
       avgTransactionFee: `0 ${gasUnit}`,
       activeMiners: 0,
-      error: 'API error'
+      error: error instanceof Error ? error.message : 'API error'
     }, { status: 500 });
   }
 }
