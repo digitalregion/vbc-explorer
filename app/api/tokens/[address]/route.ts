@@ -39,15 +39,22 @@ async function fetchNFTMetadata(tokenAddress: string, tokenId: number) {
     if (tokenURI && tokenURI !== '') {
       // If it's an HTTP URL, fetch the metadata
       if (tokenURI.startsWith('http://') || tokenURI.startsWith('https://')) {
+        try {
         const response = await fetch(tokenURI, {
           headers: {
             'User-Agent': 'VBC-Explorer/1.0'
-          }
+            },
+            // Add timeout to prevent hanging requests
+            signal: AbortSignal.timeout(5000) // 5 second timeout
         });
         
         if (response.ok) {
           const metadata = await response.json();
           return metadata;
+          }
+        } catch (fetchError) {
+          console.error('Error fetching metadata from URL:', fetchError);
+          // Don't throw error, just return null to use fallback
         }
       }
     }
@@ -159,6 +166,7 @@ export async function GET(
         );
       }
 
+      try {
       // Fetch metadata for the specific token
       let metadata = await fetchNFTMetadata(address, tokenIdNum);
 
@@ -187,11 +195,19 @@ export async function GET(
         };
       }
 
+        // If still no metadata, provide a generic fallback
       if (!metadata) {
-        return NextResponse.json(
-          { error: 'Failed to fetch token metadata' },
-          { status: 404 }
-        );
+          metadata = {
+            name: `Token #${tokenIdNum}`,
+            description: `NFT token #${tokenIdNum} from the collection.`,
+            image: null, // No image available
+            attributes: [
+              { trait_type: "Token ID", value: tokenIdNum.toString() },
+              { trait_type: "Status", value: "Metadata Unavailable" }
+            ],
+            tokenURI: null,
+            createdAt: new Date().toISOString()
+          };
       }
 
       return NextResponse.json({
@@ -199,6 +215,25 @@ export async function GET(
         address: address,
         metadata: metadata
       });
+      } catch (metadataError) {
+        console.error('Error fetching metadata:', metadataError);
+        // Return a fallback response instead of error
+        return NextResponse.json({
+          tokenId: tokenIdNum,
+          address: address,
+          metadata: {
+            name: `Token #${tokenIdNum}`,
+            description: `NFT token #${tokenIdNum} from the collection.`,
+            image: null,
+            attributes: [
+              { trait_type: "Token ID", value: tokenIdNum.toString() },
+              { trait_type: "Status", value: "Error Loading Metadata" }
+            ],
+            tokenURI: null,
+            createdAt: new Date().toISOString()
+          }
+        });
+      }
     }
 
     let token: ApiToken | null = null;

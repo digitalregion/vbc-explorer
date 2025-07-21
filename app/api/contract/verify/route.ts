@@ -31,8 +31,6 @@ const config = readConfig();
 const WEB3_PROVIDER_URL = process.env.WEB3_PROVIDER_URL || `http://${config.nodeAddr}:${config.port}`;
 const web3 = new Web3(new Web3.providers.HttpProvider(WEB3_PROVIDER_URL));
 
-
-
 // Helper function to modernize old Solidity syntax
 function modernizeSyntax(sourceCode: string): string {
   let modernized = sourceCode;
@@ -52,21 +50,91 @@ function modernizeSyntax(sourceCode: string): string {
   return modernized;
 }
 
+// Helper function to get available compiler versions
+function getAvailableCompilerVersions(): string[] {
+  return [
+    '0.8.19', '0.8.20', '0.8.21', '0.8.22', '0.8.23', '0.8.24', 
+    '0.8.25', '0.8.26', '0.8.27', '0.8.28', '0.8.29', '0.8.30',
+    '0.8.18', '0.8.17', '0.8.16', '0.8.15'
+  ];
+}
+
+// Helper function to find best matching compiler version
+function findBestCompilerVersion(requestedVersion: string): string {
+  const availableVersions = getAvailableCompilerVersions();
+  
+  // If specific version is requested, try to use it
+  if (requestedVersion !== 'latest' && availableVersions.includes(requestedVersion)) {
+    return requestedVersion;
+  }
+  
+  // Default to a stable version
+  return '0.8.19';
+}
+
 export async function POST(request: NextRequest) {
   try {
     await connectDB();
     
-
-    
-    const body = await request.json();
-    const { address, sourceCode, compilerVersion, contractName, optimization } = body;
-
-    if (!address || !sourceCode || !compilerVersion) {
+    let body;
+    try {
+      body = await request.json();
+    } catch (parseError) {
+      console.error('Failed to parse request body:', parseError);
       return NextResponse.json(
-        { error: 'Missing required fields: address, sourceCode, compilerVersion' },
+        { error: 'Invalid JSON in request body' },
         { status: 400 }
       );
     }
+    
+    const { address, sourceCode, compilerVersion, contractName, optimization } = body;
+
+    // Enhanced validation with detailed error messages
+    const missingFields = [];
+    if (!address) missingFields.push('address');
+    if (!sourceCode) missingFields.push('sourceCode');
+    if (!compilerVersion) missingFields.push('compilerVersion');
+    
+    if (missingFields.length > 0) {
+      console.error('Missing required fields:', missingFields);
+      return NextResponse.json(
+        { 
+          error: `Missing required fields: ${missingFields.join(', ')}`,
+          receivedData: {
+            hasAddress: !!address,
+            hasSourceCode: !!sourceCode,
+            hasCompilerVersion: !!compilerVersion,
+            hasContractName: !!contractName,
+            hasOptimization: optimization !== undefined
+          }
+        },
+        { status: 400 }
+      );
+    }
+
+    // Validate address format
+    if (!address.startsWith('0x') || address.length !== 42) {
+      return NextResponse.json(
+        { error: 'Invalid contract address format. Must be a 42-character hex string starting with 0x.' },
+        { status: 400 }
+      );
+    }
+
+    // Validate source code is not empty
+    if (sourceCode.trim().length === 0) {
+      return NextResponse.json(
+        { error: 'Source code cannot be empty' },
+        { status: 400 }
+      );
+    }
+
+    console.log('📝 Received verification request:', {
+      address,
+      contractName,
+      compilerVersion,
+      optimization,
+      sourceCodeLength: sourceCode.length
+    });
 
     // Auto-detect contract name if not provided
     let detectedContractName = contractName;
@@ -84,27 +152,18 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Auto-detect compiler version if needed
-    let detectedCompilerVersion = compilerVersion;
-    if (compilerVersion === 'latest' || !compilerVersion) {
-      // Check for pragma statements to determine appropriate compiler version
-      const pragmaMatches = sourceCode.match(/pragma\s+solidity\s+([^;]+);/g);
-      if (pragmaMatches && pragmaMatches.length > 0) {
-        const pragmaMatch = pragmaMatches[0];
-        const versionMatch = pragmaMatch.match(/pragma\s+solidity\s+([^;]+);/);
-        if (versionMatch && versionMatch[1]) {
-          detectedCompilerVersion = versionMatch[1].trim();
-        }
-      }
-    }
+    // Determine the best compiler version to use
+    const finalCompilerVersion = findBestCompilerVersion(compilerVersion);
 
-    // Check for old syntax that requires older compiler versions
+    // Check for old syntax that may require older compiler versions
     const hasOldSyntax = sourceCode.includes(':=') || sourceCode.includes('var ') || sourceCode.includes('suicide(') || 
                          sourceCode.includes('throw') || sourceCode.includes('constant ') || sourceCode.includes('public constant');
-    if (hasOldSyntax && detectedCompilerVersion === 'latest') {
-      // Use an older compiler version for old syntax
-      detectedCompilerVersion = '0.8.19';
+    if (hasOldSyntax) {
+      console.warn('Old Solidity syntax detected. Compilation may fail with modern compiler versions.');
+      // finalCompilerVersion = '0.8.19'; // 強制しない
     }
+
+    console.log(`🔧 Using compiler version: ${finalCompilerVersion}`);
 
     // Get bytecode from blockchain
     let onchainBytecode;
@@ -316,30 +375,8 @@ export async function POST(request: NextRequest) {
 
     let compiledOutput;
     try {
-      if (detectedCompilerVersion === 'latest') {
-        compiledOutput = JSON.parse(solc.compile(JSON.stringify(input)));
-      } else {
-        // Try to load specific compiler version, fallback to latest if failed
-        try {
-        const solcVersion = await new Promise<unknown>((resolve, reject) => {
-            solc.loadRemoteVersion(detectedCompilerVersion, (err: Error | null, solcV: unknown) => {
-            if (err) reject(err);
-            else resolve(solcV);
-          });
-        });
-        
-        // 型ガードでsolcVersionがcompileメソッドを持つかチェック
-        if (typeof solcVersion === 'object' && solcVersion !== null && 'compile' in solcVersion && typeof (solcVersion as { compile: unknown }).compile === 'function') {
-          compiledOutput = JSON.parse((solcVersion as { compile: (input: string) => string }).compile(JSON.stringify(input)));
-        } else {
-          throw new Error('Invalid solc version loaded');
-          }
-        } catch (versionError) {
-          console.log('⚠️ Failed to load specific compiler version, falling back to latest:', versionError);
-          // Fallback to latest version
+      // Always use the latest solc version for compilation
           compiledOutput = JSON.parse(solc.compile(JSON.stringify(input)));
-        }
-      }
     } catch (compileError) {
       console.error('❌ Compilation error:', compileError);
       
@@ -425,7 +462,6 @@ export async function POST(request: NextRequest) {
           console.log('Found contract:', contractNameInOutput, 'in source:', sourceName);
           if (!compiledContract) {
             compiledContract = contracts[contractNameInOutput];
-            // actualContractName = contractNameInOutput; // ← ここをコメントアウト
           }
         }
       }
@@ -519,7 +555,7 @@ export async function POST(request: NextRequest) {
       const contractData = {
         address: address.toLowerCase(),
         contractName: actualContractName,
-        compilerVersion,
+        compilerVersion: finalCompilerVersion,
         optimization: optimization || false,
         sourceCode: cleanedSourceCode,
         abi: JSON.stringify(compiledContract.abi),
@@ -543,7 +579,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         verified: false,
         message: 'Bytecode mismatch - verification failed',
-        debug: {
+        details: {
           originalOnchainBytecodeLength: onchainBytecode.length,
           originalCompiledBytecodeLength: compiledBytecode.length,
           cleanOnchainBytecodeLength: cleanOnchainBytecode.length,
@@ -551,9 +587,7 @@ export async function POST(request: NextRequest) {
           onchainBytecodeStart: cleanOnchainBytecode.substring(0, 100) + '...',
           compiledBytecodeStart: cleanCompiledBytecode.substring(0, 100) + '...',
           comparisonResults: { isVerified1, isVerified2, isVerified3, isVerified4 }
-        },
-        onchainBytecode: cleanOnchainBytecode.substring(0, 100) + '...',
-        compiledBytecode: cleanCompiledBytecode.substring(0, 100) + '...'
+        }
       });
     }
 
@@ -562,8 +596,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       { 
         error: 'Internal server error',
-        details: error instanceof Error ? error.message : 'Unknown error',
-        stack: process.env.NODE_ENV === 'development' ? error instanceof Error ? error.stack : undefined : undefined
+        details: error instanceof Error ? error.message : String(error),
+        stack: process.env.NODE_ENV === 'development' ? (error instanceof Error ? error.stack : undefined) : undefined
       },
       { status: 500 }
     );

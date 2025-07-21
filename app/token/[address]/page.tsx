@@ -530,7 +530,7 @@ export default function TokenDetailPage({ params }: { params: Promise<{ address:
                       
                       <div className='flex flex-col sm:flex-row gap-3 justify-center'>
                         <Link 
-                          href={`/contract/verify?address=${address}&contractName=${tokenData?.token?.name?.replace(/\s+/g, '') || 'TokenContract'}`}
+                          href={`/contract/verify?address=${address}&contractName=${tokenData?.contract?.name || tokenData?.token?.name?.replace(/\s+/g, '') || 'TokenContract'}`}
                           className='inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors'
                         >
                           <CodeBracketIcon className='w-5 h-5' />
