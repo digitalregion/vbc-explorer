@@ -976,7 +976,6 @@ Complete NFT functionality:
 - Image loading and fallback handling
 - Token holder tracking
 - Transfer history with proper TokenID display
-- OSATO collection support with reverse chronological TokenID ordering
 
 ### Contract Verification
 Smart contract verification system:

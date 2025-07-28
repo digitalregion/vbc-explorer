@@ -31,8 +31,6 @@ interface IToken {
   verified?: boolean;
 }
 
-
-
 export async function GET() {
   await connectDB();
   
@@ -80,7 +78,7 @@ export async function GET() {
     let actualSupply = token.supply || token.totalSupply || '0';
 
     try {
-      // For VRC-721 tokens like OSATO, get actual statistics
+      // For VRC-721 token, get actual statistics
       if (type === 'VRC-721') {
         // Get holder count from tokenholders collection
         const TokenHolder = mongoose.models.TokenHolder || mongoose.model('TokenHolder', new mongoose.Schema({
@@ -128,8 +126,17 @@ export async function GET() {
     };
   }));
 
+  // Filter only addresses existing in Contract collection map
+  const filteredTokens = (normalizedTokens as (IToken | Record<string, unknown>)[]).filter((t): t is IToken => {
+    if (!('address' in t) || typeof t.address !== 'string') return false;
+    const addr = t.address.toLowerCase();
+    if (!/^0x[0-9a-fA-F]{40}$/.test(addr)) return false; // invalid address
+    // Keep only if address exists in Contract collection (verificationMap)
+    return verificationMap.has(addr);
+  });
+
   // Combine the native token with the database tokens
-  const allTokens = [vbcToken, ...normalizedTokens];
+  const allTokens = [vbcToken, ...filteredTokens];
 
   return NextResponse.json({ tokens: allTokens });
 }

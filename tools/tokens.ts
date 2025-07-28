@@ -530,24 +530,6 @@ async function scanForTokens() {
   console.log(`✅ Token scan finished. Next scan in ${SCAN_INTERVAL_MS / 1000} seconds.`);
 }
 
-// Main function to update OSATO token with real data
-async function updateOsatoTokenData() {
-  const OSATO_TOKEN_ADDRESS = '0xd26488ea362005b023bc9f55157370c63c94d0c7';
-  
-  console.log('🪙 === Starting OSATO token real data update ===');
-  console.log(`📍 Token address: ${OSATO_TOKEN_ADDRESS}`);
-  
-  try {
-    await updateTokenWithRealData(OSATO_TOKEN_ADDRESS);
-    console.log('✅ === OSATO token real data update completed successfully ===');
-  } catch (error) {
-    console.error('❌ === Error updating OSATO token data ===', error);
-  }
-  
-  // Don't disconnect here as it affects subsequent operations
-  // await disconnect();
-}
-
 // 全VRC-721トークンを一括で更新する関数
 async function updateAllVrc721Tokens() {
   try {
@@ -574,7 +556,7 @@ async function updateAllVrc721Tokens() {
 }
 
 // Export for use by other scripts
-export { updateTokenWithRealData, updateOsatoTokenData };
+export { updateTokenWithRealData };
 
 async function main() {
   try {
@@ -586,11 +568,6 @@ async function main() {
     
     if (args.includes('--update-all-vrc721')) {
       await updateAllVrc721Tokens();
-      await disconnect();
-      return;
-    }
-    if (args.includes('--update-osato')) {
-      await updateOsatoTokenData();
       await disconnect();
       return;
     }

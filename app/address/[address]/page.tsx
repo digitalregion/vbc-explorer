@@ -82,16 +82,11 @@ export default function AddressPage({ params }: { params: Promise<{ address: str
   const [currencySymbol, setCurrencySymbol] = useState<string>('');
 
   useEffect(() => {
-    // 設定を取得
     const fetchConfig = async () => {
       try {
-        // Initialize currency conversion factors
         await initializeCurrency();
-        
-        // Load config values
         const symbol = await getCurrencySymbol();
         setCurrencySymbol(symbol);
-        
         const response = await fetch('/api/config');
         if (response.ok) {
           const configData = await response.json();
@@ -101,7 +96,6 @@ export default function AddressPage({ params }: { params: Promise<{ address: str
         console.error('Error fetching config:', err);
       }
     };
-
     fetchConfig();
   }, []);
 
@@ -110,13 +104,10 @@ export default function AddressPage({ params }: { params: Promise<{ address: str
       try {
         setLoading(true);
         setError(null);
-        
         const response = await fetch(`/api/address/${resolvedParams.address}`);
-        
         if (!response.ok) {
           throw new Error('Address not found');
         }
-        
         const data = await response.json();
         setAccount(data.account);
         setContract(data.contract);
@@ -128,13 +119,25 @@ export default function AddressPage({ params }: { params: Promise<{ address: str
         setLoading(false);
       }
     };
-
     if (resolvedParams.address) {
       fetchAddressData();
     }
   }, [resolvedParams.address]);
 
-
+  // 通貨記号が取得できるまでローディング表示
+  if (!currencySymbol) {
+    return (
+      <div className='min-h-screen bg-gray-900 text-white'>
+        <Header />
+        <div className='container mx-auto px-4 py-8'>
+          <div className='flex justify-center items-center h-64'>
+            <div className='animate-spin rounded-full h-32 w-32 border-b-2 border-blue-500'></div>
+          </div>
+          <div className='text-center text-gray-400 mt-4'>Loading currency symbol...</div>
+        </div>
+      </div>
+    );
+  }
 
   const copyToClipboard = async (text: string) => {
     try {
@@ -167,10 +170,8 @@ export default function AddressPage({ params }: { params: Promise<{ address: str
 
   const formatValue = (value: string) => {
     try {
-      // WeiからVBCに変換（1 VBC = 10^18 Wei）
       const weiValue = BigInt(value);
       const vbcValue = Number(weiValue) / 1e18;
-      
       if (vbcValue === 0) return `0 ${currencySymbol}`;
       if (vbcValue < 0.000001) return `<0.000001 ${currencySymbol}`;
       return `${vbcValue.toFixed(4)} ${currencySymbol}`;

@@ -111,14 +111,7 @@ export default function TokenDetailPage({ params }: { params: Promise<{ address:
   const [metadataLoading, setMetadataLoading] = useState<Record<number, boolean>>({});
   const [imageLoadState, setImageLoadState] = useState<ImageLoadState>({});
 
-  // Get transaction hash for a specific token ID
-  const getTransactionForTokenId = (tokenId: number) => {
-    if (!tokenData?.transfers) return null;
-    
-    // Find the transfer that created this token ID
-    const transfer = tokenData.transfers.find(tx => tx.tokenId === tokenId.toString());
-    return transfer?.hash || null;
-  };
+  // getTransactionForTokenId function removed (unused)
 
 
   useEffect(() => {
@@ -344,7 +337,10 @@ export default function TokenDetailPage({ params }: { params: Promise<{ address:
                     </tr>
                   </thead>
                   <tbody>
-                    {tokenData.transfers.map((transfer, index) => (
+                    {tokenData.transfers
+                      .filter(tx => tx.tokenId !== undefined)
+                      .sort((a, b) => Number(b.tokenId) - Number(a.tokenId))
+                      .map((transfer, index) => (
                       <tr key={index} className='border-b border-gray-700/50'>
                         <td className='py-2'>
                           <Link href={`/tx/${transfer.hash}`} className='text-blue-400 hover:text-blue-300 font-mono text-sm'>
@@ -379,7 +375,7 @@ export default function TokenDetailPage({ params }: { params: Promise<{ address:
                         {isNFT && (
                           <td className='py-2 text-gray-300'>
                             <Link href={`/tx/${transfer.hash}`} className='text-blue-400 hover:text-blue-300 font-mono text-sm'>
-                              {transfer.tokenId || '-'}
+                              {transfer.tokenId === undefined || transfer.tokenId === null ? '0' : transfer.tokenId}
                             </Link>
                           </td>
                         )}
@@ -570,11 +566,11 @@ export default function TokenDetailPage({ params }: { params: Promise<{ address:
           >
             <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4'>
               {tokenData?.holders && tokenData.holders.length > 0 ? (
-                // Collect all token IDs and sort by token ID in descending order (newest first)
+                // Collect all token IDs and sort by token ID 降順
                 tokenData.holders.flatMap((holder) =>
                   (holder.tokenIds || []).map(tokenId => ({ tokenId, holder }))
                 )
-                .sort((a, b) => b.tokenId - a.tokenId) // Sort by token ID descending
+                .sort((a, b) => Number(b.tokenId) - Number(a.tokenId)) // tokenId降順
                 .map(({ tokenId, holder }) => {
                   const metadata = tokenMetadata[tokenId];
                   const isLoading = metadataLoading[tokenId];
@@ -583,7 +579,7 @@ export default function TokenDetailPage({ params }: { params: Promise<{ address:
                     <div key={`${holder.address}-${tokenId}`} className='bg-gray-700/50 rounded-lg p-4 border border-gray-600 hover:border-gray-500 transition-colors'>
                       <div className='flex items-center justify-between mb-3'>
                         <span className='text-gray-400'>Token ID:</span>
-                        <span className='text-green-400 font-bold'>#{tokenId}</span>
+                        <Link href={`/token/${address}/${tokenId}`} className='text-blue-400 font-bold hover:underline'>#{tokenId}</Link>
                       </div>
                       <div className='flex items-center justify-between mb-3'>
                         <span className='text-gray-400'>Owner:</span>
@@ -605,7 +601,7 @@ export default function TokenDetailPage({ params }: { params: Promise<{ address:
                         ) : metadata ? (
                           <div>
                             {metadata.image ? (
-                              <div className='relative h-48 w-full overflow-hidden'>
+                              <Link href={`/token/${address}/${tokenId}`} className='block w-full h-48 rounded-t-lg overflow-hidden shadow hover:opacity-90 transition-opacity cursor-pointer' title='View NFT detail page'>
                                 {/* Loading state */}
                                 {imageLoadState[tokenId] === 'loading' && (
                                   <div className='absolute inset-0 flex items-center justify-center bg-gray-800 z-15'>
@@ -629,34 +625,27 @@ export default function TokenDetailPage({ params }: { params: Promise<{ address:
                                 )}
                                 
                                 {/* Main image with link */}
-                                <a 
-                                  href={metadata.image} 
-                                  target="_blank" 
-                                  rel="noopener noreferrer"
-                                  className='block w-full h-full hover:opacity-90 transition-opacity cursor-pointer'
-                                  title='Click to view original image'
-                                >
-                                  <Image
-                                    src={metadata.image}
-                                    alt={metadata.name || `Token #${tokenId}`}
-                                    layout='fill'
-                                    objectFit='cover'
-                                    className={`w-full h-full object-cover z-10 ${
-                                      imageLoadState[tokenId] === 'loaded' ? 'opacity-100' : 'opacity-0'
-                                    }`}
-                                    onLoadStart={() => {
-                                      setImageLoadState(prev => ({ ...prev, [tokenId]: 'loading' }));
-                                    }}
-                                    onLoad={() => {
-                                      setImageLoadState(prev => ({ ...prev, [tokenId]: 'loaded' }));
-                                    }}
-                                    onError={() => {
-                                      setImageLoadState(prev => ({ ...prev, [tokenId]: 'error' }));
-                                    }}
-                                    unoptimized
-                                  />
-                                </a>
-                              </div>
+                                <Image
+                                  src={metadata.image}
+                                  alt={metadata.name || `Token #${tokenId}`}
+                                  width={320}
+                                  height={192}
+                                  style={{ objectFit: 'cover', width: '100%', height: '192px' }}
+                                  className={`w-full h-48 object-cover z-10 ${
+                                    imageLoadState[tokenId] === 'loaded' ? 'opacity-100' : 'opacity-0'
+                                  }`}
+                                  onLoadStart={() => {
+                                    setImageLoadState(prev => ({ ...prev, [tokenId]: 'loading' }));
+                                  }}
+                                  onLoad={() => {
+                                    setImageLoadState(prev => ({ ...prev, [tokenId]: 'loaded' }));
+                                  }}
+                                  onError={() => {
+                                    setImageLoadState(prev => ({ ...prev, [tokenId]: 'error' }));
+                                  }}
+                                  unoptimized
+                                />
+                              </Link>
                             ) : (
                               <div className='h-48 flex items-center justify-center bg-gray-800'>
                                 <span className='text-gray-500 text-sm'>No image</span>
@@ -665,29 +654,30 @@ export default function TokenDetailPage({ params }: { params: Promise<{ address:
                             
                             {/* Metadata info */}
                             <div className='p-3'>
-                              <h5 className='font-semibold text-gray-200 mb-2'>
-                                {(() => {
-                                  const txHash = getTransactionForTokenId(tokenId);
-                                  const title = metadata.name || `Token #${tokenId}`;
-                                  
-                                  if (txHash) {
+                              <div className='flex items-center justify-between mb-2'>
+                                <h5 className='font-semibold text-gray-200 flex items-center gap-2'>
+                                  {(() => {
+                                    // const txHash = getTransactionForTokenId(tokenId);
+                                    const title = metadata.name || `Token #${tokenId}`;
+                                    const tokenDetailUrl = `/token/${address}/${tokenId}`;
                                     return (
-                                      <Link 
-                                        href={`/tx/${txHash}`}
+                                      <Link
+                                        href={tokenDetailUrl}
                                         className='text-blue-400 hover:text-blue-300 transition-colors'
-                                        title='View transaction details'
+                                        title='NFT詳細ページへ'
                                       >
                                         {title}
                                       </Link>
                                     );
-                                  }
-                                  return title;
-                                })()}
-                              </h5>
-                              {metadata.description && (
-                                <p className='text-sm text-gray-400 mb-2'>{metadata.description}</p>
-                              )}
-                              
+                                  })()}
+                                </h5>
+                                {/* createdAtを右側に表示 */}
+                                {metadata.createdAt && (
+                                  <span className='text-xs text-gray-500 ml-2 whitespace-nowrap'>Created: {new Date(metadata.createdAt).toLocaleString()}</span>
+                                )}
+                              </div>
+                              {/* descriptionを必ず表示 */}
+                              <p className='text-sm text-gray-400 mb-2'>{metadata.description || '-'}</p>
                               {/* Attributes */}
                               {metadata.attributes && metadata.attributes.length > 0 && (
                                 <div className='space-y-1'>
@@ -737,7 +727,7 @@ export default function TokenDetailPage({ params }: { params: Promise<{ address:
                 <table className='w-full'>
                   <thead>
                     <tr className='border-b border-gray-700'>
-                      <th className='text-left py-3 px-4 text-sm font-medium text-gray-300'>#</th>
+                      <th className='text-left py-3 px-4 text-sm font-medium text-gray-300'>Rank</th>
                       <th className='text-left py-3 px-4 text-sm font-medium text-gray-300'>Address</th>
                       <th className='text-left py-3 px-4 text-sm font-medium text-gray-300'>Balance</th>
                       <th className='text-left py-3 px-4 text-sm font-medium text-gray-300'>Percentage</th>
@@ -746,7 +736,7 @@ export default function TokenDetailPage({ params }: { params: Promise<{ address:
                   <tbody className='divide-y divide-gray-700'>
                     {tokenData.holders.map((holder) => (
                       <tr key={`${holder.address}-${holder.rank}`} className='hover:bg-gray-700/50 transition-colors'>
-                        <td className='py-3 px-4 text-gray-200 font-bold'>#{holder.rank}</td>
+                        <td className='py-3 px-4 text-yellow-400 font-bold'>#{holder.rank}</td>
                         <td className='py-3 px-4'>
                           <Link
                             href={`/address/${holder.address}`}

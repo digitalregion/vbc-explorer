@@ -4,7 +4,7 @@ import { use } from 'react';
 import { useState, useEffect } from 'react';
 import Header from '../../../components/Header';
 import Link from 'next/link';
-import { ArrowLeftIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
+import { ArrowLeftIcon, CubeIcon } from '@heroicons/react/24/outline';
 import { getCurrencySymbol } from '../../../../lib/config';
 import { initializeCurrency } from '../../../../lib/bigint-utils';
 
@@ -20,7 +20,7 @@ interface Transaction {
   type?: string;
 }
 
-export default function AddressTransactionsPage({ params }: { params: Promise<{ address: string }> }) {
+export default function AddressMiningPage({ params }: { params: Promise<{ address: string }> }) {
   const resolvedParams = use(params);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
@@ -41,26 +41,26 @@ export default function AddressTransactionsPage({ params }: { params: Promise<{ 
   }, []);
 
   useEffect(() => {
-    const fetchTransactions = async () => {
+    const fetchMiningRewards = async () => {
       try {
         setLoading(true);
-        const response = await fetch(`/api/address/${resolvedParams.address}/transactions?page=${currentPage}&limit=${itemsPerPage}`);
+        const response = await fetch(`/api/address/${resolvedParams.address}/mining?page=${currentPage}&limit=${itemsPerPage}`);
         if (!response.ok) {
-          throw new Error('Failed to fetch transactions');
+          throw new Error('Failed to fetch mining rewards');
         }
         const data = await response.json();
         setTransactions(data.transactions || []);
         setTotalPages(data.totalPages || 1);
         setTotalTransactions(data.totalTransactions || 0);
       } catch (error) {
-        console.error('Error fetching transactions:', error);
-        setError('Failed to load transactions');
+        console.error('Error fetching mining rewards:', error);
+        setError('Failed to load mining rewards');
       } finally {
         setLoading(false);
       }
     };
     if (resolvedParams.address) {
-      fetchTransactions();
+      fetchMiningRewards();
     }
   }, [resolvedParams.address, currentPage]);
 
@@ -153,27 +153,27 @@ export default function AddressTransactionsPage({ params }: { params: Promise<{ 
             >
               <ArrowLeftIcon className='w-6 h-6' />
             </Link>
-            <ArrowPathIcon className='w-8 h-8 text-blue-400' />
-            <h1 className='text-3xl font-bold text-gray-100'>Regular Transactions</h1>
+            <CubeIcon className='w-8 h-8 text-yellow-400' />
+            <h1 className='text-3xl font-bold text-gray-100'>Mining Rewards</h1>
           </div>
           <p className='text-gray-400'>
-            All regular transactions for address {resolvedParams.address}
+            All mining rewards for address {resolvedParams.address}
           </p>
         </div>
       </div>
 
       <main className='container mx-auto px-4 py-8'>
-        {/* Transaction List */}
+        {/* Mining Rewards List */}
         <div className='bg-gray-800 rounded-lg border border-gray-700 p-6'>
             <div className='flex items-center justify-between mb-6'>
-            <h2 className='text-xl font-semibold text-gray-100'>Transaction History</h2>
+            <h2 className='text-xl font-semibold text-gray-100'>Mining Reward History</h2>
                 <div className='text-sm text-gray-400'>
-              Showing {transactions.length} of {totalTransactions.toLocaleString()} transactions
+              Showing {transactions.length} of {totalTransactions.toLocaleString()} mining rewards
                 </div>
             </div>
             
             {transactions.length === 0 ? (
-            <p className='text-gray-400 text-center py-8'>No regular transactions found for this address.</p>
+            <p className='text-gray-400 text-center py-8'>No mining rewards found for this address.</p>
             ) : (
               <>
                 <div className='overflow-x-auto'>
@@ -184,7 +184,7 @@ export default function AddressTransactionsPage({ params }: { params: Promise<{ 
                           <th className='text-left py-3 px-4 text-sm font-medium text-gray-400'>Block</th>
                         <th className='text-left py-3 px-4 text-sm font-medium text-gray-400'>From</th>
                         <th className='text-left py-3 px-4 text-sm font-medium text-gray-400'>To</th>
-                          <th className='text-left py-3 px-4 text-sm font-medium text-gray-400'>Value</th>
+                          <th className='text-left py-3 px-4 text-sm font-medium text-gray-400'>Reward</th>
                           <th className='text-left py-3 px-4 text-sm font-medium text-gray-400'>Status</th>
                           <th className='text-left py-3 px-4 text-sm font-medium text-gray-400'>Age</th>
                       </tr>
@@ -192,64 +192,40 @@ export default function AddressTransactionsPage({ params }: { params: Promise<{ 
                     <tbody className='divide-y divide-gray-600'>
                                             {transactions.map((tx) => (
                           <tr key={tx.hash} className='hover:bg-gray-700/50 transition-colors'>
-                          <td className='py-3 px-4'>
-                            <Link
-                              href={`/tx/${tx.hash}`}
-                              className='text-blue-400 hover:text-blue-300 font-mono text-sm transition-colors'
-                              title={tx.hash}
-                            >
+                            <td className='py-3 px-4'>
+                              <Link
+                                href={`/tx/${tx.hash}`}
+                                className='text-blue-400 hover:text-blue-300 font-mono text-sm transition-colors'
+                                title={tx.hash}
+                              >
                                 {formatAddress(tx.hash)}
                               </Link>
                             </td>
-                            <td className='py-3 px-4'>
+                          <td className='py-3 px-4'>
                               <Link
                                 href={`/block/${tx.blockNumber}`}
                                 className='text-blue-400 hover:text-blue-300 font-medium transition-colors'
                               >
                                 {tx.blockNumber.toLocaleString()}
-                            </Link>
+                              </Link>
                           </td>
                           <td className='py-3 px-4'>
-                            <Link
-                              href={`/address/${tx.from}`}
-                                className='text-green-400 hover:text-green-300 font-mono text-sm transition-colors'
-                              title={tx.from}
-                            >
-                              {formatAddress(tx.from)}
-                            </Link>
+                              <span className='text-gray-400 font-mono text-sm'>System</span>
                           </td>
                           <td className='py-3 px-4'>
-                            {tx.to ? (
                               <Link
                                 href={`/address/${tx.to}`}
-                                  className='text-red-400 hover:text-red-300 font-mono text-sm transition-colors'
+                                className='text-red-400 hover:text-red-300 font-mono text-sm transition-colors'
                                 title={tx.to}
                               >
                                 {formatAddress(tx.to)}
                               </Link>
-                            ) : (
-                                <span className='text-gray-500 text-sm'>Contract Creation</span>
-                            )}
-                          </td>
-                            <td className='py-3 px-4'>
-                              <span className='text-green-400'>{formatValue(tx.value)}</span>
                             </td>
                             <td className='py-3 px-4'>
-                              {(() => {
-                                const statusStr = String(tx.status || '');
-                                const isSuccess = 
-                                  tx.status === 1 || 
-                                  statusStr === '1' || 
-                                  statusStr === 'true' ||
-                                  statusStr === 'success' ||
-                                  statusStr === 'Success' ||
-                                  tx.status === 0x1 ||
-                                  statusStr === '0x1';
-                                
-                                return isSuccess ? 
-                                  <span className='text-green-400'>Success</span> : 
-                                  <span className='text-red-400'>Failed</span>;
-                              })()}
+                              <span className='text-yellow-400'>{formatValue(tx.value)}</span>
+                          </td>
+                            <td className='py-3 px-4'>
+                              <span className='text-green-400'>Success</span>
                           </td>
                             <td className='py-3 px-4'>
                               <div className='text-sm'>
@@ -331,7 +307,7 @@ export default function AddressTransactionsPage({ params }: { params: Promise<{ 
 
               {/* ページ情報 */}
               <div className='text-center mt-4 text-gray-400 text-sm'>
-                Showing transactions {((currentPage - 1) * 50) + 1} to {Math.min(currentPage * 50, totalTransactions)} of {totalTransactions.toLocaleString()} total transactions
+                Showing mining rewards {((currentPage - 1) * 50) + 1} to {Math.min(currentPage * 50, totalTransactions)} of {totalTransactions.toLocaleString()} total mining rewards
                   </div>
               </>
             )}

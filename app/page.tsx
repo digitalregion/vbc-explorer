@@ -241,7 +241,7 @@ const TransactionList = ({ transactions, newTransactionHashes, now }: { transact
         >
           <div className='flex items-center gap-3'>
             <Link
-              href={`/transactions/${tx.hash}`}
+              href={`/tx/${tx.hash}`}
               className='font-mono font-bold text-sm text-blue-400 hover:text-blue-300 hover:underline transition-colors'
               title={tx.hash}
             >
