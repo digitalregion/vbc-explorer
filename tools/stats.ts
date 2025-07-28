@@ -179,8 +179,10 @@ const getStats = async function (
   }
 
   try {
-    const isListening = await web3.eth.net.isListening();
-    if (!isListening) {
+    // Test connection by getting latest block number instead of using isListening
+    try {
+      await web3.eth.getBlockNumber();
+    } catch (connectionError) {
       console.log(`❌ Error: Aborted due to web3 not connected when trying to get block ${blockNumber}`);
       process.exit(9);
       return;
@@ -305,9 +307,10 @@ const main = async (): Promise<void> => {
     // Initialize database connection first
     await initDB();
     
-    // Test connection
-    const isListening = await web3.eth.net.isListening();
-    if (!isListening) {
+    // Test connection by getting latest block number
+    try {
+      await web3.eth.getBlockNumber();
+    } catch (connectionError) {
       console.log('Error: Cannot connect to VirBiCoin node');
       process.exit(1);
     }
