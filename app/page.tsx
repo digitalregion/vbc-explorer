@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import Header from './components/Header';
 import Link from 'next/link';
 import {
   CubeIcon,
@@ -508,18 +507,6 @@ export default function Page() {
 
   return (
     <>
-      <Header />
-      {/* Page Header */}
-      <div className='bg-gray-800 border-b border-gray-700'>
-        <div className='container mx-auto px-4 py-8'>
-          <div className='flex items-center gap-3 mb-4'>
-            <HomeIcon className='w-8 h-8 text-blue-400' />
-            <h1 className='text-3xl font-bold text-gray-100'>VirBiCoin Block Explorer</h1>
-          </div>
-          <p className='text-gray-400'>Real-time blockchain explorer - search blocks, transactions, addresses, and tokens.</p>
-        </div>
-      </div>
-
       <main className='container mx-auto px-4 py-8'>
         {/* Unified Card: Blockchain Search + Add VirBiCoin */}
         <div className='mb-8 bg-gray-800 border border-gray-700 rounded-lg shadow flex flex-col sm:flex-row items-center gap-6 sm:gap-8 p-4 sm:p-6'>

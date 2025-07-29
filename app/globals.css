@@ -60,7 +60,6 @@ a:hover {
 /* Custom styles adapted from VirBiCoin Pool */
 @layer base {
   body {
-    @apply bg-gray-900 text-gray-200;
     padding-top: 0;
     margin-bottom: 0;
   }
