@@ -465,11 +465,84 @@ export default function Page() {
 
     fetchData();
 
-    // Set up polling for real-time updates
-    const interval = setInterval(fetchData, 5000); // Update every 5 seconds
+    // Set up polling for real-time updates - increased frequency to 3 seconds
+    const interval = setInterval(fetchData, 3000); // Update every 3 seconds
 
     return () => clearInterval(interval);
   }, [isInitialLoad, lastTopBlock, lastTopTransactionHash]); // Add dependencies to ensure proper updates
+
+  // WebSocket connection for real-time updates
+  useEffect(() => {
+    let ws: WebSocket | null = null;
+    
+    const connectWebSocket = () => {
+      try {
+        // Connect to WebSocket server
+        ws = new WebSocket('wss://stats.digitalregion.jp/api');
+        
+        ws.onopen = () => {
+          console.log('🔌 WebSocket connected');
+        };
+        
+        ws.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            
+            // Handle different message types
+            if (data.action === 'init') {
+              // Initial data received
+              if (data.data && data.data.stats) {
+                setStats(prevStats => ({
+                  ...prevStats,
+                  ...data.data.stats
+                }));
+              }
+            } else if (data.action === 'block') {
+              // New block received
+              console.log('📦 New block received:', data.data);
+              // Update latest block
+              setStats(prevStats => ({
+                ...prevStats,
+                latestBlock: data.data.number || prevStats.latestBlock
+              }));
+            } else if (data.action === 'stats') {
+              // Stats update received
+              console.log('📊 Stats update received:', data.data);
+              setStats(prevStats => ({
+                ...prevStats,
+                ...data.data
+              }));
+            }
+          } catch (error) {
+            console.error('Error parsing WebSocket message:', error);
+          }
+        };
+        
+        ws.onerror = (error) => {
+          console.error('WebSocket error:', error);
+        };
+        
+        ws.onclose = () => {
+          console.log('🔌 WebSocket disconnected, attempting to reconnect...');
+          // Attempt to reconnect after 5 seconds
+          setTimeout(connectWebSocket, 5000);
+        };
+        
+      } catch (error) {
+        console.error('Error connecting to WebSocket:', error);
+        // Fallback to polling if WebSocket fails
+        console.log('🔄 Falling back to polling mode');
+      }
+    };
+    
+    connectWebSocket();
+    
+    return () => {
+      if (ws) {
+        ws.close();
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const button = addVbcButtonRef.current;
