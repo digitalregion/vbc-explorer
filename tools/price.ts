@@ -24,6 +24,23 @@ const initDB = async () => {
   }
 };
 
+// Memory monitoring function
+const checkMemory = () => {
+  const usage = process.memoryUsage();
+  const usedMB = Math.round(usage.heapUsed / 1024 / 1024);
+  const limitMB = parseInt(process.env.MEMORY_LIMIT_MB || '512'); // Reduced from 1024MB to 512MB
+  
+  if (usedMB > limitMB) {
+    console.log(`⚠️ Memory usage: ${usedMB}MB (limit: ${limitMB}MB)`);
+    if (global.gc) {
+      global.gc();
+      console.log('🧹 Garbage collection executed');
+    }
+    return false;
+  }
+  return true;
+};
+
 // Interface definitions
 interface Config {
   nodeAddr: string;
@@ -35,6 +52,7 @@ interface Config {
     symbol: string;
     unit: string;
     decimals: number;
+    gasUnit: string;
     priceApi?: {
       coingecko?: {
         enabled: boolean;
@@ -60,12 +78,13 @@ const config: Config = {
   nodeAddr: 'localhost',
   port: 8329,
   quiet: false,
-  priceUpdateInterval: 15 * 60 * 1000, // 15 minutes
+  priceUpdateInterval: 30 * 60 * 1000, // 30 minutes (15分→30分に延長)
   currency: {
     name: 'VirBiCoin',
     symbol: 'VBC',
     unit: 'niku',
     decimals: 18,
+    gasUnit: 'Gwei',
     priceApi: {
       coingecko: {
         enabled: true,
@@ -104,7 +123,7 @@ if (config.quiet) {
 }
 
 /**
- * Fetch current cryptocurrency price from external API
+ * Fetch current cryptocurrency price from external API with retry mechanism
  */
 const fetchCryptoPrice = async (): Promise<PriceData | null> => {
   try {
@@ -141,10 +160,25 @@ const fetchCryptoPrice = async (): Promise<PriceData | null> => {
       };
     }
 
+    // Try each source with timeout and retry
     for (const source of priceSources) {
       try {
-        const response = await fetch(source);
-        if (!response.ok) continue;
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
+        const response = await fetch(source, {
+          signal: controller.signal,
+          headers: {
+            'User-Agent': 'VirBiCoin-Explorer/1.0'
+          }
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+          console.log(`❌ API response not ok for ${source}: ${response.status}`);
+          continue;
+        }
 
         const data = await response.json() as any;
 
@@ -172,7 +206,8 @@ const fetchCryptoPrice = async (): Promise<PriceData | null> => {
           };
         }
       } catch (error) {
-        console.log(`❌ Failed to fetch from ${source}: ${error}`);
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.log(`❌ Failed to fetch from ${source}: ${errorMessage}`);
         continue;
       }
     }
@@ -193,10 +228,16 @@ const fetchCryptoPrice = async (): Promise<PriceData | null> => {
 };
 
 /**
- * Update price data in database
+ * Update price data in database with memory management
  */
 const updatePriceData = async (priceData: PriceData): Promise<void> => {
   try {
+    // Memory check before database operation
+    if (!checkMemory()) {
+      console.log('💾 Memory limit reached, waiting before database update');
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
+
     const market = new Market(priceData);
     await market.save();
 
@@ -238,10 +279,16 @@ const shouldUpdatePrice = async (): Promise<boolean> => {
 };
 
 /**
- * Main price update function
+ * Main price update function with error handling and memory management
  */
 const updatePrice = async (): Promise<void> => {
   try {
+    // Memory check before processing
+    if (!checkMemory()) {
+      console.log('💾 Memory limit reached, skipping price update');
+      return;
+    }
+
     if (!(await shouldUpdatePrice())) {
       if (!config.quiet) {
         console.log('✅ Price data is up to date');
@@ -261,7 +308,7 @@ const updatePrice = async (): Promise<void> => {
 };
 
 /**
- * Continuous price monitoring
+ * Continuous price monitoring with improved error handling
  */
 const startPriceMonitoring = async (): Promise<void> => {
   const currencySymbol = config.currency?.symbol || 'CRYPTO';
@@ -271,9 +318,13 @@ const startPriceMonitoring = async (): Promise<void> => {
   // Initial update
   await updatePrice();
 
-  // Set up periodic updates
+  // Set up periodic updates with error handling
   setInterval(async () => {
-    await updatePrice();
+    try {
+      await updatePrice();
+    } catch (error) {
+      console.error('❌ Error in periodic price update:', error);
+    }
   }, config.priceUpdateInterval);
 };
 

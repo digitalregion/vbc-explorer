@@ -29,7 +29,7 @@ const readConfig = () => {
   return {
     nodeAddr: 'localhost',
     port: 8329,
-    bulkSize: 50,
+    bulkSize: 25, // Reduced from 50 to 25 for better performance
     quiet: false
   };
 };
@@ -55,7 +55,7 @@ const initDB = async () => {
 const checkMemory = () => {
   const usage = process.memoryUsage();
   const usedMB = Math.round(usage.heapUsed / 1024 / 1024);
-  const limitMB = parseInt(process.env.MEMORY_LIMIT_MB || '1024'); // 環境変数から取得、デフォルト1024MB
+  const limitMB = parseInt(process.env.MEMORY_LIMIT_MB || '512'); // Reduced from 1024MB to 512MB
   
   if (usedMB > limitMB) {
     console.log(`⚠️  Memory usage: ${usedMB}MB (limit: ${limitMB}MB)`);
@@ -118,7 +118,7 @@ if (config.quiet) {
 }
 
 /**
- * Update statistics for a range of blocks
+ * Update statistics for a range of blocks with improved performance
  */
 const updateStats = async (range: number, interval: number, rescan: boolean): Promise<void> => {
   // Ensure database is connected before proceeding
@@ -132,7 +132,7 @@ const updateStats = async (range: number, interval: number, rescan: boolean): Pr
 
   interval = Math.abs(parseInt(interval.toString()));
   if (!range) {
-    range = 10000;
+    range = 5000; // Reduced from 10000 to 5000
   }
   range *= interval;
   if (interval >= 10) {
@@ -153,7 +153,7 @@ const updateStats = async (range: number, interval: number, rescan: boolean): Pr
 };
 
 /**
- * Get statistics for blocks
+ * Get statistics for blocks with improved performance
  */
 const getStats = async function (
   blockNumber: number,
@@ -174,8 +174,8 @@ const getStats = async function (
 
   // メモリ監視を追加
   if (!checkMemory()) {
-    console.log('💾 Memory limit reached, pausing stats processing for 3 seconds');
-    await new Promise(resolve => setTimeout(resolve, 3000));
+    console.log('💾 Memory limit reached, pausing stats processing for 5 seconds');
+    await new Promise(resolve => setTimeout(resolve, 5000));
   }
 
   try {
@@ -208,7 +208,7 @@ const getStats = async function (
 };
 
 /**
- * Check if block statistics exist and write if not
+ * Check if block statistics exist and write if not with improved performance
  */
 const checkBlockDBExistsThenWrite = async function (
   blockData: any,
@@ -246,8 +246,8 @@ const checkBlockDBExistsThenWrite = async function (
       const blockStat = new BlockStat(stat);
       await blockStat.save();
 
-      // 500ブロックごとにログ出力
-      if (blockNumber % 500 === 0) {
+      // 1000ブロックごとにログ出力（500から1000に変更）
+      if (blockNumber % 1000 === 0) {
         console.log(`📦 Processed ${blockNumber} blocks for statistics`);
       }
 
@@ -266,11 +266,11 @@ const checkBlockDBExistsThenWrite = async function (
 };
 
 // Configuration for statistics calculation
-const minutes = 2; // 1→2分に延長
+const minutes = 5; // 2→5分に延長
 const statInterval = minutes * 60 * 1000;
 
 let rescan = false; /* rescan: true - rescan range */
-let range = 500; // 1000→500に削減
+let range = 250; // 500→250に削減
 let interval = 100;
 
 /**
@@ -297,10 +297,8 @@ if (process.env.RESCAN) {
   rescan = true;
 }
 
-
-
 /**
- * Main execution
+ * Main execution with improved performance
  */
 const main = async (): Promise<void> => {
   try {

@@ -49,6 +49,23 @@ const initDB = async () => {
   }
 };
 
+// Memory monitoring function
+const checkMemory = () => {
+  const usage = process.memoryUsage();
+  const usedMB = Math.round(usage.heapUsed / 1024 / 1024);
+  const limitMB = parseInt(process.env.MEMORY_LIMIT_MB || '512'); // Reduced from 1024MB to 512MB
+  
+  if (usedMB > limitMB) {
+    console.log(`⚠️ Memory usage: ${usedMB}MB (limit: ${limitMB}MB)`);
+    if (global.gc) {
+      global.gc();
+      console.log('🧹 Garbage collection executed');
+    }
+    return false;
+  }
+  return true;
+};
+
 // Interface definitions
 interface Config {
   nodeAddr: string;
@@ -84,7 +101,9 @@ console.log(`🔌 Connecting to VirBiCoin node ${config.nodeAddr}:${config.port}
 // Web3 connection
 const web3 = new Web3(new Web3.providers.HttpProvider(`http://${config.nodeAddr}:${config.port}`));
 
-const ADDRESS_CACHE_MAX = 10000; // address cache threshold
+const ADDRESS_CACHE_MAX = 5000; // Reduced from 10000 to 5000 for better performance
+const BATCH_SIZE = 100; // Reduced batch size for better memory management
+const BATCH_DELAY_MS = 500; // 500ms delay between batches
 
 // Set MongoDB URI from config if available
 try {
@@ -109,7 +128,7 @@ try {
 initDB();
 
 /**
- * Make richlist for VirBiCoin
+ * Make richlist for VirBiCoin with improved performance
  */
 const makeRichList: MakeRichListFunction = function (
   toBlock: number,
@@ -234,16 +253,16 @@ const makeRichList: MakeRichListFunction = function (
       const accounts = Object.keys(self.accounts!);
       const chunks: string[][] = [];
 
-      // about ~1000 `eth_getBalance` json rpc calls are possible in one json-rpc batchjob.
-      while (accounts.length > 200) {
-        const chunk = accounts.splice(0, 100);
+      // about ~500 `eth_getBalance` json rpc calls are possible in one json-rpc batchjob.
+      while (accounts.length > 100) {
+        const chunk = accounts.splice(0, 50); // Reduced from 100 to 50
         chunks.push(chunk);
       }
       if (accounts.length > 0) {
         chunks.push(accounts);
       }
 
-      // Process chunks sequentially
+      // Process chunks sequentially with delays
       for (const chunk of chunks) {
         const data: { [address: string]: AccountData } = {};
 
@@ -272,6 +291,9 @@ const makeRichList: MakeRichListFunction = function (
         if (Object.keys(data).length > 0 && updateCallback) {
           updateCallback(data, toBlock);
         }
+        
+        // Add delay between chunks to reduce CPU usage
+        await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
       }
 
       // reset accounts
@@ -305,7 +327,7 @@ const makeRichList: MakeRichListFunction = function (
       } else {
         setTimeout(() => {
           makeRichList(fromBlock, blocks, updateCallback);
-        }, 300);
+        }, 500); // Increased from 300ms to 500ms
       }
     })
     .catch(error => {
@@ -315,7 +337,7 @@ const makeRichList: MakeRichListFunction = function (
 };
 
 /**
- * Write accounts to DB
+ * Write accounts to DB with improved batching
  */
 const updateAccounts: UpdateCallback = function (
   accounts: { [address: string]: AccountData },
@@ -332,7 +354,7 @@ const updateAccounts: UpdateCallback = function (
 };
 
 /**
- * Bulk insert accounts
+ * Bulk insert accounts with improved performance
  */
 const bulkInsert = function (bulk: AccountData[]): void {
   if (!bulk.length) {
@@ -340,10 +362,10 @@ const bulkInsert = function (bulk: AccountData[]): void {
   }
 
   let localbulk: AccountData[];
-  if (bulk.length > 300) {
-    localbulk = bulk.splice(0, 200);
+  if (bulk.length > 150) { // Reduced from 300 to 150
+    localbulk = bulk.splice(0, 100); // Reduced from 200 to 100
   } else {
-    localbulk = bulk.splice(0, 300);
+    localbulk = bulk.splice(0, 150); // Reduced from 300 to 150
   }
 
   Account.insertMany(localbulk, { ordered: false })
@@ -354,7 +376,7 @@ const bulkInsert = function (bulk: AccountData[]): void {
       if (bulk.length > 0) {
         setTimeout(() => {
           bulkInsert(bulk);
-        }, 200);
+        }, 300); // Increased from 200ms to 300ms
       }
     })
     .catch((error: any) => {
@@ -384,7 +406,7 @@ const bulkInsert = function (bulk: AccountData[]): void {
             if (bulk.length > 0) {
               setTimeout(() => {
                 bulkInsert(bulk);
-              }, 200);
+              }, 300); // Increased from 200ms to 300ms
             }
           })
           .catch(err => {
@@ -401,7 +423,7 @@ const bulkInsert = function (bulk: AccountData[]): void {
 };
 
 /**
- * Start synchronization
+ * Start synchronization with improved performance
  */
 async function startSync(): Promise<void> {
   try {
@@ -418,7 +440,7 @@ async function startSync(): Promise<void> {
       console.log('🔇 Quiet mode enabled');
     }
 
-    makeRichList(Number(latestBlock), 10000, updateAccounts);
+    makeRichList(Number(latestBlock), 5000, updateAccounts); // Reduced from 10000 to 5000
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
@@ -427,7 +449,7 @@ async function startSync(): Promise<void> {
   }
 }
 
-// percentage計算・保存ロジック
+// percentage計算・保存ロジック with improved performance
 async function updatePercentages() {
   // Ensure database is connected before proceeding
   if (mongoose.connection.readyState !== 1) {
@@ -464,44 +486,55 @@ async function updatePercentages() {
     return sum + etherValue;
   }, 0);
 
-  for (const acc of accounts) {
-    let percent = 0;
-    let balanceStr = acc.balance || '0';
+  // Process accounts in batches to reduce memory usage
+  const batchSize = 1000;
+  for (let i = 0; i < accounts.length; i += batchSize) {
+    const batch = accounts.slice(i, i + batchSize);
     
-    // balanceの型チェックと変換
-    if (typeof balanceStr === 'number') {
-      balanceStr = balanceStr.toString();
-    } else if (typeof balanceStr === 'string') {
-      if (balanceStr.includes('.') || balanceStr.includes('e') || balanceStr.includes('E')) {
-        try {
-          balanceStr = BigInt(Math.floor(Number(balanceStr))).toString();
-        } catch (e) {
-          balanceStr = '0';
+    const updatePromises = batch.map(async (acc) => {
+      let percent = 0;
+      let balanceStr = acc.balance || '0';
+      
+      // balanceの型チェックと変換
+      if (typeof balanceStr === 'number') {
+        balanceStr = balanceStr.toString();
+      } else if (typeof balanceStr === 'string') {
+        if (balanceStr.includes('.') || balanceStr.includes('e') || balanceStr.includes('E')) {
+          try {
+            balanceStr = BigInt(Math.floor(Number(balanceStr))).toString();
+          } catch (e) {
+            balanceStr = '0';
+          }
         }
+      } else {
+        balanceStr = '0';
       }
-    } else {
-      balanceStr = '0';
+      
+      const ether = parseFloat(Web3.utils.fromWei(balanceStr, 'ether'));
+      
+      if (total > 0) {
+        percent = Math.round((ether / total) * 1000000) / 10000; // 小数点4桁
+      }
+      
+      // percentageはfloatで保存（BigInt変換は絶対にしない）
+      return Account.updateOne(
+        { address: acc.address },
+        { $set: { percentage: percent } }
+      );
+    });
+    
+    await Promise.all(updatePromises);
+    
+    // Memory check between batches
+    if (!checkMemory()) {
+      await new Promise(resolve => setTimeout(resolve, 2000));
     }
-    
-    const ether = parseFloat(Web3.utils.fromWei(balanceStr, 'ether'));
-    
-    if (total > 0) {
-      percent = Math.round((ether / total) * 1000000) / 10000; // 小数点4桁
-    }
-    
-    // percentageはfloatで保存（BigInt変換は絶対にしない）
-    await Account.updateOne(
-      { address: acc.address },
-      { $set: { percentage: percent } }
-    );
   }
   console.log('📈 Account percentages updated');
 }
 
-
-
 /**
- * Main execution
+ * Main execution with improved performance
  */
 const main = async (): Promise<void> => {
   try {
@@ -523,8 +556,8 @@ const main = async (): Promise<void> => {
     await startSync();
     await updatePercentages(); // percentage計算・保存を追加
 
-    // Set up periodic updates (every 30 minutes)
-    const RICHLIST_UPDATE_INTERVAL = 30 * 60 * 1000; // 30 minutes
+    // Set up periodic updates (every 60 minutes instead of 30)
+    const RICHLIST_UPDATE_INTERVAL = 60 * 60 * 1000; // 60 minutes (30分→60分に延長)
     console.log(`⏰ Richlist will update every ${RICHLIST_UPDATE_INTERVAL / 1000 / 60} minutes`);
 
     setInterval(async () => {

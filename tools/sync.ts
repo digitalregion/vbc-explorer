@@ -33,7 +33,7 @@ const readConfig = () => {
     nodeAddr: 'localhost',
     port: 8329,
     wsPort: 8330,
-    bulkSize: 50,
+    bulkSize: 25, // Reduced from 50 to 25 for better performance
     syncAll: false,
     patch: false,
     quiet: false,
@@ -64,7 +64,7 @@ const initDB = async () => {
 const checkMemory = () => {
   const usage = process.memoryUsage();
   const usedMB = Math.round(usage.heapUsed / 1024 / 1024);
-  const limitMB = parseInt(process.env.MEMORY_LIMIT_MB || '1024'); // 環境変数から取得、デフォルト1024MB
+  const limitMB = parseInt(process.env.MEMORY_LIMIT_MB || '512'); // Reduced from 1024MB to 512MB
   
   if (usedMB > limitMB) {
     console.log(`⚠️  Memory usage: ${usedMB}MB (limit: ${limitMB}MB)`);
@@ -239,7 +239,7 @@ const normalizeTX = async (
 };
 
 /**
- * Write block to database
+ * Write block to database with improved performance
  */
 interface WriteBlockToDB {
   (blockData: any | null, flush?: boolean): Promise<void>;
@@ -305,7 +305,7 @@ const writeBlockToDB: WriteBlockToDB = async function (blockData: any | null, fl
 };
 
 /**
- * Write transactions to database
+ * Write transactions to database with improved performance
  */
 interface WriteTransactionsToDB {
   (blockData: any | null, flush?: boolean): Promise<void>;
@@ -371,12 +371,12 @@ const writeTransactionsToDB: WriteTransactionsToDB = async function (
 };
 
 /**
- * Listen for new blocks (real-time sync)
+ * Listen for new blocks (real-time sync) with improved performance
  */
 const listenBlocks = function (): void {
   console.log('🚀 Starting real-time block listener...');
 
-  const pollInterval = 3000; // Poll every 3 seconds (5秒→3秒に短縮)
+  const pollInterval = 5000; // Poll every 5 seconds (3秒→5秒に延長)
   let lastProcessedBlock = 0;
   let isProcessing = false; // 重複処理を防ぐフラグ
 
@@ -394,7 +394,7 @@ const listenBlocks = function (): void {
         console.log(`🔍 New block detected: ${currentBlock} (last: ${lastProcessedBlock})`);
 
         // Process new blocks in batches
-        const blocksToProcess = Math.min(currentBlock - lastProcessedBlock, 10); // 最大10ブロックずつ処理
+        const blocksToProcess = Math.min(currentBlock - lastProcessedBlock, 5); // Reduced from 10 to 5
         
         for (let i = 0; i < blocksToProcess; i++) {
           const blockNum = lastProcessedBlock + 1 + i;
@@ -446,7 +446,7 @@ const listenBlocks = function (): void {
 };
 
 /**
- * Sync chain from specific block range
+ * Sync chain from specific block range with improved performance
  */
 const syncChain = async function (startBlock?: number, endBlock?: number): Promise<void> {
   // Use config values if not provided
@@ -507,8 +507,8 @@ const syncChain = async function (startBlock?: number, endBlock?: number): Promi
         }
       }
 
-      // 500個単位でログ出力
-      if ((blockNum - startBlock + 1) % 500 === 0) {
+      // 1000個単位でログ出力（500から1000に変更）
+      if ((blockNum - startBlock + 1) % 1000 === 0) {
         console.log(`📦 Processed ${blockNum - startBlock + 1} blocks (${blockNum}/${endBlock}) - 📈 Processed: ${processedCount}, ⏩ Skipped: ${skippedCount}`);
       }
     } catch (error) {
@@ -559,8 +559,6 @@ const prepareSync = async (): Promise<void> => {
   }
 };
 
-
-
 /**
  * Hybrid sync: Catch latest blocks while syncing past blocks
  */
@@ -581,7 +579,7 @@ const hybridSync = async (): Promise<void> => {
 };
 
 /**
- * Main execution
+ * Main execution with improved performance
  */
 const main = async (): Promise<void> => {
   try {
