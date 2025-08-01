@@ -1,7 +1,7 @@
 {
   "apps": [
     {
-      "name": "vbc-explorer-web",
+      "name": "explorer",
       "script": "npm",
       "args": "start",
       "cwd": ".",
@@ -24,16 +24,16 @@
       "log_date_format": "YYYY-MM-DD HH:mm:ss"
     },
     {
-      "name": "vbc-sync",
+      "name": "sync",
       "script": "npx",
       "args": "ts-node --project tsconfig.tools.json tools/sync.ts sync",
       "cwd": ".",
       "env": {
         "NODE_ENV": "production",
-        "NODE_OPTIONS": "--max-old-space-size=512",
-        "MEMORY_LIMIT_MB": "512"
+        "NODE_OPTIONS": "--max-old-space-size=1200",
+        "MEMORY_LIMIT_MB": "1024"
       },
-      "max_memory_restart": "1024M",
+      "max_memory_restart": "1200M",
       "instances": 1,
       "exec_mode": "fork",
       "autorestart": true,
@@ -47,16 +47,16 @@
       "log_date_format": "YYYY-MM-DD HH:mm:ss"
     },
     {
-      "name": "vbc-stats",
+      "name": "stats",
       "script": "npx",
       "args": "ts-node --project tsconfig.tools.json tools/sync.ts stats",
       "cwd": ".",
       "env": {
         "NODE_ENV": "production",
-        "NODE_OPTIONS": "--max-old-space-size=512",
+        "NODE_OPTIONS": "--max-old-space-size=768",
         "MEMORY_LIMIT_MB": "512"
       },
-      "max_memory_restart": "1024M",
+      "max_memory_restart": "768M",
       "instances": 1,
       "exec_mode": "fork",
       "autorestart": true,
@@ -70,16 +70,16 @@
       "log_date_format": "YYYY-MM-DD HH:mm:ss"
     },
     {
-      "name": "vbc-richlist",
+      "name": "richlist",
       "script": "npx",
       "args": "ts-node --project tsconfig.tools.json tools/sync.ts richlist",
       "cwd": ".",
       "env": {
         "NODE_ENV": "production",
-        "NODE_OPTIONS": "--max-old-space-size=512",
+        "NODE_OPTIONS": "--max-old-space-size=768",
         "MEMORY_LIMIT_MB": "512"
       },  
-      "max_memory_restart": "1024M",
+      "max_memory_restart": "768M",
       "instances": 1,
       "exec_mode": "fork",
       "autorestart": true,
@@ -93,16 +93,16 @@
       "log_date_format": "YYYY-MM-DD HH:mm:ss"
     },
     {
-      "name": "vbc-tokens",
+      "name": "tokens",
       "script": "npx",
       "args": "ts-node --project tsconfig.tools.json tools/sync.ts tokens",
       "cwd": ".",
       "env": {
         "NODE_ENV": "production",
-        "NODE_OPTIONS": "--max-old-space-size=512",
+        "NODE_OPTIONS": "--max-old-space-size=768",
         "MEMORY_LIMIT_MB": "512"
       },
-      "max_memory_restart": "1024M",
+      "max_memory_restart": "768M",
       "instances": 1,
       "exec_mode": "fork",
       "autorestart": true,

@@ -1,62 +1,42 @@
 #!/usr/bin/env node
 /*
-Tool for calculating VirBiCoin richlist
+Tool for calculating VirBiCoin richlist - Optimized and simplified
 */
 
 import mongoose from 'mongoose';
 import Web3 from 'web3';
-import fs from 'fs';
-import path from 'path';
-import { connectDB, Block, Transaction, Account, IBlock, ITransaction, IAccount } from '../models/index';
+import { connectDB, Block, Transaction, Account, IAccount } from '../models/index';
+import { loadConfig, getWeb3ProviderURL } from '../lib/config';
 
-// Function to read config
-const readConfig = () => {
-  try {
-    const configPath = path.join(process.cwd(), 'config.json');
-    const exampleConfigPath = path.join(process.cwd(), 'config.example.json');
-    
-    if (fs.existsSync(configPath)) {
-      return JSON.parse(fs.readFileSync(configPath, 'utf8'));
-    } else if (fs.existsSync(exampleConfigPath)) {
-      return JSON.parse(fs.readFileSync(exampleConfigPath, 'utf8'));
-    }
-  } catch (error) {
-    console.error('Error reading config:', error);
-  }
-  
-  // Default configuration
-  return {
-    nodeAddr: 'localhost',
-    port: 8329,
-    quiet: false
-  };
-};
+// Simplified interface
+interface AccountData {
+  address: string;
+  type: number;
+  balance: string; // Wei as string
+  blockNumber: number;
+}
 
-// Initialize database connection
-const initDB = async () => {
-  try {
-    // Check if already connected
-    if (mongoose.connection.readyState === 1) {
-      console.log('🔗 Database already connected');
-      return;
-    }
-    
-    await connectDB();
-    console.log('🔗 Database connection initialized successfully');
-  } catch (error) {
-    console.error('❌ Failed to connect to database:', error);
-    process.exit(1);
-  }
-};
+// Configuration
+const config = loadConfig();
+const web3 = new Web3(new Web3.providers.HttpProvider(getWeb3ProviderURL()));
 
-// Memory monitoring function
-const checkMemory = () => {
+// Constants
+const BATCH_SIZE = 50; // Optimized batch size
+const CHUNK_SIZE = 10; // Chunk size for parallel processing
+const MEMORY_LIMIT_MB = parseInt(process.env.MEMORY_LIMIT_MB || '512');
+const CACHE_MAX_SIZE = 3000; // Reduced cache size
+
+// Global state
+const accountCache = new Map<string, number>();
+let processedCount = 0;
+
+// Memory monitoring
+const checkMemory = (): boolean => {
   const usage = process.memoryUsage();
   const usedMB = Math.round(usage.heapUsed / 1024 / 1024);
-  const limitMB = parseInt(process.env.MEMORY_LIMIT_MB || '512'); // Reduced from 1024MB to 512MB
   
-  if (usedMB > limitMB) {
-    console.log(`⚠️ Memory usage: ${usedMB}MB (limit: ${limitMB}MB)`);
+  if (usedMB > MEMORY_LIMIT_MB) {
+    console.log(`⚠️ Memory usage: ${usedMB}MB (limit: ${MEMORY_LIMIT_MB}MB)`);
     if (global.gc) {
       global.gc();
       console.log('🧹 Garbage collection executed');
@@ -66,514 +46,311 @@ const checkMemory = () => {
   return true;
 };
 
-// Interface definitions
-interface Config {
-  nodeAddr: string;
-  port: number;
-  quiet: boolean;
-}
-
-interface AccountData {
-  address: string;
-  type?: number;
-  balance?: string; // Wei文字列
-  blockNumber?: number;
-}
-
-interface CachedAccounts {
-  [address: string]: number;
-}
-
-interface MakeRichListFunction {
-  (toBlock: number, blocks: number, updateCallback: UpdateCallback): void;
-  cached?: CachedAccounts;
-  index?: number;
-  accounts?: { [address: string]: AccountData };
-}
-
-type UpdateCallback = (accounts: { [address: string]: AccountData }, blockNumber: number) => void;
-
-// Configuration
-const config: Config = readConfig();
-
-console.log(`🔌 Connecting to VirBiCoin node ${config.nodeAddr}:${config.port}...`);
-
-// Web3 connection
-const web3 = new Web3(new Web3.providers.HttpProvider(`http://${config.nodeAddr}:${config.port}`));
-
-const ADDRESS_CACHE_MAX = 5000; // Reduced from 10000 to 5000 for better performance
-const BATCH_SIZE = 100; // Reduced batch size for better memory management
-const BATCH_DELAY_MS = 500; // 500ms delay between batches
-
-// Set MongoDB URI from config if available
-try {
-  const local = require('../config.json');
-  if (local.database && local.database.uri) {
-    process.env.MONGODB_URI = local.database.uri;
-    console.log('📄 MongoDB URI set from config.json');
-  }
-} catch (error) {
+// Database connection
+const initDB = async (): Promise<void> => {
   try {
-    const local = require('../config.example.json');
-    if (local.database && local.database.uri) {
-      process.env.MONGODB_URI = local.database.uri;
-      console.log('📄 MongoDB URI set from config.example.json');
+    if (mongoose.connection.readyState === 1) {
+      return; // Already connected, no need to log
     }
-  } catch (fallbackError) {
-  process.env.MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost/explorerDB';
-  }
-}
-
-// Initialize database connection after config is loaded
-initDB();
-
-/**
- * Make richlist for VirBiCoin with improved performance
- */
-const makeRichList: MakeRichListFunction = function (
-  toBlock: number,
-  blocks: number,
-  updateCallback: UpdateCallback
-): void {
-  // Ensure database is connected before proceeding
-  if (mongoose.connection.readyState !== 1) {
-    console.log('⌛ Waiting for database connection...');
-    connectDB().then(() => {
-      // Retry the operation after connection
-      makeRichList(toBlock, blocks, updateCallback);
-    });
-    return;
-  }
-
-  const self = makeRichList;
-  if (!self.cached) {
-    self.cached = {};
-    self.index = 0;
-  }
-  if (!self.accounts) {
-    self.accounts = {};
-  }
-
-  let fromBlock = toBlock - blocks;
-  if (fromBlock < 0) {
-    fromBlock = 0;
-  }
-
-  if (!config.quiet && (toBlock - fromBlock) >= 100) {
-    console.log(`🔍 Scan accounts from ${fromBlock} to ${toBlock} ...`);
-  }
-
-  let ended = false;
-  if (fromBlock == toBlock) {
-    ended = true;
-  }
-
-  const processTransactionsFrom = async (): Promise<void> => {
-    try {
-      const docs = await Transaction.aggregate([
-        { $match: { blockNumber: { $lte: toBlock, $gt: fromBlock } } },
-        { $group: { _id: '$from' } },
-        { $project: { '_id': 1 } },
-      ]);
-
-      docs.forEach((doc) => {
-        // check address cache
-        if (!self.cached![doc._id]) {
-          self.accounts![doc._id] = { address: doc._id, type: 0 };
-          // increase cache counter
-          self.cached![doc._id] = 1;
-        } else {
-          self.cached![doc._id]++;
-        }
-      });
-    } catch (error) {
-      throw error;
-    }
-  };
-
-  const processTransactionsTo = async (): Promise<void> => {
-    try {
-      const docs = await Transaction.aggregate([
-        { $match: { blockNumber: { $lte: toBlock, $gt: fromBlock } } },
-        { $group: { _id: '$to' } },
-        { $project: { '_id': 1 } },
-      ]);
-
-      docs.forEach((doc) => {
-        // to == null case
-        if (!doc._id) {
-          return;
-        }
-        if (!self.cached![doc._id]) {
-          self.accounts![doc._id] = { address: doc._id, type: 0 };
-          self.cached![doc._id] = 1;
-        } else {
-          self.cached![doc._id]++;
-        }
-      });
-    } catch (error) {
-      throw error;
-    }
-  };
-
-  const processMiners = async (): Promise<void> => {
-    try {
-      const docs = await Block.aggregate([
-        { $match: { number: { $lte: toBlock, $gt: fromBlock } } },
-        { $group: { _id: '$miner' } },
-        { $project: { '_id': 1 } },
-      ]);
-
-      docs.forEach((doc) => {
-        if (!self.cached![doc._id]) {
-          self.accounts![doc._id] = { address: doc._id, type: 0 };
-          self.cached![doc._id] = 1;
-        } else {
-          self.cached![doc._id]++;
-        }
-      });
-    } catch (error) {
-      throw error;
-    }
-  };
-
-  const updateAccountBalances = async (): Promise<void> => {
-    const len = Object.keys(self.accounts!).length;
-    if (len >= 100 || ended) {
-      console.info(`📈 ${len} / ${self.index! + len} total accounts.`);
-    }
-
-    if (updateCallback && (len >= 100 || ended)) {
-      self.index = self.index! + len;
-      if (!config.quiet) {
-        console.log(`🔄 update ${len} accounts ...`);
-      }
-
-      // split accounts into chunks to make proper sized json-rpc batch job.
-      const accounts = Object.keys(self.accounts!);
-      const chunks: string[][] = [];
-
-      // about ~500 `eth_getBalance` json rpc calls are possible in one json-rpc batchjob.
-      while (accounts.length > 100) {
-        const chunk = accounts.splice(0, 50); // Reduced from 100 to 50
-        chunks.push(chunk);
-      }
-      if (accounts.length > 0) {
-        chunks.push(accounts);
-      }
-
-      // Process chunks sequentially with delays
-      for (const chunk of chunks) {
-        const data: { [address: string]: AccountData } = {};
-
-        for (const account of chunk) {
-          try {
-            // Get contract code to determine if it's a contract
-            const code = await web3.eth.getCode(account);
-            data[account] = { address: account, type: 0 };
-
-            if (code.length > 2) {
-              data[account].type = 1; // contract type
-            } else if (self.accounts![account]) {
-              data[account].type = self.accounts![account].type;
-            }
-
-            // Get balance
-            const balance = await web3.eth.getBalance(account);
-            data[account].balance = balance.toString(); // Weiのまま文字列で保存
-
-          } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            console.log(`WARN: fail to get balance/code for ${account}: ${errorMessage}`);
-          }
-        }
-
-        if (Object.keys(data).length > 0 && updateCallback) {
-          updateCallback(data, toBlock);
-        }
-        
-        // Add delay between chunks to reduce CPU usage
-        await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
-      }
-
-      // reset accounts
-      self.accounts = {};
-
-      // check the size of the cached accounts
-      if (Object.keys(self.cached!).length > ADDRESS_CACHE_MAX) {
-        console.info('** reduce cached accounts ...');
-        const sorted = Object.keys(self.cached!).sort((a, b) => self.cached![b] - self.cached![a]);
-        const newcached: CachedAccounts = {};
-        const reduce = parseInt((ADDRESS_CACHE_MAX * 0.6).toString());
-        for (let j = 0; j < reduce; j++) {
-          newcached[sorted[j]] = self.cached![sorted[j]];
-        }
-        self.cached = newcached;
-      }
-    }
-  };
-
-  // Execute pipeline
-  Promise.all([
-    processTransactionsFrom(),
-    processTransactionsTo(),
-    processMiners()
-  ])
-    .then(async () => {
-      await updateAccountBalances();
-
-      if (ended) {
-        console.log('✅ Completed Richlist Calculation.');
-      } else {
-        setTimeout(() => {
-          makeRichList(fromBlock, blocks, updateCallback);
-        }, 500); // Increased from 300ms to 500ms
-      }
-    })
-    .catch(error => {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      console.log(`Error in makeRichList: ${errorMessage}`);
-    });
-};
-
-/**
- * Write accounts to DB with improved batching
- */
-const updateAccounts: UpdateCallback = function (
-  accounts: { [address: string]: AccountData },
-  blockNumber: number
-): void {
-  // prepare
-  const bulk: AccountData[] = Object.keys(accounts).map((address) => {
-    const account = accounts[address];
-    account.blockNumber = blockNumber;
-    return account;
-  });
-
-  bulkInsert(bulk);
-};
-
-/**
- * Bulk insert accounts with improved performance
- */
-const bulkInsert = function (bulk: AccountData[]): void {
-  if (!bulk.length) {
-    return;
-  }
-
-  let localbulk: AccountData[];
-  if (bulk.length > 150) { // Reduced from 300 to 150
-    localbulk = bulk.splice(0, 100); // Reduced from 200 to 100
-  } else {
-    localbulk = bulk.splice(0, 150); // Reduced from 300 to 150
-  }
-
-  // Use upsert operations instead of insertMany to prevent duplicates
-  const upsertPromises = localbulk.map(item => {
-    // remove _id field
-    delete (item as any)._id;
-
-    // Always update balance and blockNumber for existing addresses
-    return Account.updateOne(
-      { address: item.address },
-      { 
-        $set: {
-          balance: item.balance,
-          blockNumber: item.blockNumber,
-          type: item.type
-        }
-      },
-      { upsert: true }
-    );
-  });
-
-  Promise.all(upsertPromises)
-    .then((results: any) => {
-      const upserted = results.filter((r: any) => r.upsertedCount > 0).length;
-      const modified = results.filter((r: any) => r.modifiedCount > 0).length;
-      
-      if (!config.quiet) {
-        console.log(`✅ ${upserted} accounts inserted, ${modified} accounts updated.`);
-      }
-      
-      if (bulk.length > 0) {
-        setTimeout(() => {
-          bulkInsert(bulk);
-        }, 300);
-      }
-    })
-    .catch((error: any) => {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      console.log(`❌ ERROR: Fail to upsert accounts: ${errorMessage}`);
-      
-      // Continue with remaining bulk instead of exiting
-      if (bulk.length > 0) {
-        setTimeout(() => {
-          bulkInsert(bulk);
-        }, 500);
-      }
-    });
-};
-
-/**
- * Start synchronization with improved performance
- */
-async function startSync(): Promise<void> {
-  try {
-    // Ensure database is connected before proceeding
-    if (mongoose.connection.readyState !== 1) {
-      console.log('⌛ Waiting for database connection...');
-      await connectDB();
-    }
-
-    const latestBlock = await web3.eth.getBlockNumber();
-    console.log(`📊 latestBlock = ${latestBlock}`);
-
-    if (config.quiet) {
-      console.log('🔇 Quiet mode enabled');
-    }
-
-    makeRichList(Number(latestBlock), 5000, updateAccounts); // Reduced from 10000 to 5000
-
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    console.log(`❌ Error starting sync: ${errorMessage}`);
-    process.exit(1);
-  }
-}
-
-// percentage計算・保存ロジック with improved performance
-async function updatePercentages() {
-  // Ensure database is connected before proceeding
-  if (mongoose.connection.readyState !== 1) {
-    console.log('⌛ Waiting for database connection...');
     await connectDB();
-  }
-
-  const accounts = await Account.find({});
-  
-  // Ether小数値で合計（floatのまま扱う）
-  const total = accounts.reduce((sum, acc) => {
-    let balanceStr = acc.balance || '0';
-    
-    // balanceの型チェックと変換
-    if (typeof balanceStr === 'number') {
-      // number型の場合は文字列に変換
-      balanceStr = balanceStr.toString();
-    } else if (typeof balanceStr === 'string') {
-      // 文字列の場合、科学記数法や小数点を含む場合はBigIntで整数に変換
-      if (balanceStr.includes('.') || balanceStr.includes('e') || balanceStr.includes('E')) {
-        try {
-          balanceStr = BigInt(Math.floor(Number(balanceStr))).toString();
-        } catch (e) {
-          balanceStr = '0';
-        }
-      }
-    } else {
-      // その他の型の場合は'0'に設定
-      balanceStr = '0';
-    }
-    
-    // fromWeiでEtherに変換（小数値になる）
-    const etherValue = parseFloat(Web3.utils.fromWei(balanceStr, 'ether'));
-    return sum + etherValue;
-  }, 0);
-
-  // Process accounts in batches to reduce memory usage
-  const batchSize = 1000;
-  for (let i = 0; i < accounts.length; i += batchSize) {
-    const batch = accounts.slice(i, i + batchSize);
-    
-    const updatePromises = batch.map(async (acc) => {
-      let percent = 0;
-      let balanceStr = acc.balance || '0';
-      
-      // balanceの型チェックと変換
-      if (typeof balanceStr === 'number') {
-        balanceStr = balanceStr.toString();
-      } else if (typeof balanceStr === 'string') {
-        if (balanceStr.includes('.') || balanceStr.includes('e') || balanceStr.includes('E')) {
-          try {
-            balanceStr = BigInt(Math.floor(Number(balanceStr))).toString();
-          } catch (e) {
-            balanceStr = '0';
-          }
-        }
-      } else {
-        balanceStr = '0';
-      }
-      
-      const ether = parseFloat(Web3.utils.fromWei(balanceStr, 'ether'));
-      
-      if (total > 0) {
-        percent = Math.round((ether / total) * 1000000) / 10000; // 小数点4桁
-      }
-      
-      // percentageはfloatで保存（BigInt変換は絶対にしない）
-      return Account.updateOne(
-        { address: acc.address },
-        { $set: { percentage: percent } }
-      );
-    });
-    
-    await Promise.all(updatePromises);
-    
-    // Memory check between batches
-    if (!checkMemory()) {
-      await new Promise(resolve => setTimeout(resolve, 2000));
-    }
-  }
-  console.log('📈 Account percentages updated');
-}
-
-/**
- * Main execution with improved performance
- */
-const main = async (): Promise<void> => {
-  try {
-    // Initialize database connection first
-    await initDB();
-    
-    // Test connection by getting latest block number
-    try {
-      await web3.eth.getBlockNumber();
-    } catch (connectionError) {
-      console.log('❌ Error: Cannot connect to VirBiCoin node');
-      process.exit(1);
-    }
-
-    console.log('🔗 Connected to VirBiCoin node successfully');
-    console.log('🏆 Starting richlist calculation...');
-
-    // Initial calculation
-    await startSync();
-    await updatePercentages(); // percentage計算・保存を追加
-
-    // Set up periodic updates (every 60 minutes instead of 30)
-    const RICHLIST_UPDATE_INTERVAL = 60 * 60 * 1000; // 60 minutes (30分→60分に延長)
-    console.log(`⏰ Richlist will update every ${RICHLIST_UPDATE_INTERVAL / 1000 / 60} minutes`);
-
-    setInterval(async () => {
-      try {
-        console.log('🔄 Starting periodic richlist update...');
-        await startSync();
-        await updatePercentages();
-        console.log('✅ Periodic richlist update completed');
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        console.log(`❌ Error in periodic richlist update: ${errorMessage}`);
-      }
-    }, RICHLIST_UPDATE_INTERVAL);
-
+    console.log('🔗 Database connection initialized');
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    console.log(`💥 Fatal error: ${errorMessage}`);
+    console.error('❌ Failed to connect to database:', error);
     process.exit(1);
   }
 };
 
-export { main };
+// Get unique addresses from transactions
+const getTransactionAddresses = async (fromBlock: number, toBlock: number): Promise<Set<string>> => {
+  const addresses = new Set<string>();
+  
+  try {
+    // Get FROM addresses
+    const fromDocs = await Transaction.aggregate([
+        { $match: { blockNumber: { $lte: toBlock, $gt: fromBlock } } },
+      { $group: { _id: '$from' } }
+    ]);
+    
+    // Get TO addresses
+    const toDocs = await Transaction.aggregate([
+      { $match: { blockNumber: { $lte: toBlock, $gt: fromBlock } } },
+      { $group: { _id: '$to' } }
+    ]);
+    
+    // Get miner addresses
+    const minerDocs = await Block.aggregate([
+      { $match: { number: { $lte: toBlock, $gt: fromBlock } } },
+      { $group: { _id: '$miner' } }
+    ]);
+    
+    // Combine all addresses
+    [...fromDocs, ...toDocs, ...minerDocs].forEach(doc => {
+      if (doc._id && doc._id !== '0x0000000000000000000000000000000000000000') {
+        addresses.add(doc._id);
+      }
+    });
+    
+    console.log(`📊 Found ${addresses.size} unique addresses in blocks ${fromBlock}-${toBlock}`);
+    return addresses;
+    
+    } catch (error) {
+    console.error('❌ Error getting transaction addresses:', error);
+    return new Set();
+  }
+};
 
+// Get account data with balance and type
+const getAccountData = async (address: string, blockNumber: number): Promise<AccountData | null> => {
+  try {
+    const [balance, code] = await Promise.all([
+      web3.eth.getBalance(address),
+      web3.eth.getCode(address)
+    ]);
+    
+    return {
+      address,
+      type: code.length > 2 ? 1 : 0, // 1 for contract, 0 for EOA
+      balance: balance.toString(),
+      blockNumber
+    };
+    } catch (error) {
+    console.warn(`⚠️ Failed to get data for ${address}:`, error);
+    return null;
+  }
+};
+
+// Process accounts in chunks
+const processAccountChunk = async (addresses: string[], blockNumber: number): Promise<AccountData[]> => {
+  const promises = addresses.map(address => getAccountData(address, blockNumber));
+  const results = await Promise.all(promises);
+  
+  return results.filter((data): data is AccountData => data !== null);
+};
+
+// Bulk insert accounts to database
+const bulkInsertAccounts = async (accounts: AccountData[]): Promise<void> => {
+  if (accounts.length === 0) return;
+  
+  try {
+    const operations = accounts.map(account => ({
+      updateOne: {
+        filter: { address: account.address },
+        update: {
+          $set: {
+            address: account.address,
+            type: account.type,
+            balance: account.balance,
+            blockNumber: account.blockNumber
+          }
+        },
+        upsert: true
+      }
+    }));
+    
+    await Account.bulkWrite(operations, { ordered: false });
+    console.log(`💾 Updated ${accounts.length} accounts in database`);
+    
+  } catch (error) {
+    console.error('❌ Error bulk inserting accounts:', error);
+  }
+};
+
+// Update account percentages
+const updatePercentages = async (): Promise<void> => {
+  try {
+    console.log('📊 Calculating account percentages...');
+    
+    const accounts = await Account.find({}).select('address balance').lean();
+    
+    // Calculate total supply
+    const totalSupply = accounts.reduce((sum, account) => {
+      try {
+        const balance = parseFloat(Web3.utils.fromWei(account.balance || '0', 'ether'));
+        return sum + balance;
+      } catch {
+        return sum;
+      }
+    }, 0);
+    
+    console.log(`💰 Total supply: ${totalSupply.toFixed(2)} ETH`);
+    
+    // Update percentages in batches
+    const batchSize = 1000;
+    for (let i = 0; i < accounts.length; i += batchSize) {
+      const batch = accounts.slice(i, i + batchSize);
+      
+      const operations = batch.map(account => {
+        try {
+          const balance = parseFloat(Web3.utils.fromWei(account.balance || '0', 'ether'));
+          const percentage = totalSupply > 0 ? (balance / totalSupply) * 100 : 0;
+          
+          return {
+            updateOne: {
+              filter: { address: account.address },
+              update: { $set: { percentage } }
+            }
+          };
+        } catch {
+          return {
+            updateOne: {
+              filter: { address: account.address },
+              update: { $set: { percentage: 0 } }
+            }
+          };
+        }
+      });
+      
+      await Account.bulkWrite(operations, { ordered: false });
+      console.log(`📈 Updated percentages for batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(accounts.length/batchSize)}`);
+    }
+    
+  } catch (error) {
+    console.error('❌ Error updating percentages:', error);
+  }
+};
+
+// Main richlist calculation
+const makeRichList = async (toBlock: number, blocks: number): Promise<void> => {
+  // Ensure database connection before starting
+  await initDB();
+  
+  const fromBlock = Math.max(0, toBlock - blocks);
+  const isEnd = fromBlock === toBlock;
+  
+  if (!config.general?.quiet && (toBlock - fromBlock) >= 100) {
+    console.log(`🔍 Processing blocks ${fromBlock} to ${toBlock}...`);
+  }
+  
+  try {
+    // Get all unique addresses
+    const addresses = await getTransactionAddresses(fromBlock, toBlock);
+    
+    if (addresses.size === 0) {
+      if (isEnd) {
+        console.log('✅ No new addresses found. Richlist calculation complete.');
+        return;
+      } else {
+        setTimeout(() => makeRichList(fromBlock, blocks), 500);
+        return;
+      }
+    }
+    
+    // Filter addresses using cache - but also periodically update existing ones
+    const newAddresses: string[] = [];
+    const existingAddressesToUpdate: string[] = [];
+    
+    for (const address of addresses) {
+      const count = accountCache.get(address) || 0;
+      if (count < 3) { 
+        // New or rarely seen addresses - always process
+        newAddresses.push(address);
+        accountCache.set(address, count + 1);
+      } else if (count < 10) {
+        // Recently active addresses - 30% chance to update balance
+        if (Math.random() < 0.3) {
+          existingAddressesToUpdate.push(address);
+        }
+        accountCache.set(address, count + 1);
+      } else if (count < 25 && Math.random() < 0.1) {
+        // Older addresses - 10% chance to update balance
+        existingAddressesToUpdate.push(address);
+        accountCache.set(address, count + 1);
+      } else {
+        // Just increment counter for frequently seen addresses
+        accountCache.set(address, Math.min(count + 1, 100)); // Cap at 100
+      }
+    }
+    
+    // Combine addresses to process
+    const addressesToProcess = [...newAddresses, ...existingAddressesToUpdate];
+    
+    // Clean cache if too large
+    if (accountCache.size > CACHE_MAX_SIZE) {
+      const sortedEntries = Array.from(accountCache.entries()).sort((a, b) => b[1] - a[1]);
+      accountCache.clear();
+      sortedEntries.slice(0, Math.floor(CACHE_MAX_SIZE * 0.6)).forEach(([addr, count]) => {
+        accountCache.set(addr, count);
+      });
+      console.log(`🧹 Cache cleaned, size: ${accountCache.size}`);
+    }
+    
+    if (addressesToProcess.length === 0) {
+      console.log(`📋 All ${addresses.size} addresses cached, skipping to next batch`);
+    } else {
+      const newCount = newAddresses.length;
+      const updateCount = existingAddressesToUpdate.length;
+      const totalFound = addresses.size;
+      const cached = totalFound - addressesToProcess.length;
+      
+      if (updateCount > 0) {
+        console.log(`📋 Processing ${newCount} new + ${updateCount} existing addresses (${cached} cached)`);
+      } else {
+        console.log(`📋 Processing ${newCount} new addresses (${cached} cached)`);
+      }
+    }
+    
+    // Process addresses in chunks (both new and existing to update)
+    const allAccountData: AccountData[] = [];
+    if (addressesToProcess.length > 0) {
+      for (let i = 0; i < addressesToProcess.length; i += CHUNK_SIZE) {
+        const chunk = addressesToProcess.slice(i, i + CHUNK_SIZE);
+        const chunkData = await processAccountChunk(chunk, toBlock);
+        allAccountData.push(...chunkData);
+        
+        // Memory check
+        if (!checkMemory()) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
+      
+      // Save to database
+      if (allAccountData.length > 0) {
+        await bulkInsertAccounts(allAccountData);
+        processedCount += allAccountData.length;
+        console.log(`📊 Total processed: ${processedCount} accounts (${newAddresses.length} new, ${existingAddressesToUpdate.length} updated)`);
+      }
+    }
+    
+    if (isEnd) {
+      console.log('✅ Richlist calculation completed. Updating percentages...');
+      await updatePercentages();
+      console.log('🎉 All done!');
+    } else {
+      // Continue with next batch (reduced delay when no processing needed)
+      const delay = addressesToProcess.length === 0 ? 100 : 500; // Faster when all cached
+      setTimeout(() => makeRichList(fromBlock, blocks), delay);
+    }
+    
+  } catch (error) {
+    console.error('❌ Error in makeRichList:', error);
+  }
+};
+
+// Start sync process
+const startSync = async (): Promise<void> => {
+  await initDB();
+  
+  try {
+    console.log('🚀 Starting richlist sync...');
+    const latestBlock = await web3.eth.getBlockNumber();
+    const blockNumber = Number(latestBlock);
+    
+    console.log(`📦 Latest block: ${blockNumber}`);
+    await makeRichList(blockNumber, BATCH_SIZE);
+
+  } catch (error) {
+    console.error('❌ Error in startSync:', error);
+    process.exit(1);
+  }
+};
+
+// Main execution
 if (require.main === module) {
-  main();
+  console.log('💎 VirBiCoin Richlist Calculator - Optimized');
+  startSync().catch(error => {
+    console.error('❌ Fatal error:', error);
+    process.exit(1);
+  });
 }
+
+export { makeRichList, updatePercentages };

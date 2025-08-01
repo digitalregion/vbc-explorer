@@ -26,12 +26,27 @@ export async function GET(request: Request) {
       totalPages = Math.ceil(totalCount / limit);
     }
 
-    // Optimized query with proper indexing hints
+    // Ensure basic indexes exist for performance (only create if not exists)
+    try {
+      const indexes = await db?.collection('Transaction').indexes();
+      const hasBlockNumberIndex = indexes?.some((idx: any) => 
+        idx.key.blockNumber === -1 || (idx.key.blockNumber === -1 && idx.key.transactionIndex === -1)
+      );
+      
+      if (!hasBlockNumberIndex) {
+        console.log('Creating missing Transaction indexes...');
+        await db?.collection('Transaction').createIndex({ blockNumber: -1 }, { background: true });
+        await db?.collection('Transaction').createIndex({ blockNumber: -1, transactionIndex: -1 }, { background: true });
+        console.log('Transaction indexes created successfully');
+      }
+    } catch (indexError: any) {
+      // Indexes may already exist or creation failed, continue anyway
+      console.log('Index setup info:', indexError?.message || indexError);
+    }
+
+    // Optimized query - let MongoDB choose the best index automatically
     const transactions = await db?.collection('Transaction')
-      .find({}, {
-        // Use hint to ensure proper index usage
-        hint: { blockNumber: -1, transactionIndex: -1 }
-      })
+      .find({})
       .sort({ blockNumber: -1, transactionIndex: -1 })
       .skip(skip)
       .limit(limit)

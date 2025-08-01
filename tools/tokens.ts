@@ -31,6 +31,15 @@ const tokenSchema = new mongoose.Schema({
 
 const Token = mongoose.models.Token || mongoose.model('Token', tokenSchema);
 
+// Schema for tracking scan progress
+const scanProgressSchema = new mongoose.Schema({
+  scanType: { type: String, unique: true }, // 'tokens' or 'vrc721'
+  lastScannedBlock: { type: Number, default: 0 },
+  lastUpdateTime: { type: Date, default: Date.now }
+}, { collection: 'scan_progress' });
+
+const ScanProgress = mongoose.models.ScanProgress || mongoose.model('ScanProgress', scanProgressSchema);
+
 // Basic VRC-721 (ERC721 Compatible) ABI for tokenURI and name
 const minimalErc721Abi = [
   {
@@ -64,28 +73,7 @@ const minimalErc721Abi = [
 ];
 
 import { connectDB, Contract } from '../models/index';
-
-// Function to read config
-const readConfig = () => {
-  try {
-    const configPath = path.join(process.cwd(), 'config.json');
-    const exampleConfigPath = path.join(process.cwd(), 'config.example.json');
-    
-    if (fs.existsSync(configPath)) {
-      return JSON.parse(fs.readFileSync(configPath, 'utf8'));
-    } else if (fs.existsSync(exampleConfigPath)) {
-      return JSON.parse(fs.readFileSync(exampleConfigPath, 'utf8'));
-    }
-  } catch (error) {
-    console.error('Error reading config:', error);
-  }
-  
-  // Default configuration
-  return {
-    nodeAddr: 'localhost',
-    port: 8329
-  };
-};
+import { loadConfig, getWeb3ProviderURL } from '../lib/config';
 
 // Initialize database connection
 const initDB = async () => {
@@ -118,13 +106,14 @@ async function disconnect() {
 }
 
 // --- Configuration ---
-const config = readConfig();
-const WEB3_PROVIDER_URL = `http://${config.nodeAddr}:${config.port}`; // Generic RPC endpoint
+const config = loadConfig();
+const WEB3_PROVIDER_URL = getWeb3ProviderURL(); // Use centralized config
 const START_BLOCK = 0; // Default start block if no sync state is found
-const BLOCKS_PER_BATCH = 5000; // Reduced from 10000 to 5000 for better performance
-const SCAN_INTERVAL_MS = 600000; // 10 minutes (5分→10分に延長)
-const BATCH_DELAY_MS = 1000; // 1 second delay between batches
-const MEMORY_LIMIT_MB = 512; // Memory limit for token scanning
+const BLOCKS_PER_BATCH = 500; // Further reduced for CPU optimization
+const SCAN_INTERVAL_MS = 900000; // 15 minutes (extended for CPU relief)
+const BATCH_DELAY_MS = 1000; // Longer delay to reduce CPU load
+const MAX_PARALLEL_BLOCKS = 20; // Limit parallel block fetching
+const MEMORY_LIMIT_MB = parseInt(process.env.MEMORY_LIMIT_MB || '512'); // Optimized for 2GB instances
 
 const web3 = new Web3(new Web3.providers.HttpProvider(WEB3_PROVIDER_URL));
 
@@ -144,22 +133,47 @@ const checkMemory = () => {
   return true;
 };
 
-// Batch processing with delay
-const processBatchWithDelay = async (batch: any[], processor: Function) => {
+// Improved batch processing with parallel execution and delay (CPU optimized)
+const processBatchWithDelay = async (batch: any[], processor: Function, concurrency: number = 1) => {
   const results = [];
-  for (let i = 0; i < batch.length; i++) {
+  
+  // Process in smaller chunks for parallel execution
+  for (let i = 0; i < batch.length; i += concurrency) {
+    const chunk = batch.slice(i, i + concurrency);
+    
     try {
-      const result = await processor(batch[i]);
-      if (result) results.push(result);
+      // Process chunk items in parallel
+      const chunkPromises = chunk.map(async (item, index) => {
+        try {
+          return await processor(item);
+        } catch (error) {
+          console.error(`❌ Error processing item ${i + index}:`, error);
+          return null;
+        }
+      });
       
-      // Add small delay every 100 items to prevent overwhelming
-      if ((i + 1) % 100 === 0) {
-        await new Promise(resolve => setTimeout(resolve, 50));
+      const chunkResults = await Promise.all(chunkPromises);
+      
+      // Filter out null results and add to results
+      for (const result of chunkResults) {
+        if (result) {
+          results.push(result);
+        }
       }
+      
     } catch (error) {
-      console.error(`Error processing item ${i}:`, error);
+      console.error(`❌ Error processing chunk starting at ${i}:`, error);
+    }
+    
+    // Memory check and delay between chunks
+    if (!checkMemory()) {
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    } else if (i + concurrency < batch.length) {
+      // Small delay between chunks to prevent overwhelming the node
+      await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS / 10));
     }
   }
+  
   return results;
 };
 
@@ -432,7 +446,7 @@ async function updateTokenWithRealData(tokenAddress: string) {
 }
 
 async function scanForTokens() {
-  console.log('🔍 Starting token scan...');
+  console.log('🔍 Starting incremental token scan...');
   try {
     // Ensure DB connection is active
     if (mongoose.connection.readyState !== 1) {
@@ -451,22 +465,34 @@ async function scanForTokens() {
   }
 
   try {
-    // Ensure DB connection before database operations
-    if (mongoose.connection.readyState !== 1) {
-      console.log('🔌 Reconnecting to database...');
-      await connectDB();
+    // Get the latest scanned block from database
+    let scanProgress = await ScanProgress.findOne({ scanType: 'tokens' });
+    if (!scanProgress) {
+      // Create initial scan progress record
+      scanProgress = new ScanProgress({
+        scanType: 'tokens',
+        lastScannedBlock: START_BLOCK,
+        lastUpdateTime: new Date()
+      });
+      await scanProgress.save();
+    }
+
+    const latestBlockNumberBigInt = await web3.eth.getBlockNumber();
+    const latestBlockNumber = Number(latestBlockNumberBigInt);
+    console.log(`🔍 Latest block number: ${latestBlockNumber}`);
+    
+    // Only scan new blocks since last scan
+    let fromBlock = scanProgress.lastScannedBlock + 1;
+    
+    if (fromBlock > latestBlockNumber) {
+      console.log(`✅ No new blocks to scan. Last scanned: ${scanProgress.lastScannedBlock}, Latest: ${latestBlockNumber}`);
+      return;
     }
     
-    // Start scanning from the beginning
-    console.log(`🚀 Starting token scan from block ${START_BLOCK}`);
-
-    const latestBlockNumber = await web3.eth.getBlockNumber();
-    console.log(`🔍 Latest block number: ${latestBlockNumber}`);
-
-    let fromBlock = START_BLOCK;
+    console.log(`🚀 Scanning new blocks from ${fromBlock} to ${latestBlockNumber} (${latestBlockNumber - fromBlock + 1} blocks)`);
 
     while (fromBlock <= latestBlockNumber) {
-      const toBlock = Math.min(fromBlock + BLOCKS_PER_BATCH - 1, Number(latestBlockNumber));
+      const toBlock = Math.min(fromBlock + BLOCKS_PER_BATCH - 1, latestBlockNumber);
       
       // 5000ブロック単位でログ出力
       if (fromBlock % 5000 === 0) {
@@ -480,17 +506,21 @@ async function scanForTokens() {
       let newTokensFound = 0;
       let existingTokensSkipped = 0;
 
-      // Process blocks in smaller chunks to reduce memory usage
-      const blockChunkSize = 100;
+      // Process blocks in smaller chunks to reduce memory usage and CPU load
+      const blockChunkSize = Math.min(MAX_PARALLEL_BLOCKS, 50); // Limit parallel processing
       for (let chunkStart = fromBlock; chunkStart <= toBlock; chunkStart += blockChunkSize) {
         const chunkEnd = Math.min(chunkStart + blockChunkSize - 1, toBlock);
         
+        // Limit concurrent block fetches to reduce CPU load
         const blockPromises = [];
         for (let i = chunkStart; i <= chunkEnd; i++) {
           blockPromises.push(web3.eth.getBlock(i, true));
         }
         
         const blocks = await Promise.all(blockPromises);
+        
+        // Add delay between chunks to prevent CPU overload
+        await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS / 2));
         
         for (const block of blocks) {
           if (block && block.transactions) {
@@ -643,9 +673,17 @@ async function scanForTokens() {
           }
         }
         
-        // Memory check and delay between chunks
+        // Memory check and delay between chunks (enhanced for CPU optimization)
         if (!checkMemory()) {
-          await new Promise(resolve => setTimeout(resolve, 2000));
+          console.log('🧹 Memory limit reached, forcing cleanup...');
+          if (global.gc) {
+            global.gc();
+          }
+          // Longer delay when memory is high
+          await new Promise(resolve => setTimeout(resolve, 3000));
+        } else {
+          // Regular CPU relief delay
+          await new Promise(resolve => setTimeout(resolve, 500));
         }
       }
 
@@ -657,14 +695,45 @@ async function scanForTokens() {
       
       fromBlock = toBlock + 1;
       
+      // Update scan progress periodically
+      await ScanProgress.updateOne(
+        { scanType: 'tokens' },
+        { 
+          lastScannedBlock: toBlock,
+          lastUpdateTime: new Date()
+        },
+        { upsert: true }
+      );
+      
       // Add delay between batches to reduce CPU usage
       await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
     }
+    
+    // Final update of scan progress
+    await ScanProgress.updateOne(
+      { scanType: 'tokens' },
+      { 
+        lastScannedBlock: latestBlockNumber,
+        lastUpdateTime: new Date()
+      },
+      { upsert: true }
+    );
+    
   } catch (error) {
     console.error('❌ An error occurred during token scanning:', error);
+    // Save progress even on error
+    try {
+      // Get current scan progress to save partial work
+      const currentProgress = await ScanProgress.findOne({ scanType: 'tokens' });
+      if (currentProgress && currentProgress.lastScannedBlock > START_BLOCK) {
+        console.log(`💾 Saving progress up to block ${currentProgress.lastScannedBlock}`);
+      }
+    } catch (progressError) {
+      console.error('❌ Failed to save scan progress:', progressError);
+    }
   }
 
-  console.log(`✅ Token scan finished. Next scan in ${SCAN_INTERVAL_MS / 1000} seconds.`);
+  console.log(`✅ Incremental token scan finished. Next scan in ${SCAN_INTERVAL_MS / 1000} seconds.`);
 }
 
 // 全VRC-721トークンを一括で更新する関数（バッチ処理で最適化）

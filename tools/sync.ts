@@ -10,38 +10,11 @@ import fs from 'fs';
 import path from 'path';
 import { connectDB, Block, Transaction } from '../models/index';
 import { main as statsMain } from './stats';
-import { main as richlistMain } from './richlist';
+import { makeRichList } from './richlist';
 import { main as tokensMain } from './tokens';
+import { readConfig as loadConfig, getWeb3ProviderURL } from '../lib/config';
 
-// Function to read config
-const readConfig = () => {
-  try {
-    const configPath = path.join(process.cwd(), 'config.json');
-    const exampleConfigPath = path.join(process.cwd(), 'config.example.json');
-    
-    if (fs.existsSync(configPath)) {
-      return JSON.parse(fs.readFileSync(configPath, 'utf8'));
-    } else if (fs.existsSync(exampleConfigPath)) {
-      return JSON.parse(fs.readFileSync(exampleConfigPath, 'utf8'));
-    }
-  } catch (error) {
-    console.error('Error reading config:', error);
-  }
-  
-  // Default configuration
-  return {
-    nodeAddr: 'localhost',
-    port: 8329,
-    wsPort: 8330,
-    bulkSize: 25, // Reduced from 50 to 25 for better performance
-    syncAll: false,
-    patch: false,
-    quiet: false,
-    useRichList: true,
-    startBlock: 0,
-    endBlock: null
-  };
-};
+// Use unified config loader
 
 // Initialize database connection
 const initDB = async () => {
@@ -64,7 +37,7 @@ const initDB = async () => {
 const checkMemory = () => {
   const usage = process.memoryUsage();
   const usedMB = Math.round(usage.heapUsed / 1024 / 1024);
-  const limitMB = parseInt(process.env.MEMORY_LIMIT_MB || '512'); // Reduced from 1024MB to 512MB
+  const limitMB = parseInt(process.env.MEMORY_LIMIT_MB || '1024'); // Optimized for 2GB instances
   
   if (usedMB > limitMB) {
     console.log(`⚠️  Memory usage: ${usedMB}MB (limit: ${limitMB}MB)`);
@@ -152,7 +125,7 @@ interface BlockDocument {
 }
 
 // Generic Configuration
-const config: Config = readConfig();
+const config = loadConfig();
 
 // Parse command line arguments
 const args = process.argv.slice(2);
@@ -202,10 +175,12 @@ if (args.length >= 2 && !isNaN(parseInt(args[0])) && !isNaN(parseInt(args[1]))) 
   console.log(`Command line override: syncing blocks ${config.startBlock} to ${config.endBlock}`);
 }
 
-console.log(`🔌 Connecting to VirBiCoin node ${config.nodeAddr}:${config.port}...`);
+// Use unified Web3 provider URL
+const providerUrl = getWeb3ProviderURL();
+console.log(`🔌 Connecting to VirBiCoin node at ${providerUrl}...`);
 
-// Web3 connection
-const web3 = new Web3(new Web3.providers.HttpProvider(`http://${config.nodeAddr}:${config.port}`));
+// Web3 connection using unified config
+const web3 = new Web3(new Web3.providers.HttpProvider(providerUrl));
 
 /**
  * Normalize transaction data
@@ -446,7 +421,7 @@ const listenBlocks = function (): void {
 };
 
 /**
- * Sync chain from specific block range with improved performance
+ * Sync chain from specific block range with improved performance and parallel processing
  */
 const syncChain = async function (startBlock?: number, endBlock?: number): Promise<void> {
   // Use config values if not provided
@@ -470,56 +445,187 @@ const syncChain = async function (startBlock?: number, endBlock?: number): Promi
 
   let processedCount = 0;
   let skippedCount = 0;
+  const BATCH_SIZE = Math.min(config.bulkSize, 50); // Reduced for 2GB instances
+  const CONCURRENCY_LIMIT = 3; // Reduced concurrent block fetches for low memory
 
-  for (let blockNum = startBlock; blockNum <= endBlock; blockNum++) {
-    // メモリ監視を追加
-    if (!checkMemory()) {
-      console.log('💾 Memory limit reached, pausing sync for 5 seconds');
-      await new Promise(resolve => setTimeout(resolve, 5000));
+  // Process blocks in parallel batches
+  for (let batchStart = startBlock; batchStart <= endBlock; batchStart += BATCH_SIZE) {
+    const batchEnd = Math.min(batchStart + BATCH_SIZE - 1, endBlock);
+    const batchNumbers = [];
+    
+    // Collect block numbers that need processing
+    for (let blockNum = batchStart; blockNum <= batchEnd; blockNum++) {
+      if (!existingBlockNumbers.has(blockNum)) {
+        batchNumbers.push(blockNum);
+      } else {
+        skippedCount++;
+      }
     }
 
+    if (batchNumbers.length === 0) {
+      continue; // Skip this batch if all blocks exist
+    }
+
+    console.log(`🚀 Processing batch ${batchStart}-${batchEnd} (${batchNumbers.length} new blocks)`);
+
     try {
-      // Check if block already exists in DB
-      const existingBlock = await Block.findOne({ number: blockNum }).lean();
+      // Process blocks in smaller chunks to avoid overwhelming the node
+      const chunks = [];
+      for (let i = 0; i < batchNumbers.length; i += CONCURRENCY_LIMIT) {
+        chunks.push(batchNumbers.slice(i, i + CONCURRENCY_LIMIT));
+      }
+
+      const allBlocksData = [];
       
-      if (existingBlock) {
-        skippedCount++;
-        continue;
-      }
+      for (const chunk of chunks) {
+        // Fetch blocks in parallel within each chunk
+        const blockPromises = chunk.map(async (blockNum) => {
+          try {
+            const blockData = await web3.eth.getBlock(blockNum, true);
+            return { blockNum, blockData };
+          } catch (error) {
+            console.log(`❌ Error fetching block ${blockNum}: ${error}`);
+            return { blockNum, blockData: null };
+          }
+        });
 
-      const blockData = await web3.eth.getBlock(blockNum, true);
-
-      if (blockData) {
-        // Process new block
-        await writeBlockToDB(blockData);
-        await writeTransactionsToDB(blockData);
-        processedCount++;
-      }
-
-      // Flush every bulkSize blocks
-      if ((blockNum - startBlock) % config.bulkSize === 0) {
-        await writeBlockToDB(null, true);
-        await writeTransactionsToDB(null, true);
+        const chunkResults = await Promise.all(blockPromises);
+        allBlocksData.push(...chunkResults);
         
-        // バッチ処理後にGC実行
-        if (global.gc) {
-          global.gc();
+        // Small delay between chunks to prevent overwhelming the node
+        if (chunks.length > 1) {
+          await new Promise(resolve => setTimeout(resolve, 100));
         }
       }
 
-      // 1000個単位でログ出力（500から1000に変更）
-      if ((blockNum - startBlock + 1) % 1000 === 0) {
-        console.log(`📦 Processed ${blockNum - startBlock + 1} blocks (${blockNum}/${endBlock}) - 📈 Processed: ${processedCount}, ⏩ Skipped: ${skippedCount}`);
+      // Batch write to database
+      const blocksToInsert = [];
+      const transactionsToInsert = [];
+
+      for (const { blockNum, blockData } of allBlocksData) {
+        if (blockData) {
+          // Prepare block data for insertion
+          const blockDoc = {
+            number: toNumber(blockData.number),
+            hash: toString(blockData.hash),
+            parentHash: toString(blockData.parentHash),
+            nonce: toString(blockData.nonce),
+            sha3Uncles: toString(blockData.sha3Uncles),
+            logsBloom: toString(blockData.logsBloom),
+            transactionsRoot: toString(blockData.transactionsRoot),
+            stateRoot: toString(blockData.stateRoot),
+            receiptsRoot: toString(blockData.receiptsRoot),
+            miner: toString(blockData.miner),
+            difficulty: toString(blockData.difficulty),
+            totalDifficulty: toString(blockData.totalDifficulty),
+            extraData: toString(blockData.extraData),
+            size: toNumber(blockData.size),
+            gasLimit: toNumber(blockData.gasLimit),
+            gasUsed: toNumber(blockData.gasUsed),
+            timestamp: toNumber(blockData.timestamp),
+            transactions: blockData.transactions ? blockData.transactions.map((tx: any) => toString(tx.hash || tx)) : [],
+            uncles: blockData.uncles || [],
+            baseFeePerGas: blockData.baseFeePerGas ? toString(blockData.baseFeePerGas) : undefined,
+            mixHash: blockData.mixHash ? toString(blockData.mixHash) : undefined,
+            withdrawals: (blockData as any).withdrawals || [],
+            withdrawalsRoot: (blockData as any).withdrawalsRoot ? toString((blockData as any).withdrawalsRoot) : undefined,
+            blobGasUsed: (blockData as any).blobGasUsed ? toNumber((blockData as any).blobGasUsed) : undefined,
+            excessBlobGas: (blockData as any).excessBlobGas ? toNumber((blockData as any).excessBlobGas) : undefined,
+            parentBeaconBlockRoot: (blockData as any).parentBeaconBlockRoot ? toString((blockData as any).parentBeaconBlockRoot) : undefined
+          };
+
+          blocksToInsert.push(blockDoc);
+
+          // Process transactions if they exist and are detailed
+          if (blockData.transactions && Array.isArray(blockData.transactions)) {
+            // Get transaction receipts in parallel for gas usage and status
+            const receiptPromises = blockData.transactions
+              .filter((tx: any) => typeof tx === 'object' && tx !== null)
+              .map(async (tx: any) => {
+                try {
+                  const receipt = await web3.eth.getTransactionReceipt(toString(tx.hash));
+                  return { tx, receipt };
+                } catch (error) {
+                  console.log(`⚠️ Warning: Failed to get receipt for tx ${toString(tx.hash)}: ${error}`);
+                  return { tx, receipt: null };
+                }
+              });
+
+            const txReceiptPairs = await Promise.all(receiptPromises);
+
+            for (const { tx, receipt } of txReceiptPairs) {
+              const txDoc = {
+                hash: toString(tx.hash),
+                nonce: toNumber(tx.nonce),
+                blockHash: toString(tx.blockHash),
+                blockNumber: toNumber(tx.blockNumber),
+                transactionIndex: toNumber(tx.transactionIndex),
+                from: toString(tx.from),
+                to: tx.to ? toString(tx.to) : null,
+                value: toString(tx.value),
+                gasPrice: tx.gasPrice ? toString(tx.gasPrice) : null,
+                gas: toNumber(tx.gas),
+                gasUsed: receipt ? toNumber(receipt.gasUsed) : 0, // Add gasUsed from receipt
+                status: receipt ? (receipt.status ? 1 : 0) : null, // Add status from receipt
+                input: toString(tx.input),
+                timestamp: toNumber(blockData.timestamp), // Add block timestamp to transaction
+                creates: (tx as any).creates ? toString((tx as any).creates) : null,
+                raw: (tx as any).raw ? toString((tx as any).raw) : null,
+                publicKey: (tx as any).publicKey ? toString((tx as any).publicKey) : null,
+                r: tx.r ? toString(tx.r) : null,
+                s: tx.s ? toString(tx.s) : null,
+                v: tx.v ? toString(tx.v) : null,
+                standardV: (tx as any).standardV ? toString((tx as any).standardV) : null,
+                type: tx.type !== undefined ? toNumber(tx.type) : null,
+                accessList: tx.accessList || [],
+                chainId: tx.chainId ? toNumber(tx.chainId) : null,
+                maxFeePerGas: tx.maxFeePerGas ? toString(tx.maxFeePerGas) : null,
+                maxPriorityFeePerGas: tx.maxPriorityFeePerGas ? toString(tx.maxPriorityFeePerGas) : null,
+                maxFeePerBlobGas: (tx as any).maxFeePerBlobGas ? toString((tx as any).maxFeePerBlobGas) : null,
+                blobVersionedHashes: (tx as any).blobVersionedHashes || [],
+                yParity: (tx as any).yParity ? toString((tx as any).yParity) : null
+              };
+              transactionsToInsert.push(txDoc);
+            }
+          }
+          processedCount++;
+        }
       }
+
+      // Bulk insert blocks and transactions
+      try {
+        if (blocksToInsert.length > 0) {
+          await Block.insertMany(blocksToInsert, { ordered: false });
+        }
+        if (transactionsToInsert.length > 0) {
+          await Transaction.insertMany(transactionsToInsert, { ordered: false });
+        }
+      } catch (error) {
+        // Handle duplicate key errors gracefully
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        if (!errorMessage.includes('duplicate key') && !errorMessage.includes('E11000')) {
+          console.log(`❌ Database error: ${errorMessage}`);
+        }
+      }
+
+      // Memory check and GC
+      if (!checkMemory()) {
+        console.log('💾 Memory limit reached, forcing garbage collection');
+        if (global.gc) {
+          global.gc();
+        }
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
+
+      // Progress logging
+      const progress = ((batchEnd - startBlock + 1) / (endBlock - startBlock + 1) * 100).toFixed(1);
+      console.log(`📦 Batch completed: ${batchStart}-${batchEnd} | Progress: ${progress}% | Processed: ${processedCount}, Skipped: ${skippedCount}`);
+
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      console.log(`❌ Error syncing block ${blockNum}: ${errorMessage}`);
+      console.log(`❌ Error processing batch ${batchStart}-${batchEnd}: ${errorMessage}`);
     }
   }
-
-  // Final flush
-  await writeBlockToDB(null, true);
-  await writeTransactionsToDB(null, true);
 
   console.log(`✅ Sync Completed`);
   console.log(`📊 Processed: ${processedCount} blocks`);
@@ -653,12 +759,28 @@ process.on('SIGINT', async () => {
   process.exit(0);
 });
 
+// Richlist wrapper function
+const runRichlist = async () => {
+  console.log('🚀 Starting richlist calculation...');
+  
+  // Ensure database connection first
+  await initDB();
+  
+  const web3 = new Web3(new Web3.providers.HttpProvider(getWeb3ProviderURL()));
+  const latestBlock = await web3.eth.getBlockNumber();
+  const blockNumber = Number(latestBlock);
+  const BATCH_SIZE = 50;
+  
+  console.log(`📦 Processing richlist for block ${blockNumber}`);
+  await makeRichList(blockNumber, BATCH_SIZE);
+};
+
 const runAll = async () => {
   // 各mainを並列で実行
   await Promise.all([
     main(),         // sync
     statsMain(),    // stats
-    richlistMain(), // richlist
+    runRichlist(),  // richlist
     tokensMain()    // tokens
   ]);
 };
@@ -674,7 +796,7 @@ if (require.main === module) {
         await statsMain();
         break;
       case 'richlist':
-        await richlistMain();
+        await runRichlist();
         break;
       case 'tokens':
         await tokensMain();

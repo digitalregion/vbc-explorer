@@ -170,6 +170,9 @@ const TransactionSchema = new Schema({
   'input': String,
 }, { collection: 'Transaction' });
 
+// Note: Compound indexes will be created programmatically via create-indexes script
+// to avoid duplicate index warnings. Individual field indexes are handled above.
+
 const TokenTransferSchema = new Schema({
   'hash': { type: String, index: { unique: true }, lowercase: true },
   'blockNumber': Number,

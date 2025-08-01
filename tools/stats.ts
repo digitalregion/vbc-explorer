@@ -5,34 +5,9 @@ Tool for calculating VirBiCoin block statistics
 
 import mongoose from 'mongoose';
 import Web3 from 'web3';
-import fs from 'fs';
-import path from 'path';
 import type { Block as Web3Block } from 'web3-types';
 import { connectDB, Block, BlockStat, IBlock, IBlockStat } from '../models/index';
-
-// Function to read config
-const readConfig = () => {
-  try {
-    const configPath = path.join(process.cwd(), 'config.json');
-    const exampleConfigPath = path.join(process.cwd(), 'config.example.json');
-    
-    if (fs.existsSync(configPath)) {
-      return JSON.parse(fs.readFileSync(configPath, 'utf8'));
-    } else if (fs.existsSync(exampleConfigPath)) {
-      return JSON.parse(fs.readFileSync(exampleConfigPath, 'utf8'));
-    }
-  } catch (error) {
-    console.error('Error reading config:', error);
-  }
-  
-  // Default configuration
-  return {
-    nodeAddr: 'localhost',
-    port: 8329,
-    bulkSize: 25, // Reduced from 50 to 25 for better performance
-    quiet: false
-  };
-};
+import { loadConfig, getWeb3ProviderURL } from '../lib/config';
 
 // Initialize database connection
 const initDB = async () => {
@@ -55,7 +30,7 @@ const initDB = async () => {
 const checkMemory = () => {
   const usage = process.memoryUsage();
   const usedMB = Math.round(usage.heapUsed / 1024 / 1024);
-  const limitMB = parseInt(process.env.MEMORY_LIMIT_MB || '512'); // Reduced from 1024MB to 512MB
+  const limitMB = parseInt(process.env.MEMORY_LIMIT_MB || '512'); // Optimized for 2GB instances
   
   if (usedMB > limitMB) {
     console.log(`⚠️  Memory usage: ${usedMB}MB (limit: ${limitMB}MB)`);
@@ -103,22 +78,22 @@ interface BlockStatData {
 }
 
 // Configuration
-const config: Config = readConfig();
+const config = loadConfig();
 
 // Initialize database connection after config is loaded
 initDB();
 
-console.log(`🔌 Connecting to VirBiCoin node ${config.nodeAddr}:${config.port}...`);
+console.log(`🔌 Connecting to VirBiCoin node ${getWeb3ProviderURL()}...`);
 
 // Web3 connection
-const web3 = new Web3(new Web3.providers.HttpProvider(`http://${config.nodeAddr}:${config.port}`));
+const web3 = new Web3(new Web3.providers.HttpProvider(getWeb3ProviderURL()));
 
 if (config.quiet) {
   console.log('🔇 Quiet mode enabled');
 }
 
 /**
- * Update statistics for a range of blocks with improved performance
+ * Update statistics for a range of blocks with improved performance and parallel processing
  */
 const updateStats = async (range: number, interval: number, rescan: boolean): Promise<void> => {
   // Ensure database is connected before proceeding
@@ -132,24 +107,162 @@ const updateStats = async (range: number, interval: number, rescan: boolean): Pr
 
   interval = Math.abs(parseInt(interval.toString()));
   if (!range) {
-    range = 5000; // Reduced from 10000 to 5000
+    range = 1000; // Reduced from 5000 to 1000 for better performance
   }
   range *= interval;
   if (interval >= 10) {
     latestBlock -= latestBlock % interval;
   }
   
-
+  const startBlock = latestBlock - range;
+  const endBlock = latestBlock;
   
   // Check which blocks already have statistics
   const existingStats = await BlockStat.find({ 
-    number: { $gte: latestBlock - range, $lte: latestBlock } 
+    number: { $gte: startBlock, $lte: endBlock } 
   }).select('number').lean();
   
   const existingStatNumbers = new Set(existingStats.map(s => s.number));
-  console.log(`📊 Found ${existingStats.length} existing block statistics in range ${latestBlock - range}-${latestBlock}`);
+  console.log(`📊 Found ${existingStats.length} existing block statistics in range ${startBlock}-${endBlock}`);
   
-  getStats(latestBlock, null, latestBlock - range, interval, rescan, existingStatNumbers);
+  // Process in parallel batches for better performance
+  await processStatsInBatches(startBlock, endBlock, interval, rescan, existingStatNumbers);
+};
+
+/**
+ * Process statistics in parallel batches for improved performance
+ */
+const processStatsInBatches = async (
+  startBlock: number,
+  endBlock: number,
+  interval: number,
+  rescan: boolean,
+  existingStatNumbers: Set<number>
+): Promise<void> => {
+  const BATCH_SIZE = 20; // Reduced for 2GB instances
+  const CONCURRENCY_LIMIT = 3; // Reduced concurrent fetches for low memory
+  
+  console.log(`🚀 Processing stats from block ${startBlock} to ${endBlock} in batches...`);
+
+  for (let batchStart = endBlock; batchStart > startBlock; batchStart -= BATCH_SIZE) {
+    const batchEnd = Math.max(batchStart - BATCH_SIZE + 1, startBlock);
+    const batchBlocks = [];
+    
+    // Collect blocks that need processing
+    for (let blockNum = batchStart; blockNum >= batchEnd; blockNum -= interval) {
+      if (rescan || !existingStatNumbers.has(blockNum)) {
+        batchBlocks.push(blockNum);
+      }
+    }
+
+    if (batchBlocks.length === 0) {
+      continue; // Skip this batch if all stats exist
+    }
+
+    console.log(`📈 Processing stats batch ${batchEnd}-${batchStart} (${batchBlocks.length} blocks)`);
+
+    try {
+      // Process blocks in smaller chunks for parallel processing
+      const chunks = [];
+      for (let i = 0; i < batchBlocks.length; i += CONCURRENCY_LIMIT) {
+        chunks.push(batchBlocks.slice(i, i + CONCURRENCY_LIMIT));
+      }
+
+      const allStatsData = [];
+      
+      for (const chunk of chunks) {
+        // Fetch blocks in parallel within each chunk
+        const blockPromises = chunk.map(async (blockNum) => {
+          try {
+            const [blockData, nextBlockData] = await Promise.all([
+              web3.eth.getBlock(blockNum, true),
+              blockNum < endBlock ? web3.eth.getBlock(blockNum + interval, true) : Promise.resolve(null)
+            ]);
+            return { blockNum, blockData, nextBlockData };
+          } catch (error) {
+            console.log(`❌ Error fetching block ${blockNum}: ${error}`);
+            return { blockNum, blockData: null, nextBlockData: null };
+          }
+        });
+
+        const chunkResults = await Promise.all(blockPromises);
+        allStatsData.push(...chunkResults);
+        
+        // Small delay between chunks to prevent overwhelming the node
+        if (chunks.length > 1) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+      }
+
+      // Batch create statistics
+      const statsToInsert = [];
+
+      for (const { blockNum, blockData, nextBlockData } of allStatsData) {
+        if (blockData) {
+          try {
+            // Check if stat already exists
+            const existingStat = await BlockStat.findOne({ number: blockNum }).lean();
+            
+            if (existingStat && !rescan) {
+              continue;
+            }
+
+            if (nextBlockData) {
+              // Calculate statistics
+              const stat: BlockStatData = {
+                number: toNumber(blockData.number),
+                timestamp: toNumber(blockData.timestamp),
+                difficulty: toString(blockData.difficulty),
+                txCount: blockData.transactions.length,
+                gasUsed: toNumber(blockData.gasUsed),
+                gasLimit: toNumber(blockData.gasLimit),
+                miner: toString(blockData.miner),
+                blockTime: (toNumber(nextBlockData.timestamp) - toNumber(blockData.timestamp)) / (toNumber(nextBlockData.number) - toNumber(blockData.number)),
+                uncleCount: blockData.uncles.length,
+              };
+
+              statsToInsert.push(stat);
+            }
+          } catch (error) {
+            console.log(`❌ Error processing stats for block ${blockNum}: ${error}`);
+          }
+        }
+      }
+
+      // Bulk insert statistics
+      if (statsToInsert.length > 0) {
+        try {
+          await BlockStat.insertMany(statsToInsert, { ordered: false });
+          console.log(`✅ Inserted ${statsToInsert.length} block statistics`);
+        } catch (error) {
+          // Handle duplicate key errors gracefully
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          if (!errorMessage.includes('duplicate key') && !errorMessage.includes('E11000')) {
+            console.log(`❌ Database error: ${errorMessage}`);
+          }
+        }
+      }
+
+      // Memory check and GC
+      if (!checkMemory()) {
+        console.log('💾 Memory limit reached, forcing garbage collection');
+        if (global.gc) {
+          global.gc();
+        }
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
+
+      // Progress logging
+      const progress = ((endBlock - batchEnd + 1) / (endBlock - startBlock + 1) * 100).toFixed(1);
+      console.log(`📊 Stats batch completed: ${batchEnd}-${batchStart} | Progress: ${progress}%`);
+
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.log(`❌ Error processing stats batch ${batchEnd}-${batchStart}: ${errorMessage}`);
+    }
+  }
+
+  console.log(`✅ Statistics processing completed for range ${startBlock}-${endBlock}`);
 };
 
 /**

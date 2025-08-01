@@ -59,7 +59,7 @@ export async function getChainStats() {
       console.error('[Stats] Error getting latest block:', error);
       return { latestBlockDoc: null, latestBlock: 0 };
     }
-  }, 10000); // 10 second cache for latest block
+  }, 30000); // 30 second cache for latest block (extended for low-spec servers)
   
   // Calculate average block time from last 100 blocks with caching
   const avgBlockTime = await getCachedData('avgBlockTime', async () => {

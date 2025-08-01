@@ -6,6 +6,7 @@ Tool for fetching and updating cryptocurrency price data
 import { Market } from '../models/index';
 import mongoose from 'mongoose';
 import { connectDB } from '../models/index';
+import { loadConfig, getCurrencyConfig } from '../lib/config';
 
 // Initialize database connection
 const initDB = async () => {
@@ -28,7 +29,7 @@ const initDB = async () => {
 const checkMemory = () => {
   const usage = process.memoryUsage();
   const usedMB = Math.round(usage.heapUsed / 1024 / 1024);
-  const limitMB = parseInt(process.env.MEMORY_LIMIT_MB || '512'); // Reduced from 1024MB to 512MB
+  const limitMB = parseInt(process.env.MEMORY_LIMIT_MB || '256'); // Optimized for 2GB instances
   
   if (usedMB > limitMB) {
     console.log(`⚠️ Memory usage: ${usedMB}MB (limit: ${limitMB}MB)`);
@@ -74,155 +75,160 @@ interface PriceData {
 }
 
 // Configuration
-const config: Config = {
-  nodeAddr: 'localhost',
-  port: 8329,
-  quiet: false,
-  priceUpdateInterval: 30 * 60 * 1000, // 30 minutes (15分→30分に延長)
-  currency: {
-    name: 'VirBiCoin',
-    symbol: 'VBC',
-    unit: 'niku',
-    decimals: 18,
-    gasUnit: 'Gwei',
-    priceApi: {
-      coingecko: {
-        enabled: true,
-        id: 'virbicoin'
-      },
-      coinpaprika: {
-        enabled: true,
-        id: 'vbc-virbicoin'
-      }
-    }
-  }
-};
-
-// Try to load config.json, fallback to config.example.json
-try {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const local = require('../config.json');
-  Object.assign(config, local);
-  console.log('📄 config.json found.');
-} catch (error) {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const local = require('../config.example.json');
-    Object.assign(config, local);
-    console.log('📄 config.example.json found (fallback).');
-  } catch (fallbackError) {
-    console.log('📄 No config files found. Using default configuration...');
-  }
-}
+const config = loadConfig();
+const currencyConfig = getCurrencyConfig();
 
 // Initialize database connection after config is loaded
 initDB();
 
-if (config.quiet) {
+if (config.general?.quiet) {
   console.log('🔇 Quiet mode enabled');
 }
 
+// Price cache to avoid frequent API calls
+const priceCache = new Map<string, { data: PriceData; timestamp: number }>();
+const CACHE_DURATION = 60000; // 1 minute cache
+
 /**
- * Fetch current cryptocurrency price from external API with retry mechanism
+ * Fetch current cryptocurrency price from external API with retry mechanism, caching, and parallel requests
  */
 const fetchCryptoPrice = async (): Promise<PriceData | null> => {
   try {
-    const currency = config.currency;
+    const currency = currencyConfig;
     if (!currency) {
       console.error('❌ Currency configuration not found');
       return null;
     }
 
-    const priceSources: string[] = [];
+    // Check cache first
+    const cacheKey = currency.symbol;
+    const cached = priceCache.get(cacheKey);
+    if (cached && (Date.now() - cached.timestamp) < CACHE_DURATION) {
+      console.log(`📋 Using cached price data for ${currency.symbol}`);
+      return cached.data;
+    }
+
+    const priceSources = [];
 
     // Add CoinGecko API if enabled
     if (currency.priceApi?.coingecko?.enabled) {
-      priceSources.push(
-        `https://api.coingecko.com/api/v3/simple/price?ids=${currency.priceApi.coingecko.id}&vs_currencies=btc,usd`
-      );
+      priceSources.push({
+        name: 'CoinGecko',
+        url: `https://api.coingecko.com/api/v3/simple/price?ids=${currency.priceApi.coingecko.id}&vs_currencies=btc,usd`,
+        parser: (data: any) => {
+          const coinId = currency.priceApi?.coingecko?.id;
+          if (data[coinId!]) {
+            return {
+              quoteBTC: data[coinId!].btc || 0,
+              quoteUSD: data[coinId!].usd || 0
+            };
+          }
+          return null;
+        }
+      });
     }
 
     // Add CoinPaprika API if enabled
     if (currency.priceApi?.coinpaprika?.enabled) {
-      priceSources.push(
-        `https://api.coinpaprika.com/v1/tickers/${currency.priceApi.coinpaprika.id}`
-      );
+      priceSources.push({
+        name: 'CoinPaprika',
+        url: `https://api.coinpaprika.com/v1/tickers/${currency.priceApi.coinpaprika.id}`,
+        parser: (data: any) => ({
+          quoteBTC: data.quotes?.BTC?.price || 0,
+          quoteUSD: data.quotes?.USD?.price || 0
+        })
+      });
     }
 
     // If no price APIs are configured, use fallback
     if (priceSources.length === 0) {
       console.log('⚠️ No price APIs configured, using fallback data');
-      return {
+      const fallbackData = {
         symbol: currency.symbol,
         timestamp: Date.now(),
         quoteBTC: 0.000001, // Mock BTC price
         quoteUSD: 0.05 // Mock USD price
       };
+      priceCache.set(cacheKey, { data: fallbackData, timestamp: Date.now() });
+      return fallbackData;
     }
 
-    // Try each source with timeout and retry
-    for (const source of priceSources) {
+    // Parallel API calls with timeout and error handling
+    const fetchPromises = priceSources.map(async (source) => {
       try {
+        console.log(`🔄 Fetching price from ${source.name}...`);
+        
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+        const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout
 
-        const response = await fetch(source, {
+        const response = await fetch(source.url, {
           signal: controller.signal,
           headers: {
-            'User-Agent': 'VirBiCoin-Explorer/1.0'
+            'User-Agent': 'VirBiCoin-Explorer/1.0',
+            'Accept': 'application/json',
+            'Cache-Control': 'no-cache'
           }
         });
         
         clearTimeout(timeoutId);
         
         if (!response.ok) {
-          console.log(`❌ API response not ok for ${source}: ${response.status}`);
-          continue;
+          throw new Error(`HTTP error! status: ${response.status}`);
         }
 
-        const data = await response.json() as any;
-
-        // Parse different API formats
-        let quoteBTC = 0;
-        let quoteUSD = 0;
-
-        if (source.includes('coingecko')) {
-          const coinId = currency.priceApi?.coingecko?.id;
-          if (data[coinId!]) {
-            quoteBTC = data[coinId!].btc || 0;
-            quoteUSD = data[coinId!].usd || 0;
-          }
-        } else if (source.includes('coinpaprika')) {
-          quoteBTC = data.quotes?.BTC?.price || 0;
-          quoteUSD = data.quotes?.USD?.price || 0;
-        }
-
-        if (quoteUSD > 0 || quoteBTC > 0) {
+        const data = await response.json();
+        const priceData = source.parser(data);
+        
+        if (priceData && (priceData.quoteUSD > 0 || priceData.quoteBTC > 0)) {
+          console.log(`✅ Successfully fetched from ${source.name}: $${priceData.quoteUSD} USD, ${priceData.quoteBTC} BTC`);
           return {
-            symbol: currency.symbol,
-            timestamp: Date.now(),
-            quoteBTC,
-            quoteUSD
+            source: source.name,
+            ...priceData
           };
         }
+        return null;
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
-        console.log(`❌ Failed to fetch from ${source}: ${errorMessage}`);
-        continue;
+        console.log(`❌ Failed to fetch from ${source.name}: ${errorMessage}`);
+        return null;
+      }
+    });
+
+    // Wait for all promises and take the first successful result
+    const results = await Promise.allSettled(fetchPromises);
+    
+    for (const result of results) {
+      if (result.status === 'fulfilled' && result.value) {
+        const priceResult = {
+          symbol: currency.symbol,
+          timestamp: Date.now(),
+          quoteBTC: result.value.quoteBTC,
+          quoteUSD: result.value.quoteUSD
+        };
+        
+        // Cache the result
+        priceCache.set(cacheKey, { data: priceResult, timestamp: Date.now() });
+        
+        return priceResult;
       }
     }
 
     // Fallback: use mock data if no external API works
     console.log('🔄 Using fallback price data');
-    return {
+    const fallbackData = {
       symbol: currency.symbol,
       timestamp: Date.now(),
       quoteBTC: 0.000001, // Mock BTC price
       quoteUSD: 0.05 // Mock USD price
     };
+    
+    // Cache fallback data for shorter duration
+    priceCache.set(cacheKey, { data: fallbackData, timestamp: Date.now() - (CACHE_DURATION / 2) });
+    
+    return fallbackData;
 
   } catch (error) {
-    console.error(`❌ Error fetching ${config.currency?.symbol || 'crypto'} price:`, error);
+    console.error(`❌ Error fetching ${currencyConfig?.symbol || 'crypto'} price:`, error);
     return null;
   }
 };
@@ -241,7 +247,7 @@ const updatePriceData = async (priceData: PriceData): Promise<void> => {
     const market = new Market(priceData);
     await market.save();
 
-    if (!config.quiet) {
+    if (!config.general?.quiet) {
       console.log(`💰 Price data updated: ${priceData.symbol} = $${priceData.quoteUSD} (${priceData.quoteBTC} BTC)`);
     }
   } catch (error) {
@@ -271,7 +277,7 @@ const shouldUpdatePrice = async (): Promise<boolean> => {
     if (!latestPrice) return true;
 
     const timeSinceLastUpdate = Date.now() - latestPrice.timestamp;
-    return timeSinceLastUpdate > config.priceUpdateInterval;
+    return timeSinceLastUpdate > (config.priceUpdateInterval || 30 * 60 * 1000);
   } catch (error) {
     console.error('❌ Error checking price update status:', error);
     return true;
@@ -290,7 +296,7 @@ const updatePrice = async (): Promise<void> => {
     }
 
     if (!(await shouldUpdatePrice())) {
-      if (!config.quiet) {
+      if (!config.general?.quiet) {
         console.log('✅ Price data is up to date');
       }
       return;
@@ -311,9 +317,9 @@ const updatePrice = async (): Promise<void> => {
  * Continuous price monitoring with improved error handling
  */
 const startPriceMonitoring = async (): Promise<void> => {
-  const currencySymbol = config.currency?.symbol || 'CRYPTO';
+  const currencySymbol = currencyConfig?.symbol || 'CRYPTO';
   console.log(`💰 Starting ${currencySymbol} price monitoring...`);
-  console.log(`⏰ Update interval: ${config.priceUpdateInterval / 1000} seconds`);
+  console.log(`⏰ Update interval: ${(config.priceUpdateInterval || 30 * 60 * 1000) / 1000} seconds`);
 
   // Initial update
   await updatePrice();
@@ -325,7 +331,7 @@ const startPriceMonitoring = async (): Promise<void> => {
     } catch (error) {
       console.error('❌ Error in periodic price update:', error);
     }
-  }, config.priceUpdateInterval);
+  }, config.priceUpdateInterval || 30 * 60 * 1000);
 };
 
 /**
@@ -364,7 +370,7 @@ const main = async (): Promise<void> => {
     } else if (args.includes('--show') || args.includes('-s')) {
       await showCurrentPrice();
     } else if (args.includes('--help') || args.includes('-h')) {
-      const currencySymbol = config.currency?.symbol || 'CRYPTO';
+      const currencySymbol = currencyConfig?.symbol || 'CRYPTO';
       console.log(`
 💰 ${currencySymbol} Price Tool
 
