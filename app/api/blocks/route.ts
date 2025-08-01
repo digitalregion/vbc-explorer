@@ -64,43 +64,91 @@ export async function GET(request: NextRequest) {
     const startBlock = Math.max(0, blockNumber - (page - 1) * limit);
     const endBlock = Math.max(0, startBlock - limit + 1);
     
-    // Fetch blocks
+    // Fetch blocks in parallel for better performance
     const blocks: Block[] = [];
+    const blockNumbers: number[] = [];
+    
+    // Create array of block numbers to fetch
     for (let i = startBlock; i >= endBlock && i >= 0; i--) {
+      blockNumbers.push(i);
+    }
+    
+    // Fetch blocks in parallel batches to avoid overwhelming the node
+    const batchSize = 10; // Process 10 blocks at a time
+    const batches = [];
+    for (let i = 0; i < blockNumbers.length; i += batchSize) {
+      batches.push(blockNumbers.slice(i, i + batchSize));
+    }
+    
+    for (const batch of batches) {
       try {
-        const block = await web3.eth.getBlock(i, false); // Don't fetch full transaction details
-        if (block) {
-          const txCount = await web3.eth.getBlockTransactionCount(i);
-          // Convert all BigInt values to string using JSON replacer
-          const convertedBlock = JSON.parse(JSON.stringify(block, bigIntReplacer));
-          const txCountString = typeof txCount === 'bigint' ? txCount.toString() : String(txCount);
-          blocks.push({
-            number: String(convertedBlock.number ?? '0'),
-            hash: String(convertedBlock.hash ?? ''),
-            miner: String(convertedBlock.miner ?? ''),
-            timestamp: String(convertedBlock.timestamp ?? '0'),
-            transactions: txCountString,
-            gasUsed: String(convertedBlock.gasUsed ?? '0'),
-            gasLimit: String(convertedBlock.gasLimit ?? '0'),
-            difficulty: String(convertedBlock.difficulty ?? '0'),
-            totalDifficulty: String(convertedBlock.totalDifficulty ?? '0'),
-            size: String(convertedBlock.size ?? '0'),
-            nonce: String(convertedBlock.nonce ?? ''),
-            extraData: String(convertedBlock.extraData ?? ''),
-            parentHash: String(convertedBlock.parentHash ?? ''),
-            stateRoot: String(convertedBlock.stateRoot ?? ''),
-            receiptsRoot: String(convertedBlock.receiptsRoot ?? ''),
-            transactionsRoot: String(convertedBlock.transactionsRoot ?? ''),
-            logsBloom: String(convertedBlock.logsBloom ?? ''),
-            sha3Uncles: String(convertedBlock.sha3Uncles ?? ''),
-            uncles: Array.isArray(convertedBlock.uncles) ? convertedBlock.uncles.map((u: unknown) => String(u ?? '')) : []
-          });
+        // Fetch block data and transaction counts in parallel
+        const blockPromises = batch.map(blockNum => 
+          web3.eth.getBlock(blockNum, false).catch(err => {
+            console.error(`Error fetching block ${blockNum}:`, err);
+            return null;
+          })
+        );
+        
+        const txCountPromises = batch.map(blockNum => 
+          web3.eth.getBlockTransactionCount(blockNum).catch(err => {
+            console.error(`Error fetching tx count for block ${blockNum}:`, err);
+            return 0;
+          })
+        );
+        
+        // Wait for all requests in the batch to complete
+        const [blockResults, txCountResults] = await Promise.all([
+          Promise.all(blockPromises),
+          Promise.all(txCountPromises)
+        ]);
+        
+        // Process the results
+        for (let i = 0; i < blockResults.length; i++) {
+          const block = blockResults[i];
+          const txCount = txCountResults[i];
+          
+          if (block) {
+            // Convert all BigInt values to string using JSON replacer
+            const convertedBlock = JSON.parse(JSON.stringify(block, bigIntReplacer));
+            const txCountString = typeof txCount === 'bigint' ? txCount.toString() : String(txCount);
+            
+            blocks.push({
+              number: String(convertedBlock.number ?? '0'),
+              hash: String(convertedBlock.hash ?? ''),
+              miner: String(convertedBlock.miner ?? ''),
+              timestamp: String(convertedBlock.timestamp ?? '0'),
+              transactions: txCountString,
+              gasUsed: String(convertedBlock.gasUsed ?? '0'),
+              gasLimit: String(convertedBlock.gasLimit ?? '0'),
+              difficulty: String(convertedBlock.difficulty ?? '0'),
+              totalDifficulty: String(convertedBlock.totalDifficulty ?? '0'),
+              size: String(convertedBlock.size ?? '0'),
+              nonce: String(convertedBlock.nonce ?? ''),
+              extraData: String(convertedBlock.extraData ?? ''),
+              parentHash: String(convertedBlock.parentHash ?? ''),
+              stateRoot: String(convertedBlock.stateRoot ?? ''),
+              receiptsRoot: String(convertedBlock.receiptsRoot ?? ''),
+              transactionsRoot: String(convertedBlock.transactionsRoot ?? ''),
+              logsBloom: String(convertedBlock.logsBloom ?? ''),
+              sha3Uncles: String(convertedBlock.sha3Uncles ?? ''),
+              uncles: Array.isArray(convertedBlock.uncles) ? convertedBlock.uncles.map((u: unknown) => String(u ?? '')) : []
+            });
+          }
+        }
+        
+        // Add small delay between batches to avoid overwhelming the node
+        if (batches.indexOf(batch) < batches.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 100));
         }
       } catch (err) {
-        console.error(`Error fetching block ${i}:`, err);
-        // Continue with next block
+        console.error(`Error processing batch:`, err);
+        // Continue with next batch
       }
     }
+    
+    // Sort blocks by number in descending order (latest first)
+    blocks.sort((a, b) => Number(b.number) - Number(a.number));
 
 
 

@@ -126,13 +126,12 @@ export async function GET() {
     };
   }));
 
-  // Filter only addresses existing in Contract collection map
+  // Include all valid tokens from the tokens collection
   const filteredTokens = (normalizedTokens as (IToken | Record<string, unknown>)[]).filter((t): t is IToken => {
     if (!('address' in t) || typeof t.address !== 'string') return false;
     const addr = t.address.toLowerCase();
-    if (!/^0x[0-9a-fA-F]{40}$/.test(addr)) return false; // invalid address
-    // Keep only if address exists in Contract collection (verificationMap)
-    return verificationMap.has(addr);
+    // Only validate address format, don't require Contract collection entry
+    return /^0x[0-9a-fA-F]{40}$/.test(addr);
   });
 
   // Combine the native token with the database tokens

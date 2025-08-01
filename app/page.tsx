@@ -368,8 +368,14 @@ export default function Page() {
   }, []);
 
   useEffect(() => {
+    let isFetching = false; // Prevent concurrent requests
+    
     const fetchData = async () => {
+      if (isFetching) return; // Skip if already fetching
+      
       try {
+        isFetching = true;
+        
         // Fetch enhanced stats
         const statsResponse = await fetch('/api/stats?enhanced=true');
         const statsData = await statsResponse.json();
@@ -460,13 +466,15 @@ export default function Page() {
         setTransactions(transactionsArray);
       } catch (error) {
         console.error('Error fetching data:', error);
+      } finally {
+        isFetching = false; // Reset fetching flag
       }
     };
 
     fetchData();
 
-    // Set up polling for real-time updates - increased frequency to 3 seconds
-    const interval = setInterval(fetchData, 3000); // Update every 3 seconds
+    // Set up polling for real-time updates - optimized interval based on network activity
+    const interval = setInterval(fetchData, 10000); // Update every 10 seconds instead of 3
 
     return () => clearInterval(interval);
   }, [isInitialLoad, lastTopBlock, lastTopTransactionHash]); // Add dependencies to ensure proper updates

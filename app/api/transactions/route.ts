@@ -14,12 +14,24 @@ export async function GET(request: Request) {
 
     const db = mongoose.connection.db;
 
-    // Get total count for pagination
-    const totalCount = await db?.collection('Transaction').countDocuments({});
-    const totalPages = Math.ceil((totalCount || 0) / limit);
+    // Only get total count when explicitly requested for pagination
+    let totalCount = 0;
+    let totalPages = 0;
+    
+    const hasPageParams = searchParams.has('page') || searchParams.has('limit');
+    if (hasPageParams) {
+      // Use estimated count for better performance with large collections
+      const stats = await db?.collection('Transaction').estimatedDocumentCount();
+      totalCount = stats || 0;
+      totalPages = Math.ceil(totalCount / limit);
+    }
 
-    // Get transactions for current page
-    const transactions = await db?.collection('Transaction').find()
+    // Optimized query with proper indexing hints
+    const transactions = await db?.collection('Transaction')
+      .find({}, {
+        // Use hint to ensure proper index usage
+        hint: { blockNumber: -1, transactionIndex: -1 }
+      })
       .sort({ blockNumber: -1, transactionIndex: -1 })
       .skip(skip)
       .limit(limit)
@@ -32,7 +44,8 @@ export async function GET(request: Request) {
         blockNumber: 1,
         gasUsed: 1,
         gasPrice: 1,
-        status: 1
+        status: 1,
+        _id: 0 // Exclude _id for smaller payload
       })
       .toArray();
 
@@ -49,23 +62,20 @@ export async function GET(request: Request) {
       status: tx.status
     }));
 
-    // 後方互換性のため: pageまたはlimitパラメータが明示的に指定された場合のみページネーション形式
-    const hasPageParams = searchParams.has('page') || searchParams.has('limit');
-    
     if (hasPageParams) {
       return NextResponse.json({
         transactions: formattedTransactions,
         pagination: {
           page,
           limit,
-          total: totalCount || 0,
+          total: totalCount,
           totalPages,
           hasNext: page < totalPages,
           hasPrev: page > 1
         }
       });
     } else {
-      // 従来の配列形式（デフォルトで15件）
+      // For homepage requests (without pagination), return optimized array format
       return NextResponse.json(formattedTransactions);
     }
   } catch (error) {

@@ -202,7 +202,9 @@ const MarketSchema = new Schema({
 }, { collection: 'Market' });
 
 // Create indices
+// Optimized transaction indexes for homepage queries
 TransactionSchema.index({ blockNumber: -1 });
+TransactionSchema.index({ blockNumber: -1, transactionIndex: -1 }, { background: true });
 TransactionSchema.index({ from: 1, blockNumber: -1 });
 TransactionSchema.index({ to: 1, blockNumber: -1 });
 TransactionSchema.index({ creates: 1, blockNumber: -1 });
@@ -261,19 +263,23 @@ export const connectDB = async (): Promise<void> => {
           console.log('📄 Using default MongoDB URI');
         }
 
-        // Load config.json for database options
+        // Optimized database connection options for performance
         let dbOptions = {
-          maxPoolSize: 20,
-          serverSelectionTimeoutMS: 30000,
-          socketTimeoutMS: 60000,
-          connectTimeoutMS: 30000,
+          maxPoolSize: 25, // Increased from 20 to 25 for better concurrency
+          minPoolSize: 5,  // Maintain minimum connections
+          serverSelectionTimeoutMS: 15000, // Reduced from 30000 to 15000
+          socketTimeoutMS: 45000, // Reduced from 60000 to 45000
+          connectTimeoutMS: 15000, // Reduced from 30000 to 15000
           retryWrites: true,
           retryReads: true,
-          bufferCommands: true, // Changed to true to avoid connection issues
-          autoIndex: true,
-          autoCreate: true,
-          heartbeatFrequencyMS: 10000,
-          maxIdleTimeMS: 30000,
+          bufferCommands: false, // Changed to false for better error handling
+          bufferMaxEntries: 0,   // Disable buffering
+          autoIndex: false,      // Disable auto indexing in production
+          autoCreate: false,     // Disable auto creation in production
+          heartbeatFrequencyMS: 5000,  // Reduced from 10000 to 5000
+          maxIdleTimeMS: 20000,  // Reduced from 30000 to 20000
+          compressors: ['zlib'], // Enable compression
+          readPreference: 'secondaryPreferred', // Use secondary for reads when available
         };
 
         try {

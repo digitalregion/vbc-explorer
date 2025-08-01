@@ -63,7 +63,7 @@ const minimalErc721Abi = [
   }
 ];
 
-import { connectDB } from '../models/index';
+import { connectDB, Contract } from '../models/index';
 
 // Function to read config
 const readConfig = () => {
@@ -547,6 +547,28 @@ async function scanForTokens() {
                       });
                       await newToken.save();
                       
+                      // Also add to Contract collection for consistency
+                      try {
+                        const existingContract = await Contract.findOne({ address: contractAddress.toLowerCase() });
+                        if (!existingContract) {
+                          const newContract = new Contract({
+                            address: contractAddress.toLowerCase(),
+                            contractName: name,
+                            tokenName: name,
+                            symbol: symbol,
+                            decimals: Number(decimals),
+                            totalSupply: Number(totalSupply),
+                            ERC: 2, // ERC20 = 2
+                            verified: false,
+                            blockNumber: block.number
+                          });
+                          await newContract.save();
+                          console.log(`📝 Added contract ${contractAddress} to Contract collection`);
+                        }
+                      } catch (contractError) {
+                        console.warn(`⚠️ Failed to add contract ${contractAddress} to Contract collection:`, contractError);
+                      }
+                      
                       newTokensFound++;
                       existingTokenAddresses.add(contractAddress.toLowerCase());
                   } else if (await isErc721Token(contractAddress)) {
@@ -585,6 +607,28 @@ async function scanForTokens() {
                               supply: totalSupply.toString(),
                           });
                           await newToken.save();
+                          
+                          // Also add to Contract collection for consistency
+                          try {
+                            const existingContract = await Contract.findOne({ address: contractAddress.toLowerCase() });
+                            if (!existingContract) {
+                              const newContract = new Contract({
+                                address: contractAddress.toLowerCase(),
+                                contractName: name,
+                                tokenName: name,
+                                symbol: symbol,
+                                decimals: 0,
+                                totalSupply: 0,
+                                ERC: 3, // VRC-721 = 3 (similar to ERC721)
+                                verified: false,
+                                blockNumber: block.number
+                              });
+                              await newContract.save();
+                              console.log(`📝 Added VRC-721 contract ${contractAddress} to Contract collection`);
+                            }
+                          } catch (contractError) {
+                            console.warn(`⚠️ Failed to add VRC-721 contract ${contractAddress} to Contract collection:`, contractError);
+                          }
                           
                           newTokensFound++;
                           existingTokenAddresses.add(contractAddress.toLowerCase());

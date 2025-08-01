@@ -368,56 +368,49 @@ const bulkInsert = function (bulk: AccountData[]): void {
     localbulk = bulk.splice(0, 150); // Reduced from 300 to 150
   }
 
-  Account.insertMany(localbulk, { ordered: false })
-    .then((data: any) => {
+  // Use upsert operations instead of insertMany to prevent duplicates
+  const upsertPromises = localbulk.map(item => {
+    // remove _id field
+    delete (item as any)._id;
+
+    // Always update balance and blockNumber for existing addresses
+    return Account.updateOne(
+      { address: item.address },
+      { 
+        $set: {
+          balance: item.balance,
+          blockNumber: item.blockNumber,
+          type: item.type
+        }
+      },
+      { upsert: true }
+    );
+  });
+
+  Promise.all(upsertPromises)
+    .then((results: any) => {
+      const upserted = results.filter((r: any) => r.upsertedCount > 0).length;
+      const modified = results.filter((r: any) => r.modifiedCount > 0).length;
+      
       if (!config.quiet) {
-        console.log(`✅ * ${data.length} accounts successfully inserted.`);
+        console.log(`✅ ${upserted} accounts inserted, ${modified} accounts updated.`);
       }
+      
       if (bulk.length > 0) {
         setTimeout(() => {
           bulkInsert(bulk);
-        }, 300); // Increased from 200ms to 300ms
+        }, 300);
       }
     })
     .catch((error: any) => {
-      if (error.code == 11000) {
-        // For already exists case, try upsert method.
-        const updatePromises = localbulk.map(item => {
-          // remove _id field
-          delete (item as any)._id;
-
-          if (item.type == 0) {
-            // do not update for normal address cases
-            item.type = undefined;
-          }
-
-          return Account.updateOne(
-            { address: item.address },
-            { $set: item },
-            { upsert: true }
-          );
-        });
-
-        Promise.all(updatePromises)
-          .then(() => {
-            if (!config.quiet) {
-              console.log(`💾 ${localbulk.length} accounts successfully updated.`);
-            }
-            if (bulk.length > 0) {
-              setTimeout(() => {
-                bulkInsert(bulk);
-              }, 300); // Increased from 200ms to 300ms
-            }
-          })
-          .catch(err => {
-            const errorMessage = err instanceof Error ? err.message : String(err);
-            console.log(`❌ ERROR: Fail to update accounts: ${errorMessage}`);
-          });
-
-      } else {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        console.log(`💥 Error: Aborted due to error on DB: ${errorMessage}`);
-        process.exit(9);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.log(`❌ ERROR: Fail to upsert accounts: ${errorMessage}`);
+      
+      // Continue with remaining bulk instead of exiting
+      if (bulk.length > 0) {
+        setTimeout(() => {
+          bulkInsert(bulk);
+        }, 500);
       }
     });
 };

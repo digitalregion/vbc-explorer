@@ -1,6 +1,5 @@
 'use client';
 
-import Header from '../components/Header';
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import { TrophyIcon } from '@heroicons/react/24/outline';
