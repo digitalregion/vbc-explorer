@@ -6,14 +6,13 @@ import {
   ArrowPathIcon,
   GlobeAltIcon,
   CodeBracketIcon,
-  TrophyIcon,
-  MagnifyingGlassIcon
+  TrophyIcon
 } from '@heroicons/react/24/outline';
 
-const Header = () => {
+export default function Header() {
   return (
-    <header className='bg-gray-900 border-b border-gray-800'>
-      <nav className='max-w-[1920px] mx-auto px-2 flex items-center justify-between h-14'>
+    <header className="bg-gray-900 border-b border-gray-800">
+      <nav className="container mx-auto px-2 flex items-center justify-between h-14">
         <Link href='/' className='text-xl font-bold nav-link text-gray-100 hover:text-blue-400 transition-colors'>
           VirBiCoin Explorer
         </Link>
@@ -75,5 +74,3 @@ const Header = () => {
     </header>
   );
 };
-
-export default Header;

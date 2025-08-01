@@ -9,7 +9,7 @@ import type { Viewport } from 'next'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: "VirBiCoin Explorer",
+  title: "VirBiCoin Blockchain Explorer",
   description: "Explore the VirBiCoin blockchain with real-time transaction data, block information, address tracking, and comprehensive token analytics. A modern, user-friendly blockchain explorer for the VirBiCoin ecosystem.",
 };
 
