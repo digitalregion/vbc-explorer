@@ -96,13 +96,13 @@ export default function TokenIdDetailPage() {
   }, [address, id]);
 
   if (loading) {
-    return <div className="min-h-screen bg-gray-900 text-white"><Header /><div className="flex justify-center items-center h-64"><div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-500"></div></div></div>;
+    return <div className="min-h-screen bg-gray-900 text-white"><div className="flex justify-center items-center h-64"><div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-500"></div></div></div>;
   }
   if (error) {
-    return <div className="min-h-screen bg-gray-900 text-white"><Header /><div className="container mx-auto px-4 py-8"><div className="bg-red-800 border border-red-600 text-red-100 px-4 py-3 rounded mb-4"><strong className="font-bold">Error:</strong><span className="block sm:inline"> {error}</span></div><Link href='/' className='inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded transition-colors'><CubeIcon className='w-4 h-4' />Back to Explorer</Link></div></div>;
+    return <div className="min-h-screen bg-gray-900 text-white"><div className="container mx-auto px-4 py-8"><div className="bg-red-800 border border-red-600 text-red-100 px-4 py-3 rounded mb-4"><strong className="font-bold">Error:</strong><span className="block sm:inline"> {error}</span></div><Link href='/' className='inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded transition-colors'><CubeIcon className='w-4 h-4' />Back to Explorer</Link></div></div>;
   }
   if (!tokenDetail) {
-    return <div className="min-h-screen bg-gray-900 text-white"><Header /><div className="container mx-auto px-4 py-8"><div className="bg-red-800 border border-red-600 text-red-100 px-4 py-3 rounded mb-4">Error: No metadata found</div></div></div>;
+    return <div className="min-h-screen bg-gray-900 text-white"><div className="container mx-auto px-4 py-8"><div className="bg-red-800 border border-red-600 text-red-100 px-4 py-3 rounded mb-4">Error: No metadata found</div></div></div>;
   }
 
   // owner calculation removed (unused)
@@ -114,7 +114,6 @@ export default function TokenIdDetailPage() {
 
   return (
     <div className="min-h-screen bg-gray-900 text-white">
-      <Header />
       {/* Page header */}
       <div className="bg-gray-800 border-b border-gray-700">
         <div className="container mx-auto px-4 py-8">

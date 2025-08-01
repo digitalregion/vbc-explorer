@@ -243,7 +243,6 @@ export default function TxPage({ params }: { params: Promise<{ hash: string }> }
   if (loading) {
     return (
       <>
-        <Header />
         <div className='bg-gray-800 border-b border-gray-700'>
           <div className='container mx-auto px-4 py-8'>
             <div className='flex items-center gap-3 mb-4'>
@@ -266,7 +265,6 @@ export default function TxPage({ params }: { params: Promise<{ hash: string }> }
   if (error || !transaction) {
     return (
       <>
-        <Header />
         <div className='bg-gray-800 border-b border-gray-700'>
           <div className='container mx-auto px-4 py-8'>
             <div className='flex items-center gap-3 mb-4'>
@@ -462,8 +460,6 @@ export default function TxPage({ params }: { params: Promise<{ hash: string }> }
 
     return (
       <>
-        <Header />
-
         {/* Page Header */}
         <div className='bg-gray-800 border-b border-gray-700'>
           <div className='container mx-auto px-4 py-8'>

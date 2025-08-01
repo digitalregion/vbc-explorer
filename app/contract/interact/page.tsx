@@ -148,8 +148,6 @@ export default function ContractInteractPage() {
 
   return (
     <div className="min-h-screen bg-gray-900">
-      <Header />
-      
       <div className="max-w-6xl mx-auto px-4 py-8">
         <div className="bg-gray-800 rounded-lg shadow-xl">
           <div className="px-6 py-4 border-b border-gray-700">

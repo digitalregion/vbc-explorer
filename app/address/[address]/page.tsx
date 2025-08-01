@@ -128,7 +128,6 @@ export default function AddressPage({ params }: { params: Promise<{ address: str
   if (!currencySymbol) {
     return (
       <div className='min-h-screen bg-gray-900 text-white'>
-        <Header />
         <div className='container mx-auto px-4 py-8'>
           <div className='flex justify-center items-center h-64'>
             <div className='animate-spin rounded-full h-32 w-32 border-b-2 border-blue-500'></div>
@@ -271,7 +270,6 @@ export default function AddressPage({ params }: { params: Promise<{ address: str
   if (loading) {
     return (
       <div className='min-h-screen bg-gray-900 text-white'>
-        <Header />
           <div className='container mx-auto px-4 py-8'>
           <div className='flex justify-center items-center h-64'>
             <div className='animate-spin rounded-full h-32 w-32 border-b-2 border-blue-500'></div>
@@ -284,7 +282,6 @@ export default function AddressPage({ params }: { params: Promise<{ address: str
   if (error) {
     return (
       <div className='min-h-screen bg-gray-900 text-white'>
-        <Header />
           <div className='container mx-auto px-4 py-8'>
           <div className='bg-red-800 border border-red-600 text-red-100 px-4 py-3 rounded mb-4'>
             <strong className='font-bold'>Error:</strong>
@@ -359,8 +356,6 @@ export default function AddressPage({ params }: { params: Promise<{ address: str
 
   return (
     <div className='min-h-screen bg-gray-900 text-white'>
-      <Header />
-
       {/* Page Header */}
       <div className='bg-gray-800 border-b border-gray-700'>
         <div className='container mx-auto px-4 py-8'>

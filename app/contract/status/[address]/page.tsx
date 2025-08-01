@@ -59,7 +59,6 @@ export default function ContractStatusPage({ params }: { params: Promise<{ addre
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-900">
-        <Header />
         <div className="max-w-4xl mx-auto px-4 py-8">
           <div className="bg-gray-800 rounded-lg p-8 text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
@@ -73,7 +72,6 @@ export default function ContractStatusPage({ params }: { params: Promise<{ addre
   if (error) {
     return (
       <div className="min-h-screen bg-gray-900">
-        <Header />
         <div className="max-w-4xl mx-auto px-4 py-8">
           <div className="bg-red-900/20 border border-red-600 rounded-lg p-6">
             <div className="flex items-center gap-2 mb-4">
@@ -95,7 +93,6 @@ export default function ContractStatusPage({ params }: { params: Promise<{ addre
 
   return (
     <div className="min-h-screen bg-gray-900 text-white">
-      <Header />
       {/* トップの帯は全幅 */}
       <div className="bg-gray-800 border-b border-gray-700 w-full">
         <div className="container mx-auto px-4 py-8">

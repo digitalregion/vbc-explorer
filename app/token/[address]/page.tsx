@@ -765,7 +765,6 @@ export default function TokenDetailPage({ params }: { params: Promise<{ address:
   if (loading) {
     return (
       <>
-        <Header />
         <div className='page-header-container'>
           <div className='container mx-auto px-4 py-8'>
             <h1 className='text-3xl font-bold mb-2 text-gray-100'>Token Details</h1>
@@ -787,7 +786,6 @@ export default function TokenDetailPage({ params }: { params: Promise<{ address:
   if (error) {
     return (
       <>
-        <Header />
         <div className='page-header-container'>
           <div className='container mx-auto px-4 py-8'>
             <h1 className='text-3xl font-bold mb-2 text-gray-100'>Token Details</h1>
@@ -811,8 +809,6 @@ export default function TokenDetailPage({ params }: { params: Promise<{ address:
 
   return (
     <>
-      <Header />
-
       {/* Page Header */}
       <div className='page-header-container'>
         <div className='container mx-auto px-4 py-8'>

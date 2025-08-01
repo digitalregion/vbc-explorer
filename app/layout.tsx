@@ -22,11 +22,11 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang='en'>
       <body className={`${inter.className} bg-gray-900 text-gray-200 min-h-screen flex flex-col`}>
-        <Header />
         <div className='flex-grow'>
+          <Header />
           {children}
+          <Footer />
         </div>
-        <Footer />
       </body>
     </html>
   );
