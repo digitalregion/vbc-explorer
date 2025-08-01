@@ -252,7 +252,7 @@ export async function POST(request: NextRequest) {
         }
       },
       { $addFields: { balanceNum: { $toDouble: "$balance" } } },
-      { $sort: sortOrder.balance ? { balanceNum: sortOrder.balance } : sortOrder },
+      { $sort: sortOrder.balance ? { balanceNum: sortOrder.balance as 1 | -1 } : sortOrder as Record<string, 1 | -1> },
       { $skip: start },
       { $limit: limit }
     ]);

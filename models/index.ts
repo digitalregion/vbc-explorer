@@ -246,9 +246,9 @@ export const connectDB = async (): Promise<void> => {
         try {
           const fs = await import('fs');
           const path = await import('path');
-          const configPath = path.default.join(process.cwd(), 'config.json');
-          if (fs.default.existsSync(configPath)) {
-            const config = JSON.parse(fs.default.readFileSync(configPath, 'utf8'));
+          const configPath = path.join(process.cwd(), 'config.json');
+          if (fs.existsSync(configPath)) {
+            const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
             if (config.database && config.database.uri) {
               uri = config.database.uri;
               console.log('📄 Using MongoDB URI from config.json');
@@ -264,7 +264,7 @@ export const connectDB = async (): Promise<void> => {
         }
 
         // Optimized database connection options for performance
-        let dbOptions = {
+        let dbOptions: mongoose.ConnectOptions = {
           maxPoolSize: 25, // Increased from 20 to 25 for better concurrency
           minPoolSize: 5,  // Maintain minimum connections
           serverSelectionTimeoutMS: 15000, // Reduced from 30000 to 15000
@@ -273,21 +273,20 @@ export const connectDB = async (): Promise<void> => {
           retryWrites: true,
           retryReads: true,
           bufferCommands: false, // Changed to false for better error handling
-          bufferMaxEntries: 0,   // Disable buffering
           autoIndex: false,      // Disable auto indexing in production
           autoCreate: false,     // Disable auto creation in production
           heartbeatFrequencyMS: 5000,  // Reduced from 10000 to 5000
           maxIdleTimeMS: 20000,  // Reduced from 30000 to 20000
-          compressors: ['zlib'], // Enable compression
-          readPreference: 'secondaryPreferred', // Use secondary for reads when available
+          compressors: ['zlib' as const], // Enable compression with explicit type
+          readPreference: 'secondaryPreferred' as const, // Use secondary for reads when available
         };
 
         try {
           const fs = await import('fs');
           const path = await import('path');
-          const configPath = path.default.join(process.cwd(), 'config.json');
-          if (fs.default.existsSync(configPath)) {
-            const config = JSON.parse(fs.default.readFileSync(configPath, 'utf8'));
+          const configPath = path.join(process.cwd(), 'config.json');
+          if (fs.existsSync(configPath)) {
+            const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
             if (config.database && config.database.options) {
               dbOptions = { ...dbOptions, ...config.database.options };
               console.log('📄 Using database options from config.json');
@@ -297,7 +296,7 @@ export const connectDB = async (): Promise<void> => {
           console.log('📄 Using default database options');
         }
 
-        const connectionOptions: mongoose.ConnectOptions = dbOptions;
+        const connectionOptions = dbOptions;
         
         console.log('🔗 Connecting to MongoDB...');
         await mongoose.connect(uri, connectionOptions);
