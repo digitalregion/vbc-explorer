@@ -343,8 +343,8 @@ export default function TokenDetailPage({ params }: { params: Promise<{ address:
                       .map((transfer, index) => (
                       <tr key={index} className='border-b border-gray-700/50'>
                         <td className='py-2'>
-                          <Link href={`/tx/${transfer.hash}`} className='text-blue-400 hover:text-blue-300 font-mono text-sm'>
-                            {transfer.hash.slice(0, 8)}...{transfer.hash.slice(-8)}
+                          <Link href={transfer.hash ? `/tx/${transfer.hash}` : '#'} className='text-blue-400 hover:text-blue-300 font-mono text-sm'>
+                            {transfer.hash ? `${transfer.hash.slice(0, 8)}...${transfer.hash.slice(-8)}` : 'N/A'}
                           </Link>
                         </td>
                         <td className='py-2'>
@@ -374,7 +374,7 @@ export default function TokenDetailPage({ params }: { params: Promise<{ address:
                         <td className='py-2 text-green-400 font-bold'>{transfer.value}</td>
                         {isNFT && (
                           <td className='py-2 text-gray-300'>
-                            <Link href={`/tx/${transfer.hash}`} className='text-blue-400 hover:text-blue-300 font-mono text-sm'>
+                            <Link href={transfer.hash ? `/tx/${transfer.hash}` : '#'} className='text-blue-400 hover:text-blue-300 font-mono text-sm'>
                               {transfer.tokenId === undefined || transfer.tokenId === null ? '0' : transfer.tokenId}
                             </Link>
                           </td>
@@ -384,7 +384,7 @@ export default function TokenDetailPage({ params }: { params: Promise<{ address:
                             <ClockIcon className='w-4 h-4 text-yellow-400 mr-2' />
                             <div>
                               <div className='text-sm text-gray-300'>{transfer.timeAgo}</div>
-                              <div className='text-xs text-gray-500'>{new Date(transfer.timestamp).toLocaleString()}</div>
+                              <div className='text-xs text-gray-500'>{new Date(transfer.timestamp).toLocaleString(undefined, { timeZoneName: 'short' })}</div>
                             </div>
                           </div>
                         </td>

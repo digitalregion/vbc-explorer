@@ -240,7 +240,7 @@ export default function SearchPage() {
                         <div className='flex items-center'>
                           <ClockIcon className='w-4 h-4 text-gray-400 mr-2' />
                           <span className='text-gray-400'>
-                            {result.data.timestamp ? new Date(result.data.timestamp).toLocaleString() : 'N/A'}
+                            {result.data.timestamp ? new Date(result.data.timestamp).toLocaleString(undefined, { timeZoneName: 'short' }) : 'N/A'}
                           </span>
                         </div>
                       </div>

@@ -53,14 +53,13 @@ interface Transaction {
   timestamp: number;
 }
 
-const SummaryCard = ({ title, value, sub, icon, isLive, trend, isLoading }: {
+const SummaryCard = ({ title, value, sub, icon, isLive, trend }: {
   title: string;
   value: string;
   sub: string;
   icon?: React.ReactNode;
   isLive?: boolean;
   trend?: 'up' | 'down' | 'stable';
-  isLoading?: boolean;
 }) => (
   <div className='bg-gray-800 rounded-lg border border-gray-700 p-6 flex items-center gap-4 min-h-[140px] h-full transition-all duration-300 hover:shadow-lg hover:bg-gray-700/80 hover:border-gray-600'>
     {icon && (
@@ -70,15 +69,8 @@ const SummaryCard = ({ title, value, sub, icon, isLive, trend, isLoading }: {
     )}
     <div className='space-y-2'>
       <h3 className='text-lg font-semibold text-gray-300 mb-1'>{title}</h3>
-      {isLoading ? (
-        <div className='flex items-center gap-2'>
-          <div className='animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500'></div>
-          <p className='text-xl font-bold text-gray-400'>Loading...</p>
-        </div>
-      ) : (
-        <p className='text-2xl font-bold text-blue-500'>{value}</p>
-      )}
-      {sub && !isLoading && (
+      <p className='text-2xl font-bold text-blue-500'>{value}</p>
+      {sub && (
         <div className='flex items-center gap-2'>
           {isLive !== undefined && (
             <div className='flex items-center gap-1'>
@@ -108,14 +100,11 @@ const SummaryCard = ({ title, value, sub, icon, isLive, trend, isLoading }: {
           <p className='text-sm text-gray-400'>{sub}</p>
         </div>
       )}
-      {isLoading && (
-        <p className='text-sm text-gray-500'>Fetching network data...</p>
-      )}
     </div>
   </div>
 );
 
-const BlockList = ({ blocks, newBlockNumbers, now, config, isLoading }: { blocks: Block[], newBlockNumbers: Set<number>, now: number, config: Config | null, isLoading?: boolean }) => (
+const BlockList = ({ blocks, newBlockNumbers, now, config }: { blocks: Block[], newBlockNumbers: Set<number>, now: number, config: Config | null }) => (
   <div className='bg-gray-800 rounded-lg border border-gray-700 p-6 h-full flex flex-col'>
     <div className='flex items-center justify-between mb-4'>
       <div className='flex items-center gap-2'>
@@ -127,12 +116,7 @@ const BlockList = ({ blocks, newBlockNumbers, now, config, isLoading }: { blocks
       </Link>
     </div>
     <div className='space-y-2 flex-1'>
-        {isLoading ? (
-          <div className='flex items-center justify-center py-8'>
-            <div className='animate-spin rounded-full h-8 w-8 border-b-2 border-green-400'></div>
-            <span className='ml-3 text-gray-400'>Loading blocks...</span>
-          </div>
-        ) : Array.isArray(blocks) && blocks.length > 0 ? (
+        {Array.isArray(blocks) && blocks.length > 0 ? (
         blocks.map((block) => (
         <div
           key={block.number}
@@ -232,7 +216,7 @@ const BlockList = ({ blocks, newBlockNumbers, now, config, isLoading }: { blocks
   </div>
 );
  
-const TransactionList = ({ transactions, newTransactionHashes, now, isLoading }: { transactions: Transaction[], newTransactionHashes: Set<string>, now: number, isLoading?: boolean }) => (
+const TransactionList = ({ transactions, newTransactionHashes, now }: { transactions: Transaction[], newTransactionHashes: Set<string>, now: number }) => (
   <div className='bg-gray-800 rounded-lg border border-gray-700 p-6 h-full flex flex-col'>
     <div className='flex items-center justify-between mb-4'>
       <div className='flex items-center gap-2'>
@@ -244,12 +228,7 @@ const TransactionList = ({ transactions, newTransactionHashes, now, isLoading }:
       </Link>
     </div>
     <div className='space-y-2 flex-1'>
-        {isLoading ? (
-          <div className='flex items-center justify-center py-8'>
-            <div className='animate-spin rounded-full h-8 w-8 border-b-2 border-blue-400'></div>
-            <span className='ml-3 text-gray-400'>Loading transactions...</span>
-          </div>
-        ) : Array.isArray(transactions) && transactions.length > 0 ? (
+        {Array.isArray(transactions) && transactions.length > 0 ? (
         transactions.map((tx) => (
         <div
           key={tx.hash}
@@ -330,7 +309,6 @@ const TransactionList = ({ transactions, newTransactionHashes, now, isLoading }:
 export default function Page() {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
-  const [isLoading, setIsLoading] = useState<boolean>(true);
   const [stats, setStats] = useState<StatsData>({
     latestBlock: 0,
     avgBlockTime: '0',
@@ -390,49 +368,16 @@ export default function Page() {
   }, []);
 
   useEffect(() => {
-    let isFetching = false; // Prevent concurrent requests
-    
     const fetchData = async () => {
-      if (isFetching) return; // Skip if already fetching
-      
       try {
-        isFetching = true;
-        
-        // Fetch enhanced stats with timeout
-        // Fetch blocks first to get the actual latest block
-        const blocksResponse = await fetch('/api/blocks', {
-          signal: AbortSignal.timeout(10000), // 10 second timeout
-          headers: {
-            'Cache-Control': 'no-cache'
-          }
-        });
-        const blocksData = await blocksResponse.json();
-
-        // Fetch stats and sync with latest block from blocks data
-        const statsResponse = await fetch('/api/stats?enhanced=true', {
-          signal: AbortSignal.timeout(15000), // 15 second timeout for slow servers
-          headers: {
-            'Cache-Control': 'no-cache'
-          }
-        });
+        // Fetch enhanced stats
+        const statsResponse = await fetch('/api/stats?enhanced=true');
         const statsData = await statsResponse.json();
-        
-        // Sync latest block: use the actual latest block from blocks list
-        const actualLatestBlock = blocksData.blocks?.[0]?.number;
-        const actualLatestBlockTimestamp = blocksData.blocks?.[0]?.timestamp;
-        
-        if (actualLatestBlock) {
-          console.log(`🔄 SYNC: Setting stats.latestBlock from ${statsData.latestBlock} to ${actualLatestBlock}`);
-          statsData.latestBlock = actualLatestBlock;
-          
-          // Also sync the Last Block Found timestamp
-          if (actualLatestBlockTimestamp) {
-            console.log(`🔄 SYNC: Setting stats.lastBlockTimestamp from ${statsData.lastBlockTimestamp} to ${actualLatestBlockTimestamp}`);
-            statsData.lastBlockTimestamp = actualLatestBlockTimestamp;
-            console.log(`🔄 Syncing block data: #${actualLatestBlock} @ ${new Date(actualLatestBlockTimestamp * 1000).toLocaleString()}`);
-          }
-        }
         setStats(statsData);
+
+        // Fetch blocks
+        const blocksResponse = await fetch('/api/blocks');
+        const blocksData = await blocksResponse.json();
 
         // Check for new blocks to animate (only after initial load)
         const newTopBlock = blocksData.blocks?.[0]?.number;
@@ -443,7 +388,6 @@ export default function Page() {
             setLastTopBlock(newTopBlock);
           }
           setIsInitialLoad(false);
-          setIsLoading(false); // Mark initial loading as complete
         } else {
           // Only animate blocks discovered after page load
           if (newTopBlock && lastTopBlock > 0 && newTopBlock > lastTopBlock) {
@@ -471,30 +415,9 @@ export default function Page() {
         // Ensure blocksData is an array and limit to 25 items
         const blocksArray = Array.isArray(blocksData.blocks) ? blocksData.blocks.slice(0, 25) : [];
         setBlocks(blocksArray);
-        
-        // Double-check: ensure all block data is synchronized
-        if (blocksArray.length > 0) {
-          const currentLatestBlock = blocksArray[0].number;
-          const currentTimestamp = blocksArray[0].timestamp;
-          
-          if (currentLatestBlock !== statsData.latestBlock || 
-              (currentTimestamp && currentTimestamp !== statsData.lastBlockTimestamp)) {
-            console.log(`🔄 Final sync: block #${currentLatestBlock}, timestamp ${currentTimestamp}`);
-            setStats(prevStats => ({
-              ...prevStats,
-              latestBlock: currentLatestBlock,
-              lastBlockTimestamp: currentTimestamp
-            }));
-          }
-        }
 
-        // Fetch transactions with timeout
-        const transactionsResponse = await fetch('/api/transactions', {
-          signal: AbortSignal.timeout(10000), // 10 second timeout
-          headers: {
-            'Cache-Control': 'no-cache'
-          }
-        });
+        // Fetch transactions
+        const transactionsResponse = await fetch('/api/transactions');
         const transactionsData = await transactionsResponse.json();
 
         // Check for new transactions to animate (only after initial load)
@@ -537,144 +460,16 @@ export default function Page() {
         setTransactions(transactionsArray);
       } catch (error) {
         console.error('Error fetching data:', error);
-        // Even on error, mark initial loading as complete if it was the first load
-        if (isInitialLoad) {
-          setIsLoading(false);
-          setIsInitialLoad(false);
-        }
-      } finally {
-        isFetching = false; // Reset fetching flag
       }
     };
 
     fetchData();
 
-    // Set up polling for real-time updates - optimized interval based on network activity
-    const interval = setInterval(fetchData, 10000); // Update every 10 seconds instead of 3
+    // Set up polling for real-time updates
+    const interval = setInterval(fetchData, 5000); // Update every 5 seconds
 
     return () => clearInterval(interval);
   }, [isInitialLoad, lastTopBlock, lastTopTransactionHash]); // Add dependencies to ensure proper updates
-
-  // WebSocket connection for real-time updates
-  useEffect(() => {
-    let ws: WebSocket | null = null;
-    
-    const connectWebSocket = () => {
-      try {
-        // Connect to WebSocket server
-        ws = new WebSocket('wss://stats.digitalregion.jp/api');
-        
-        ws.onopen = () => {
-          console.log('🔌 WebSocket connected');
-        };
-        
-        ws.onmessage = (event) => {
-          try {
-            const data = JSON.parse(event.data);
-            
-            // Handle different message types
-            if (data.action === 'init') {
-              // Initial data received
-              if (data.data && data.data.stats) {
-                setStats(prevStats => ({
-                  ...prevStats,
-                  ...data.data.stats
-                }));
-              }
-            } else if (data.action === 'block') {
-              // New block received
-              console.log('📦 New block received:', data.data);
-              
-              // Update latest block in stats and trigger block list refresh
-              const newBlockNumber = data.data.number;
-              const newBlockTimestamp = data.data.timestamp;
-              
-              if (newBlockNumber) {
-                // Update stats with both block number and timestamp
-                setStats(prevStats => ({
-                  ...prevStats,
-                  latestBlock: newBlockNumber,
-                  lastBlockTimestamp: newBlockTimestamp || prevStats.lastBlockTimestamp
-                }));
-                
-                // Also refresh the blocks list to keep it in sync
-                fetch('/api/blocks', {
-                  headers: { 'Cache-Control': 'no-cache' }
-                })
-                .then(res => res.json())
-                .then(blocksData => {
-                  const blocksArray = Array.isArray(blocksData.blocks) ? blocksData.blocks.slice(0, 25) : [];
-                  setBlocks(blocksArray);
-                  
-                  // Ensure complete sync with the refreshed block data
-                  if (blocksArray.length > 0 && blocksArray[0].number === newBlockNumber) {
-                    setStats(prevStats => ({
-                      ...prevStats,
-                      latestBlock: blocksArray[0].number,
-                      lastBlockTimestamp: blocksArray[0].timestamp
-                    }));
-                  }
-                  
-                  // Animate new block if it's newer than the last seen block
-                  if (newBlockNumber > lastTopBlock) {
-                    setNewBlockNumbers(new Set([newBlockNumber]));
-                    setTimeout(() => setNewBlockNumbers(new Set()), 3100);
-                    setLastTopBlock(newBlockNumber);
-                  }
-                })
-                .catch(error => console.error('Error refreshing blocks:', error));
-              }
-            } else if (data.action === 'stats') {
-              // Stats update received
-              console.log('📊 Stats update received:', data.data);
-              
-              // Update stats but preserve latest block sync with blocks list
-              setStats(prevStats => {
-                const newStats = {
-                  ...prevStats,
-                  ...data.data
-                };
-                
-                // If we have blocks data, always use the actual latest block data from the list
-                if (blocks.length > 0 && blocks[0].number) {
-                  newStats.latestBlock = blocks[0].number;
-                  newStats.lastBlockTimestamp = blocks[0].timestamp;
-                  console.log(`📊 Stats sync: keeping block #${blocks[0].number} with timestamp ${blocks[0].timestamp}`);
-                }
-                
-                return newStats;
-              });
-            }
-          } catch (error) {
-            console.error('Error parsing WebSocket message:', error);
-          }
-        };
-        
-        ws.onerror = (error) => {
-          console.error('WebSocket error:', error);
-        };
-        
-        ws.onclose = () => {
-          console.log('🔌 WebSocket disconnected, attempting to reconnect...');
-          // Attempt to reconnect after 5 seconds
-          setTimeout(connectWebSocket, 5000);
-        };
-        
-      } catch (error) {
-        console.error('Error connecting to WebSocket:', error);
-        // Fallback to polling if WebSocket fails
-        console.log('🔄 Falling back to polling mode');
-      }
-    };
-    
-    connectWebSocket();
-    
-    return () => {
-      if (ws) {
-        ws.close();
-      }
-    };
-  }, []);
 
   useEffect(() => {
     const button = addVbcButtonRef.current;
@@ -761,21 +556,18 @@ export default function Page() {
             sub='Live updates'
             icon={<CubeIcon className='w-8 h-8 text-green-400' />}
             isLive={stats.isConnected}
-            isLoading={isLoading}
           />
           <SummaryCard
             title='Average Block Time'
             value={`${stats.avgBlockTime}s`}
             sub='Last 100 blocks'
             icon={<ClockIcon className='w-8 h-8 text-yellow-400' />}
-            isLoading={isLoading}
           />
           <SummaryCard
             title='Network Hashrate'
             value={stats.networkHashrate || 'N/A'}
             sub='Current mining power'
             icon={<GlobeAltIcon className='w-8 h-8 text-orange-400' />}
-            isLoading={isLoading}
           />
           <SummaryCard
             title='Last Block Found'
@@ -789,7 +581,6 @@ export default function Page() {
             })() : (stats.lastBlockTime || 'Unknown')}
             sub='Time since last block'
             icon={<CalendarIcon className='w-8 h-8 text-emerald-400' />}
-            isLoading={isLoading}
           />
         </section>
 
@@ -800,35 +591,31 @@ export default function Page() {
             value={stats.totalTransactions.toLocaleString()}
             sub='All time'
             icon={<ArrowPathIcon className='w-8 h-8 text-blue-400' />}
-            isLoading={isLoading}
           />
           <SummaryCard
             title='Network Difficulty'
             value={stats.networkDifficulty || 'N/A'}
             sub='Current difficulty'
             icon={<ChartBarIcon className='w-8 h-8 text-orange-400' />}
-            isLoading={isLoading}
           />
           <SummaryCard
             title='Active Miners'
             value={(stats.activeMiners || 0).toString()}
             sub='Last 100 blocks'
             icon={<UserGroupIcon className='w-8 h-8 text-cyan-400' />}
-            isLoading={isLoading}
           />
           <SummaryCard
             title='Avg Transaction Fee'
             value={stats.avgTransactionFee || '0 Gwei'}
             sub='Average gas price for transactions'
             icon={<ChartBarIcon className='w-8 h-8 text-rose-400' />}
-            isLoading={isLoading}
           />
         </section>
 
         {/* Latest Blocks & Transactions */}
         <section className='grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch'>
-          <BlockList blocks={blocks} newBlockNumbers={newBlockNumbers} now={now} config={config} isLoading={isLoading} />
-          <TransactionList transactions={transactions} newTransactionHashes={newTransactionHashes} now={now} isLoading={isLoading} />
+          <BlockList blocks={blocks} newBlockNumbers={newBlockNumbers} now={now} config={config} />
+          <TransactionList transactions={transactions} newTransactionHashes={newTransactionHashes} now={now} />
         </section>
       </main>
     </>
